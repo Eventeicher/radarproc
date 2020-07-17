@@ -31,7 +31,7 @@ from matplotlib.axes import Axes
 from cartopy.mpl.geoaxes import GeoAxes
 GeoAxes._pcolormesh_patched = Axes.pcolormesh
 import sys, traceback
-from read_nssl import read_nsslmm
+from read_platforms import read_nsslmm
 import json
 import nexradaws
 import pytz
@@ -46,7 +46,7 @@ day='20190517' #'YYYYMMDD'
 filesys='/Users/severe2/Research/'
 p_var= 'Thetav'
 probe_of_interest='Prb1'
-temploc='/Users/severe2/Research/TORUS_Data/'
+temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
 r_only= False #Set to True for only radar as output, Set to False for Radar + Timeseries
 
 #crop the start time to a time you specify (comment out to do the whole day) 
@@ -56,9 +56,12 @@ tend = None
 
 #Troubleshooting y/n
 ####################
+#Set to True to print statements when entering/leaving definitions
+print_long = False # True/False variable
+
 #Set to False to not print out the errors that tripped 'try' statements: set to True only while troubleshooting 
   ##there will be 'valid' errors caused by looping through platforms etc.... hence needlessly confusing unless troubleshooting
-e_test = True #True/False variable
+e_test = False# True/False variable
 
 def error_printing(e_test):
     ''' Basically I got sick of removing/replacing the try statements while troubleshooting 
@@ -119,7 +122,8 @@ def get_WSR_from_AWS(start, end, radar_id,temploc):
     
     #download the files that were identified
     #results = conn.download(scans[0:4], filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
-    results = conn.download(scans, filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+    #results = conn.download(scans, filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+    results = conn.download(scans, temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
     print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
     #print("Results.iter_success : {}\n".format(results.iter_success()))
     
@@ -153,7 +157,7 @@ def getLocation(file, currentscantime,p_var,offset=0):
     return lat_min, lat_max, lon_min, lon_max
 
 def legend_maker(p_name,m_style,m_color,leg_str,legend_elements):
-    print('made it into legend_maker')
+    if print_long== True: print('made it into legend_maker') 
     if (p_name in ['ka1','ka2']): #the legend entries for the ka radars
         legend_entry=Line2D([], [], marker=m_style, markeredgecolor='black',markeredgewidth=3,label=leg_str,markerfacecolor=m_color, markersize=26)
     else:
@@ -165,12 +169,12 @@ def legend_maker(p_name,m_style,m_color,leg_str,legend_elements):
         #  legend_entry=line2D([], [], marker=m_style, markeredgecolor=m_color,markeredgewidth=3,label=leg_str, markersize=26,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')])
     
     legend_elements=np.append(legend_elements,legend_entry)
-    print('made it through legend maker')
+    if print_long== True: print('made it through legend maker')
     
     return legend_elements
 
 def platform_attr(p_file,legend_elements,radar_m=False,r_s=False):
-    print('Made it into platform_attr')
+    if print_long== True: print('Made it into platform_attr')
     if radar_m == False:
         if p_file.name == "Prb1":
             m_style, m_color, l_color, leg_str= '1','xkcd:lightblue','steelblue','Prb1'
@@ -193,7 +197,7 @@ def platform_attr(p_file,legend_elements,radar_m=False,r_s=False):
 
     if r_s == True: #only add to the legend if the platform_attr def was called while making the radar subplots
         legend_elements=legend_maker(p_name, m_style,m_color,leg_str,legend_elements)
-    print('Made it through platform_attr')
+    if print_long==True: print('Made it through platform_attr')
 
     return m_style, m_color, l_color, leg_str, legend_elements
 
@@ -242,7 +246,7 @@ def grab_platform_subset(p_df, scan_time, p_var):
     return p_sub, lon_sub, lat_sub, U_sub, V_sub, p_deploy
 
 def platform_plot(file,radartime,ax_n,color,m_color,p_var,e_test,labelbias=(0,0)):
-    print('made it into platform_plot')
+    if print_long==True: print('made it into platform_plot')
 
     #grab the subset of data of +- interval around radar scan
     p_sub, lon_sub, lat_sub, u_sub, v_sub, p_deploy = grab_platform_subset(file, radartime, p_var)
@@ -262,13 +266,13 @@ def platform_plot(file,radartime,ax_n,color,m_color,p_var,e_test,labelbias=(0,0)
             stationplot.plot_barb(u_sub[::30], v_sub[::30],length=7)
         except: error_printing(e_test)
 
-    print('made it through platform_plot')
+    if print_long==True: print('made it through platform_plot')
     
     return
 
 # **********************************
-def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_of_int,e_test,i,j):
-    print('made it into ppiplot')
+def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_of_int,CS3,e_test,i,j):
+    if print_long==True: print('made it into ppiplot')
     
     SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 25, 30, 35, 50
     plt.rc('font', size=MEDIUM_SIZE)         # controls default text sizes
@@ -319,12 +323,12 @@ def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_o
     #  plt.clf() # clear current figure
 #
     # Plot colorbars
-    #  if p_var == "Thetae":
-        #  c_lab= "Equivalent Potential Temp [K]"
-    #  elif p_var == "Thetav":
-        #  c_lab= "Virtual Potential Temp [K]"
-    #  cbar_ax = plt.axes([.5265,.5356,.014, 0.405])#left, bottom, width, height
-    #  cbar=plt.colorbar(CS3,cax=cbar_ax, orientation='vertical', label=c_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(globalamin,globalamax+1,2))
+    if p_var == "Thetae":
+        c_lab= "Equivalent Potential Temp [K]"
+    elif p_var == "Thetav":
+        c_lab= "Virtual Potential Temp [K]"
+    cbar_ax = plt.axes([.5265,.5356,.014, 0.405])#left, bottom, width, height
+    cbar=plt.colorbar(CS3,cax=cbar_ax, orientation='vertical', label=c_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(globalamin,globalamax+1,2))
 #
     ## Plot title
     title=fancy_date_string_utc
@@ -335,13 +339,13 @@ def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_o
     plt.savefig('/Users/severe2/Research/TORUS_Data/'+day+'/radar/Nexrad/plots/goal'+str(i)+'_'+str(j)+'.png')
     plt.close()
 
-    print('made it through ppiplot')
+    if print_long== True: print('made it through ppiplot')
     print('***********************************************************************************************************')
     
     return
 
 def radar_subplots(mom,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,e_test):
-    print("made it into radar sub")
+    if print_long==True: print("made it into radar sub")
     ## SET UP PLOTTING CONTROLS
     NSSLmm, NEBmm, UASd = True, False, False #which other platforms do you wish to plot 
     country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
@@ -393,12 +397,12 @@ def radar_subplots(mom,fig,display,currentscantime,globalamin,globalamax,p_var,p
         l.get_title().set_fontweight('bold')
     else: #Set up an invisible legend in a jankey method to force the plots to be where I want them (#goodenoughforgovwork)
         ax_n.legend([],[],loc='lower left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(1.3,1.017), handlelength=.25,frameon=False)
-    print('made it through radar sub')
+    if print_long==True: print('made it through radar sub')
 
     return
 
 def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,radar_sub=False):
-    print('Made it into time_series')
+    if print_long==True: print('Made it into time_series')
     if radar_sub == True:
         ax_n, var1='ax3', 212
         vline=currentscantime 
@@ -410,7 +414,7 @@ def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,rada
     
     #NSSLMM_files= sorted(glob.glob(filesys+'TORUS_Data/'+day+'/mesonets/NSSL/*.nc'))
     for NSSLMM in NSSLMM_df:
-        print(str(NSSLMM.name))
+        #print(str(NSSLMM.name))
         b_array=[] #blank array
         m_style,m_color,l_color,leg_str,bb_array = platform_attr(NSSLMM,b_array) #get the attributes (color, label, etc)
 
@@ -460,7 +464,7 @@ def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,rada
     for line in leg.get_lines():
         line.set_linewidth(12)
     
-    print('Made it through time_series')
+    if print_long==True: print('Made it through time_series')
     return
 
 #*****************************
@@ -798,6 +802,17 @@ for MM in ['FFld','LIDR','Prb1','Prb2','WinS']:
 globalamax = np.max(max_array)
 globalamin = np.min(min_array)
 print(p_of_int)
+
+#Dummy plot for scatter
+# Make a scale covering max and min
+cmap=cmocean.cm.curl
+Z = [[0,0],[0,0]]
+levels = np.arange(globalamin,globalamax+1,1)
+print(Z)
+print(levels)
+print(cmap)
+CS3 = plt.contourf(Z, levels, cmap=cmap)#,transform=datacrs)
+plt.clf() # clear current figure
 # ************************************
 
 #print(Prb1_df)
@@ -825,7 +840,7 @@ for r in r_ofintrest:
         #testing_plots(radar,i,j,r_only,globalamin,globalamax,p_var,e_test)
         #plot_with_WSR(radar,i,j)
 
-        ppiplot(r_only, radar_list,radar, filesys, day, globalamin,globalamax, p_var, p_of_int, e_test,i,j)
+        ppiplot(r_only, radar_list,radar, filesys, day, globalamin,globalamax, p_var, p_of_int,CS3, e_test,i,j)
     #plot_with_WSR(test2)
     #print(timeranges_each_r)
     

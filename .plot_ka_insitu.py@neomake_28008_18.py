@@ -55,7 +55,7 @@ import sys, traceback
 ##########################################################################
 #Variables
 ##########
-day = '20190524' #'YYYYMMDD'
+day = '20190517' #'YYYYMMDD'
 radar_plotting= True #would you like to plot radar images? (set to False to only plot timeseries)
 r_only=False #set to true if you want the radar plots only 
 p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
@@ -64,11 +64,11 @@ filesys='/Users/severe2/Research/'
 #Troubleshooting y/n
 ####################
 #Set to True to print statements when entering/leaving definitions (helpful to understanding whats going on in the code but prints alot of lines to your terminal)
-print_long = False# True/False variable
+print_long = False # True/False variable
 
 #Set to False to not print out the errors that tripped 'try' statements: set to True only while troubleshooting 
   ##there will be 'valid' errors caused by looping through platforms etc.... hence needlessly confusing unless troubleshooting
-e_test = False#True/False variable
+e_test = False #True/False variable
 
 def error_printing(e_test):
     ''' Basically I got sick of removing/replacing the try statements while troubleshooting 
@@ -204,24 +204,11 @@ def getRadarPositionData(c_time, r_dep):
 ###########################
 ## PLOTTING DEFINTIONS  ###
 ###########################
-def maskdata(p_var, platform_file, mask=True):
-    platform_unmasked= platform_file[p_var].values
+def maskdata(p_var, NSSLMM):
+    p_um = NSSLMM[p_var].values
+    p_m = np.ma.masked_where(NSSLMM['qc_flag'].values>0, p_um)
     
-    if mask== False:
-        platform_data= platform_unmasked
-    elif mask== True:
-        platform_name= str(platform_file.name)
-        if (platform_name in ['FFld','WinS','LIDR','Prb1','Prb2']):
-            platform_data= np.ma.masked_where(platform_file['qc_flag'].values>0, platform_unmasked)
-        elif (platform_name in ['CoMeT1','CoMeT2','CoMeT3']):
-            #for now
-            platform_data= platform_unmasked
-        elif (platform_name in ['Insert UAS filenames here']):
-            print("will be filled in")
-        else:
-            print("What platform are you trying to use?")
-    
-    return platform_data
+    return p_m, p_um
 
 #* * * * * 
 def getLocation(lat1, lon1, brng, distancekm):
@@ -254,7 +241,6 @@ def createCircleAroundWithRadius(lat, lon, radiuskm,sectorstart,sectorfinish,hea
 # * * * * * * 
 def rhi_spokes_rings(rhib,rhie,head,klat,klon,radar,display,ymin,ymax,xmin,xmax):
     if print_long== True: print('made it into rhi_spokes_rings')
-
     #produce spoke and ring
     for j in range(int(rhib),int(rhie)+1,10):
         ang= head + j
@@ -266,29 +252,26 @@ def rhi_spokes_rings(rhib,rhie,head,klat,klon,radar,display,ymin,ymax,xmin,xmax)
         display.plot_line_geo([klon,D], [klat,C], marker=None, color='k', linewidth=0.5, linestyle=":")
         #if np.logical_and(C>ymin,np.logical_and(C<ymax,np.logical_and(D>xmin,D<xmax))):
             #d1=plt.text(D, C, str(ang),horizontalalignment='center',transform=ccrs.PlateCarree(),fontsize=10,zorder=9,path_effects=([PathEffects.withStroke(linewidth=4,foreground='xkcd:pale blue')])
-    
     if print_long== True: print('made it through rhi_spokes_rings')
+    
     return
 
 # * * * * * *
 def legend_maker(p_name,m_style,m_color,leg_str,legend_elements):
     if print_long== True: print('made it into legend_maker')
-    
     if (p_name in ['Ka1','Ka2']): #the legend entries for the KA radars
         legend_entry=Line2D([], [], marker=m_style, markeredgecolor='black',markeredgewidth=3,label=leg_str,markerfacecolor=m_color, markersize=26)
     else:
         legend_entry=Line2D([], [], marker=m_style, markeredgecolor=m_color,markeredgewidth=3,label=leg_str, markersize=26,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')])
     
     legend_elements=np.append(legend_elements,legend_entry)
-    
     if print_long== True: print('made it through legend maker')
+    
     return legend_elements
 
 # * * * * * *
 def platform_attr(p_file,legend_elements,radar_m=False,r_s=False):
     if print_long== True: print('Made it into platform_attr')
-
-    #assign the atributes for non-radar markers
     if radar_m == False:
         if p_file.name == "Prb1":
             m_style, m_color, l_color, leg_str= '1','xkcd:lightblue','steelblue','Prb1'
@@ -300,15 +283,8 @@ def platform_attr(p_file,legend_elements,radar_m=False,r_s=False):
             m_style, m_color, l_color, leg_str= '1','xkcd:pastel purple','xkcd:light plum','LIDR'
         elif p_file.name == "WinS":
             m_style, m_color, l_color, leg_str= '1','xkcd:peach','xkcd:dark peach','WinS'
-        elif p_file.name == "CoMeT1":
-            m_style, m_color, l_color, leg_str= '1','brown','brown','CoMeT1'
-        elif p_file.name == "CoMeT2":
-            m_style, m_color, l_color, leg_str= '1','yellow','yellow','CoMeT2'
-        elif p_file.name == "CoMeT3":
-            m_style, m_color, l_color, leg_str= '1','black','black','CoMeT3'
         p_name = p_file.name
 
-    #assign the atributes for the radar markers
     elif radar_m == True:
         if p_file == 'Ka2':
             m_style, m_color, l_color, leg_str= '8','xkcd:crimson','xkcd:crimson','Ka2'
@@ -318,8 +294,8 @@ def platform_attr(p_file,legend_elements,radar_m=False,r_s=False):
 
     if r_s == True: #only add to the legend if the platform_attr def was called while making the radar subplots
         legend_elements=legend_maker(p_name,m_style,m_color,leg_str,legend_elements)
-    
     if print_long== True: print('Made it through platform_attr')
+
     return m_style, m_color, l_color, leg_str, legend_elements
 
 # * * * * * *
@@ -355,7 +331,7 @@ def grab_platform_subset(p_df, scan_time, p_var):
     V_sub = df_sub['V'].values
     lat_sub= df_sub['lat'].values
     lon_sub= df_sub['lon'].values
-
+    
     # test to ensure that there is valid data in the subrange (aka the platform was deployed during the time of radarscan)
     try:
         # p_test=df_sub.loc[df_sub['datetime']==scan_time
@@ -391,6 +367,7 @@ def platform_plot(file,radartime,ax_n,color,m_color,p_var,e_test,labelbias=(0,0)
         except: error_printing(e_test)
 
     if print_long== True: print('made it through platform_plot')
+    
     return
 
 
@@ -398,7 +375,7 @@ def platform_plot(file,radartime,ax_n,color,m_color,p_var,e_test,labelbias=(0,0)
 ##  #  #  #  #  #  #  #  #  #  #  #  #  # # # #  #  #  #  #  #  #  #  #  #  # #  #  #  # # #  #  #  #  #  #  #  #  # #  #
 ##  #  #  #  #  #  #  #  #  #  #  #  #  # # # #  #  #  #  #  #  #  #  #  #  # #  #  #  # # #  #  #  #  #  #  #  #  # #  #
 def ppiplot(r_only,radar,swp_id,azimuth,currentscantime,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1,rhib2,rhie2,head1,head2,globalamin,globalamax,p_var,e_test):
-    if print_long== True: print('~~~~~~~~~~~Made it into ppiplot~~~~~~~~~~~~~~~~~~~~~')
+    if print_long== True: print('made it into ppiplot')
     
     SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 25, 30, 35, 50
     plt.rc('font', size=MEDIUM_SIZE)         # controls default text sizes
@@ -437,22 +414,22 @@ def ppiplot(r_only,radar,swp_id,azimuth,currentscantime,klat,klon,klat1,klon1,kl
     ## Finish plot 
     plt.tight_layout()
     plt.savefig('/Users/severe2/Research/TORUS_Data/'+day+'/mesonets/plots/'+thefile.split("/")[-1][10:13]+'_'+currentscantime.strftime('%m%d%H%M')+'_'+p_var+'.png')
-    print('/Users/severe2/Research/TORUS_Data/'+day+'/mesonets/plots/'+thefile.split("/")[-1][10:13]+'_'+currentscantime.strftime('%m%d%H%M')+'_'+p_var+'.png')
     plt.close()
 
-    if print_long== True: print('~~~~~~~~~~~made it through ppiplot~~~~~~~~~~~~~~~~~~')
+    if print_long== True: print('made it through ppiplot')
     print('Done Plotting')
     print('******************************************************************************************************')
+    
     return 
 
 # * * * * * *  *
 def radar_subplots(mom,fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1,rhib2,rhie2,head1,head2,radar,swp_id,currentscantime,p_var,e_test):
-    if print_long== True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
+    if print_long== True: print('made it into radar_subplots')
     
     ## SET UP PLOTTING CONTROLS
-    NSSLmm, NEBmm, UASd = True, True, False #which other platforms do you wish to plot 
+    NSSLmm, NEBmm, UASd = True, False, False #which other platforms do you wish to plot 
     rhi_ring= True #do you want the rhi spokes
-    country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
+    country_roads, hwys, county_lines, state_lines = False, True, False, False #background plot features
     legend_elements=[]
     ###########################
 
@@ -510,11 +487,7 @@ def radar_subplots(mom,fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1
             m_style,m_color,l_color,leg_str,legend_elements=platform_attr(NSSLMM,legend_elements,r_s=True)
             platform_plot(NSSLMM,currentscantime,ax_n,'xkcd:light grey',m_color,p_var,e_test, labelbias=(0,0))
     if NEBmm == True:
-        for UNLMM in UNLMM_df:
-            if print_long== True: print(UNLMM.name)
-            m_style,m_color,l_color,leg_str,legend_elements=platform_attr(UNLMM,legend_elements,r_s=True)
-            platform_plot(UNLMM,currentscantime,ax_n,'xkcd:light grey',m_color,p_var,e_test, labelbias=(0,0))
-
+        print('To be filled in')
     if UASd == True:
         for UAS in UAS_files:
             m_style,m_color,l_color,leg_str,legend_elements=platform_attr(UAS,legend_elements,r_s=True)
@@ -550,13 +523,13 @@ def radar_subplots(mom,fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1
         states_provinces = cartopy.feature.NaturalEarthFeature(category='cultural',name='admin_1_states_provinces_lines',scale='10m',facecolor='none')
         ax_n.add_feature(states_provinces, edgecolor='black', linewidth=2)
      
-    if print_long== True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
+    if print_long== True: print('Made it through radar_subplots')
+    
     return
 
 # * * * * * * * 
 def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,radar_sub=False):
-    if print_long== True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
-
+    if print_long== True: print('Made it into time_series')
     if radar_sub == True:
         ax_n, var1='ax3', 212
         vline=currentscantime 
@@ -566,40 +539,36 @@ def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,rada
         ax_n='ax'
         fig, ax_n= plt.subplots()
     
-    for platform_df in [NSSLMM_df,UNLMM_df,UAS_df]: 
-        #can remove this if/else statement once you fill in the UAS portion
-        if platform_df == UAS_df:
-            # Need to come back and fill in UAS
-            # Can remove this if/else statement once you fill in the UAS portion
-            pass
-        else:
-            for platform_file in platform_df:
-                if print_long== True: print(str(platform_file.name))
-                
-                ## Set up line colors and legend labels 
-                b_array=[] #blank array
-                m_style,m_color,l_color,leg_str,bb_array = platform_attr(platform_file,b_array) #get the attributes (color, label, etc)
+    #NSSLMM_files= sorted(glob.glob(filesys+'TORUS_Data/'+day+'/mesonets/NSSL/*.nc'))
+    for NSSLMM in NSSLMM_df:
+        if print_long== True: print(str(NSSLMM.name))
+        b_array=[] #blank array
+        m_style,m_color,l_color,leg_str,bb_array = platform_attr(NSSLMM,b_array) #get the attributes (color, label, etc)
 
-                ## Should ploting data be masked?
-                # if you only want to mask certain platforms set up an if-statement to assign the "masking" variable
-                masking = True #True/False variable
-                plot_data= maskdata(p_var,platform_file,masking)
+        ## OPEN the file and pull out data we want
+        if p_var == "Thetae":
+            ylab = "Equivalent Potential Temp [K]"
+        elif p_var == "Thetav":
+            ylab = "Virtual Potential Temp [K]"
 
-                ## Plot
-                ax_n.plot(platform_file['datetime'],plot_data,linewidth=3,color=l_color,label=leg_str) #assigning label= is what allows the legend to work  
-                    
-    ## Set up XY axes tick locations
-    ax_n.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
-    ax_n.xaxis.set_major_locator(mdates.AutoDateLocator()) 
-    ax_n.xaxis.set_minor_locator(AutoMinorLocator(6)) # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
-    ax_n.yaxis.set_major_locator(MultipleLocator(5)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
-    ax_n.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
+        ## Plot
+        #should ploting data be masked?
+        mask = True #True/False variable
+        if mask == True:
+            p_mask, p_unmasked = maskdata(p_var, NSSLMM)
+            ax_n.plot(NSSLMM['datetime'],p_mask,linewidth=3,color=l_color,label=leg_str) #assigning label= is what allows the legend to work  
+        elif mask == False:
+            p_mask, p_unmasked = maskdata(p_var, NSSLMM)
+            ax_n.plot(NSSLMM['datetime'],p_unmasked,linewidth=3,color=l_color,label=leg_str) #assigning label= is what allows the legend to work  
+        
+        ## Set up XY axes tick locations
+        ax_n.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
+        ax_n.xaxis.set_major_locator(mdates.AutoDateLocator()) 
+        ax_n.xaxis.set_minor_locator(AutoMinorLocator(6)) # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
+        ax_n.yaxis.set_major_locator(MultipleLocator(5)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
+        ax_n.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
     
     ## Set up axes formats (lables/ ticks etc)
-    if p_var == "Thetae":
-        ylab = "Equivalent Potential Temp [K]"
-    elif p_var == "Thetav":
-        ylab = "Virtual Potential Temp [K]"
     ax_n.set_ylabel(ylab)
     ax_n.set_xlabel('Time (UTC)')
     ax_n.tick_params(which='major', width=2,length=20, color='black') 
@@ -622,7 +591,8 @@ def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,rada
     for line in leg.get_lines():
         line.set_linewidth(12)
     
-    if print_long== True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
+    if print_long== True: print('Made it through time_series')
+    
     return
 
 
@@ -635,7 +605,7 @@ tstart = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),15,0,0)
 tend= None
 
 NSSLMM_df, UNLMM_df, max_array, min_array = [], [], [], []
-for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']:
+for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3']:
    
     #load the NSSL mesonets 
     if (MM in ['FFld','LIDR','Prb1','Prb2','WinS']):
@@ -646,31 +616,31 @@ for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']:
                 FFld_df = read_nsslmm(MMfile,tstart,tend)
                 FFld_df.name='FFld'
                 NSSLMM_df.append(FFld_df)
-                masked_df = maskdata(p_var, FFld_df, mask=True)
+                masked_df, unmasked_df = maskdata(p_var, FFld_df)
                 max_val, min_val= masked_df.max(), masked_df.min()
             elif MM == 'LIDR':
                 LIDR_df = read_nsslmm(MMfile,tstart,tend)
                 LIDR_df.name='LIDR'
                 NSSLMM_df.append(LIDR_df)
-                masked_df = maskdata(p_var, LIDR_df, mask=True)
+                masked_df, unmasked_df = maskdata(p_var, LIDR_df)
                 max_val, min_val= masked_df.max(), masked_df.min()
             elif MM == 'Prb1':
                 Prb1_df = read_nsslmm(MMfile,tstart,tend)
                 Prb1_df.name='Prb1'
                 NSSLMM_df.append(Prb1_df)
-                masked_df = maskdata(p_var, Prb1_df, mask=True)
+                masked_df, unmasked_df = maskdata(p_var, Prb1_df)
                 max_val, min_val= masked_df.max(), masked_df.min()
             elif MM == 'Prb2':
                 Prb2_df = read_nsslmm(MMfile,tstart,tend)
                 Prb2_df.name='Prb2'
                 NSSLMM_df.append(Prb2_df)
-                masked_df = maskdata(p_var, Prb2_df, mask=True)
+                masked_df, unmasked_df = maskdata(p_var, Prb2_df)
                 max_val, min_val= masked_df.max(), masked_df.min()
             elif MM == 'WinS':
                 WinS_df = read_nsslmm(MMfile,tstart,tend)
                 WinS_df.name='WinS'
                 NSSLMM_df.append(WinS_df)
-                masked_df = maskdata(p_var, WinS_df, mask=True)
+                masked_df, unmasked_df = maskdata(p_var, WinS_df)
                 max_val, min_val= masked_df.max(), masked_df.min()
                 #max_val, min_val= WinS_df[p_var].max(), WinS_df[p_var].min()
         except: error_printing(e_test)
@@ -678,34 +648,31 @@ for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']:
     #load the UNL MM files 
     elif (MM in ['CoMeT1', 'CoMeT2', 'CoMeT3']):
         try: 
-            MMfile='/Volumes/Samsung_T5/Research/TORUS_Data/'+day+'/mesonets/UNL/UNL.'+MM+'.*'
+            MMfile='/Volumes/Samsung_T5/Research/TORUS_Data/'+day+'/mesonets/UNL/UNL.'+MM+'.'+day+'*'
             
             if MM == 'CoMeT1':
-                CoMeT1_df = read_unlmm(MMfile,tstart,tend)
+                CoMeT1_df, co1 = read_unlmm(MMfile,tstart,tend)
                 CoMeT1_df.name='CoMeT1'
                 UNLMM_df.append(CoMeT1_df)
-                masked_df = maskdata(p_var, CoMeT1_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
+                #masked_df, unmasked_df = maskdata(p_var, CoMeT1_df)
+                #max_val, min_val= unmasked_df.max(), unmasked_df.min()
             elif MM == 'CoMeT2':
-                CoMeT2_df = read_unlmm(MMfile,tstart,tend)
+                CoMeT2_df,co2 = read_unlmm(MMfile,tstart,tend)
                 CoMeT2_df.name='CoMeT2'
                 UNLMM_df.append(CoMeT2_df)
-                masked_df = maskdata(p_var, CoMeT2_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
+                #masked_df, unmasked_df = maskdata(p_var, CoMeT2_df)
+                #max_val, min_val= unmasked_df.max(), unmasked_df.min()
             elif MM == 'CoMeT3':
-                CoMeT3_df = read_unlmm(MMfile,tstart,tend)
+                CoMeT3_df , co3= read_unlmm(MMfile,tstart,tend)
                 CoMeT3_df.name='CoMeT3'
                 UNLMM_df.append(CoMeT3_df)
-                masked_df = maskdata(p_var, CoMeT3_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
+                #masked_df, unmasked_df = maskdata(p_var, CoMeT3_df)
+                #max_val, min_val= unmasked_df.max(), unmasked_df.min()
         except: error_printing(e_test)
-
-    #load the UAS files
-    elif (MM in ['UAS','UAS_fillers']):
-        UAS_df='Will come back and fill in'
 
     max_array.append(max_val)
     min_array.append(min_val)
+print(co1)
 
 #max an min values that will plot
 #if p_var =='Thetae':
@@ -717,6 +684,7 @@ for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']:
 globalamax = np.max(max_array)
 globalamin = np.min(min_array)
 
+print(UNLMM_df)
 #######################################################################################################
 #################
 # Create Plots ##
@@ -791,7 +759,7 @@ if radar_plotting == True:
     print("all finished")
 
 else:
-#Only plotting timeseries (this code isn't fully fleshed out but in theroy this code is built in such a way to allow for this)
+#Only plotting timeseries
     print("no radar plotted")
     time_series(filesys,day,fig,p_var,radar_sub=False)
     #print(str(filesys+'TORUS_Data/'+day+'/mesonets/NSSL/*.nc'))
