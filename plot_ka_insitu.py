@@ -17,6 +17,7 @@ import datetime as dt
 from matplotlib.colors import ListedColormap
 import matplotlib.pylab as pl
 import matplotlib.dates as mdates
+import matplotlib.gridspec as gridspec
 from matplotlib.ticker import MaxNLocator
 from datetime import timedelta
 from mpl_toolkits import axes_grid1
@@ -53,13 +54,14 @@ import read_platforms
 import sys, traceback
 
 ##########################################################################
-#Variables
-##########
+## VARIABLES
+############
 day = '20190524' #'YYYYMMDD'
 radar_plotting= True #would you like to plot radar images? (set to False to only plot timeseries)
 r_only=False #set to true if you want the radar plots only 
 p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
 filesys='/Users/severe2/Research/'
+temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
 
 #Troubleshooting y/n
 ####################
@@ -224,28 +226,61 @@ def maskdata(p_var, platform_file, mask=True):
     return platform_data
 
 #* * * * * 
-def getLocation(lat1, lon1, brng, distancekm):
-    lat1 = lat1 * np.pi / 180.0
-    lon1 = lon1 * np.pi / 180.0
+def getLocation(current_lat,current_lon,offsetkm, given_bearing= False):
+    ''' 
+    This definition has two functions:
+        1) If no bearing is specified it will return the max and min lat/lons 
+            to form a square surrounding the point indicated by lat1,lon1 by x km. 
+            In this scenario end_lat and end_lon will be returned as nan's. 
+        2) If a bearing is given then the defintion will return one set of lat/lon values 
+             (end_lat and end_lon) which is the location x km away from the point lat1, lon1
+             if an observer moved in a straight line the direction the bearing indicated. In 
+             this scenario the four  min/max_lat/lon will be returned as nan's. 
+    '''
+    lat1 = current_lat * np.pi / 180.0
+    lon1 = current_lon * np.pi / 180.0
     
     R = 6378.1 #earth radius
     #R = ~ 3959 MilesR = 3959
-    bearing = (brng / 90.)* np.pi / 2.
-
-    lat2 = np.arcsin(np.sin(lat1) * np.cos(distancekm/R) + np.cos(lat1) * np.sin(distancekm/R) * np.cos(bearing))
-    lon2 = lon1 + np.arctan2(np.sin(bearing)*np.sin(distancekm/R)*np.cos(lat1),np.cos(distancekm/R)-np.sin(lat1)*np.sin(lat2))
-    lon2 = 180.0 * lon2 / np.pi
-    lat2 = 180.0 * lat2 / np.pi
     
-    return lat2, lon2
+    if given_bearing == False:
+        for brng in [0,90,180,270]:
+            bearing = (brng / 90.)* np.pi / 2.
+
+            new_lat = np.arcsin(np.sin(lat1) * np.cos(offsetkm/R) + np.cos(lat1) * np.sin(offsetkm/R) * np.cos(bearing))
+            new_lon = lon1 + np.arctan2(np.sin(bearing)*np.sin(offsetkm/R)*np.cos(lat1),np.cos(offsetkm/R)-np.sin(lat1)*np.sin(new_lat))
+            new_lon = 180.0 * new_lon / np.pi
+            new_lat = 180.0 * new_lat / np.pi
+
+            if brng == 0:
+                max_lat=new_lat
+            elif brng == 90:
+                max_lon= new_lon
+            elif brng == 180: 
+                min_lat= new_lat
+            elif brng == 270: 
+                min_lon=new_lon 
+        end_lat, end_lon = np.nan, np.nan
+        
+    else:
+        #if a bearing is provided 
+        bearing = (given_bearing/ 90.)* np.pi / 2.
+
+        new_lat = np.arcsin(np.sin(lat1) * np.cos(offsetkm/R) + np.cos(lat1) * np.sin(offsetkm/R) * np.cos(bearing))
+        new_lon = lon1 + np.arctan2(np.sin(bearing)*np.sin(offsetkm/R)*np.cos(lat1),np.cos(offsetkm/R)-np.sin(lat1)*np.sin(new_lat))
+        end_lon = 180.0 * new_lon / np.pi
+        end_lat = 180.0 * new_lat / np.pi
+        min_lat, min_lon, max_lat, max_lon = np.nan, np.nan, np.nan, np.nan   
+            
+    return min_lat, max_lat, min_lon, max_lon, end_lat, end_lon 
 
 #* * * * * 
 def createCircleAroundWithRadius(lat, lon, radiuskm,sectorstart,sectorfinish,heading):
     #    ring = ogr.Geometry(ogr.wkbLinearRing)
     latArray = []
     lonArray = []
-    for brng in range(int(heading+sectorstart),int(heading+sectorfinish)): #degrees of sector
-        lat2, lon2 = getLocation(lat,lon,brng,radiuskm)
+    for bearing in range(int(heading+sectorstart),int(heading+sectorfinish)): #degrees of sector
+        a, b, c, d, lat2, lon2 = getLocation(lat,lon,radiuskm,given_bearing=bearing)
         latArray.append(lat2)
         lonArray.append(lon2)
     
@@ -261,7 +296,8 @@ def rhi_spokes_rings(rhib,rhie,head,klat,klon,radar,display,ymin,ymax,xmin,xmax)
         if ang > 360.:
             ang=int(ang-360.)
         A,B = createCircleAroundWithRadius(klat,klon,(radar.range['data'][-1]-500.)/1000., rhib,rhie+1,head) #this plots a circle that connects the spokes
-        C,D = getLocation(klat, klon, ang, (radar.range['data'][-1]-500.)/1000.)
+        #C,D = getLocation(klat, klon, ang, (radar.range['data'][-1]-500.)/1000.)
+        a,b,c,d, lat2,lon2 = getLocation(klat, klon, (radar.range['data'][-1]-500.)/1000.,given_bearing=ang)
         display.plot_line_geo(A,B,marker=None,color='grey',linewidth=.25) #this plots a circle that connects the spokes
         display.plot_line_geo([klon,D], [klat,C], marker=None, color='k', linewidth=0.5, linestyle=":")
         #if np.logical_and(C>ymin,np.logical_and(C<ymax,np.logical_and(D>xmin,D<xmax))):
@@ -400,7 +436,7 @@ def platform_plot(file,radartime,ax_n,color,m_color,p_var,e_test,labelbias=(0,0)
 def ppiplot(r_only,radar,swp_id,azimuth,currentscantime,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1,rhib2,rhie2,head1,head2,globalamin,globalamax,p_var,e_test):
     if print_long== True: print('~~~~~~~~~~~Made it into ppiplot~~~~~~~~~~~~~~~~~~~~~')
     
-    SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 25, 30, 35, 50
+    SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 23, 28, 33, 50
     plt.rc('font', size=MEDIUM_SIZE)         # controls default text sizes
     plt.rc('axes', titlesize=MEDIUM_SIZE)    # fontsize of the axes title
     plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
@@ -412,41 +448,54 @@ def ppiplot(r_only,radar,swp_id,azimuth,currentscantime,klat,klon,klat1,klon1,kl
     ## Set up plot size
     if r_only == True:
         fig = plt.figure(figsize=(40,150), facecolor='white')
+        gs= gridspec.GridSpec(nrows=2,ncols=1)      
     else:
-        fig = plt.figure(figsize=(30,20),facecolor='white')
+        ## Set up figure
+        fig = plt.figure(figsize=(32,20),facecolor='white')
+
+        ## Establish the gridspec layout 
+        gs= gridspec.GridSpec(nrows=2, ncols=5,width_ratios=[.5,8,1,8,.25],height_ratios=[3,2],wspace=.25,hspace=.1)
+        
+        ## There are extra columns which are spacers to allow the formating to work 
+        # Uncomment to visualize the spacers 
+        #  ax_c=fig.add_subplot(gs[0,2])
+        #  ax_l=fig.add_subplot(gs[0,0])
+        #  ax_s=fig.add_subplot(gs[0,4])
     display = pyart.graph.RadarMapDisplay(radar)
 
     ## Plot instuments on subplots
-    radar_subplots('refl',fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1,rhib2,rhie2,head1,head2,radar,swp_id,currentscantime,p_var,e_test)
-    radar_subplots('vel',fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1,rhib2,rhie2,head1,head2,radar,swp_id,currentscantime,p_var,e_test)
+    post=radar_subplots('refl',fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1,rhib2,rhie2,head1,head2,radar,swp_id,currentscantime,p_var,gs,e_test)
+    post=radar_subplots('vel',fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1,rhib2,rhie2,head1,head2,radar,swp_id,currentscantime,p_var,gs,e_test)
     if r_only == False:
-        time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,radar_sub=True)
+        time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,gs,radar_sub=True)
 
-    ## Plot colorbars
+    ## Plot platform colorbar
     if p_var == "Thetae":
         c_lab= "Equivalent Potential Temp [K]"
     elif p_var == "Thetav":
         c_lab= "Virtual Potential Temp [K]"
-    cbar_ax = plt.axes([.5265,.5356,.014, 0.405])#left, bottom, width, height
+    cbar_ax = plt.axes([.514, post.y0,.014, post.y1-post.y0])#left, bottom, width, height
     cbar=plt.colorbar(CS3,cax=cbar_ax, orientation='vertical', label=c_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(globalamin,globalamax+1,2))
-   
+
     ## Plot title
     title = thefile.split("/")[-1][10:13] + ' '+str(np.around(azimuth,2))+r'$^{\circ}$ PPI ' +currentscantime.strftime("%m/%d/%y %H:%M")+ ' UTC'
-    plt.suptitle(title)
+    plt.suptitle(title,y=.92)
     
     ## Finish plot 
-    plt.tight_layout()
-    plt.savefig('/Users/severe2/Research/TORUS_Data/'+day+'/mesonets/plots/'+thefile.split("/")[-1][10:13]+'_'+currentscantime.strftime('%m%d%H%M')+'_'+p_var+'.png')
+    plt.savefig('/Users/severe2/Research/TORUS_Data/'+day+'/mesonets/plots/'+thefile.split("/")[-1][10:13]+'_'+currentscantime.strftime('%m%d%H%M')+'_'+p_var+'.png' ,bbox_inches='tight',pad_inches=.3)
     print('/Users/severe2/Research/TORUS_Data/'+day+'/mesonets/plots/'+thefile.split("/")[-1][10:13]+'_'+currentscantime.strftime('%m%d%H%M')+'_'+p_var+'.png')
     plt.close()
 
     if print_long== True: print('~~~~~~~~~~~made it through ppiplot~~~~~~~~~~~~~~~~~~')
     print('Done Plotting')
     print('******************************************************************************************************')
+
+    ## Makes a ding noise 
+    print('\a')
     return 
 
 # * * * * * *  *
-def radar_subplots(mom,fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1,rhib2,rhie2,head1,head2,radar,swp_id,currentscantime,p_var,e_test):
+def radar_subplots(mom,fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1,rhib2,rhie2,head1,head2,radar,swp_id,currentscantime,p_var,gs,e_test):
     if print_long== True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
     
     ## SET UP PLOTTING CONTROLS
@@ -458,25 +507,30 @@ def radar_subplots(mom,fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1
 
     ## SET UP VARS FOR EACH RADAR MOMENTS
     if mom == 'refl':
-        pos, field=221, 'refl_fix'
+        row, col, field= 0, 1, 'refl_fix'
         c_scale, c_label='pyart_HomeyerRainbow','Radar Reflectivity [dbz]'
         vminb, vmaxb= -30.,30.
         p_title, leg ='Reflectivity', True
     elif mom == 'vel':
-        pos, field=222, 'vel_fix'
+        row, col, field= 0, 3, 'vel_fix'
         c_scale, c_label='pyart_balance','Velocity [m/s]'
         vminb, vmaxb= -40.,40.
         p_title, leg ='Radial Velocity', False
+    else:
+        print("hey what just happened!\n")
+        exit
     
     ## Bounding box, x km away from the radar in all directions 
-    xmin, xmax = getLocation(klat,klon,270,21)[1], getLocation(klat,klon,90,21)[1]
-    ymin, ymax = getLocation(klat,klon,180,21)[0], getLocation(klat,klon,0,21)[0]
+    ymin,ymax,xmin,xmax,a,b=getLocation(klat,klon,offsetkm=21)    
+    #  xmin, xmax = getLocation(klat,klon,270,21)[1], getLocation(klat,klon,90,21)[1]
+    #  ymin, ymax = getLocation(klat,klon,180,21)[0], getLocation(klat,klon,0,21)[0]
     
     ## SET UP SUBPLOTS   
-    ax_n=fig.add_subplot(pos,projection=display.grid_projection)
+    ax_n=fig.add_subplot(gs[row,col],projection=display.grid_projection)
     ax_n.plot(klon,klat,transform=display.grid_projection)
-    display.plot_ppi_map(field, swp_id,title_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, colorbar_label= c_label, min_lon=xmin, max_lon=xmax, min_lat=ymin, max_lat=ymax, embelish=False) 
     ax_n.text(.5,-.065,p_title,transform=ax_n.transAxes,horizontalalignment='center',fontsize=40) #the radar subplot titles
+    display.plot_ppi_map(field, swp_id,title_flag=False,colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lon=xmin, max_lon=xmax, min_lat=ymin, max_lat=ymax, embelish=False) 
+    #display.plot_ppi_map(field, swp_id,title_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, colorbar_label= c_label, min_lon=xmin, max_lon=xmax, min_lat=ymin, max_lat=ymax, embelish=False) 
         
     ## PLOT RHI SPOKES
     if rhi_ring == True:
@@ -514,21 +568,34 @@ def radar_subplots(mom,fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1
             if print_long== True: print(UNLMM.name)
             m_style,m_color,l_color,leg_str,legend_elements=platform_attr(UNLMM,legend_elements,r_s=True)
             platform_plot(UNLMM,currentscantime,ax_n,'xkcd:light grey',m_color,p_var,e_test, labelbias=(0,0))
-
     if UASd == True:
         for UAS in UAS_files:
             m_style,m_color,l_color,leg_str,legend_elements=platform_attr(UAS,legend_elements,r_s=True)
             platform_plot(UAS,currentscantime,ax_n,'xkcd:very pale green',p_var,labelbias=(0,0.01))
  
     
+    ## DEAL WITH COLORBARS
+    # Attach colorbar to each subplot 
+    divider = make_axes_locatable(plt.gca())
+    c_ax = divider.append_axes("right","5%", pad="2%",axes_class=plt.Axes)
+    sm = plt.cm.ScalarMappable(cmap=c_scale,norm=matplotlib.colors.Normalize(vmin=vminb,vmax=vmaxb))
+    sm._A = []
+    cb = plt.colorbar(sm,cax=c_ax,label=c_label)
+    
+    ## Get position information to pass along to the remaining colorbar 
+    post=ax_n.get_position()
+    
+
     ## SET UP LEGENDS
     l_list=legend_elements.tolist()
-    if leg == True: #add legend for platform markers
-        l=ax_n.legend(handles=l_list,loc='lower left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.45,0), handlelength=.1,title="Platforms",shadow=True,fancybox=True,ncol=1,edgecolor='black')
+    if leg == True: #this means you are currently making the left subplot 
+        #add legend for platform markers
+        l=ax_n.legend(handles=l_list,loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1,title="Platforms",shadow=True,fancybox=True,ncol=1,edgecolor='black')
         l.get_title().set_fontweight('bold')
-    else: #Set up an invisible legend in a jankey method to force the plots to be where I want them (#goodenoughforgovwork)
-        ax_n.legend([],[],loc='lower left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(1.3,1.017), handlelength=.25,frameon=False)
     
+    else: #this means you are currently making the right subplot 
+        pass
+
     ## PLOT BACKGROUND FEATURES
     if country_roads == True:
         ox.config(log_file=True, log_console=True, use_cache=True)
@@ -551,21 +618,20 @@ def radar_subplots(mom,fig,display,klat,klon,klat1,klon1,klat2,klon2,rhib1,rhie1
         ax_n.add_feature(states_provinces, edgecolor='black', linewidth=2)
      
     if print_long== True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
-    return
+    return post
 
 # * * * * * * * 
-def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,radar_sub=False):
+def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,gs,radar_sub=False):
     if print_long== True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
 
     if radar_sub == True:
-        ax_n, var1='ax3', 212
         vline=currentscantime 
-        ax_n=fig.add_subplot(var1)
+        ax_n=fig.add_subplot(gs[1,:])
     
     else: #will only plot the time series (not the radar subplots)
-        ax_n='ax'
         fig, ax_n= plt.subplots()
     
+    ## MAKE THE TIMESERIES 
     for platform_df in [NSSLMM_df,UNLMM_df,UAS_df]: 
         #can remove this if/else statement once you fill in the UAS portion
         if platform_df == UAS_df:
@@ -630,9 +696,10 @@ def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,rada
 ##########################################
 # Create new datasets for each platform ##
 ##########################################
-#crop the start/end time to a time you specify (or set to None to get the full time range)
+##Crop the mesonet timeframe?
+#crop the start or end time to a time you specify (comment out to do the whole day) 
 tstart = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),15,0,0)
-tend= None
+tend = None
 
 NSSLMM_df, UNLMM_df, max_array, min_array = [], [], [], []
 for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']:
