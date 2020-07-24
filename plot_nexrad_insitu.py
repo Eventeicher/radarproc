@@ -11,12 +11,10 @@ import pyart
 import cmocean
 from matplotlib.ticker import MaxNLocator
 import pandas as pd
-import matplotlib as mpl
 import glob
-import os
 import matplotlib
 import matplotlib.cm as cm
-import matplotlib.patheffects as pe
+import matplotlib.patheffects as PathEffects
 import matplotlib.dates as mdates
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 from metpy.plots import ctables
@@ -31,28 +29,25 @@ from matplotlib.axes import Axes
 from cartopy.mpl.geoaxes import GeoAxes
 GeoAxes._pcolormesh_patched = Axes.pcolormesh
 import sys, traceback
-from read_platforms import read_nsslmm
+from read_platforms import read_nsslmm, read_unlmm
 import json
 import nexradaws
 import pytz
 import matplotlib.gridspec as gridspec
 from matplotlib.lines import Line2D
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 conn = nexradaws.NexradAwsInterface()
 
-
+##########################################################################
 ## VARIABLES
 ############
 day='20190517' #'YYYYMMDD'
-filesys='/Users/severe2/Research/'
-p_var= 'Thetav'
-probe_of_interest='Prb1'
-temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
+radar_plotting= True #would you like to plot radar images? (set to False to only plot timeseries)
 r_only= False #Set to True for only radar as output, Set to False for Radar + Timeseries
-
-#crop the start time to a time you specify (comment out to do the whole day) 
-#could also set up a tend var in same format
-tstart = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),15,0,0)
-tend = None
+p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
+probe_of_interest='Prb1'
+filesys='/Users/severe2/Research/'
+temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
 
 #Troubleshooting y/n
 ####################
@@ -75,8 +70,10 @@ def error_printing(e_test):
     else: pass
     return
 
-## Functions to get radar data
-################################
+##########################################################################
+#################################
+## RADAR RETRIEVAL DEFENITIONS ##
+#################################
 def det_nearest_WSR(p_df):
     '''
     Function to locate the nearest WSR88D site to the insitu instruments
@@ -123,7 +120,7 @@ def get_WSR_from_AWS(start, end, radar_id,temploc):
     #download the files that were identified
     #results = conn.download(scans[0:4], filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
     #results = conn.download(scans, filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
-    results = conn.download(scans, temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+    results = conn.download(scans[0:4], temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
     print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
     #print("Results.iter_success : {}\n".format(results.iter_success()))
     
@@ -137,44 +134,101 @@ def get_WSR_from_AWS(start, end, radar_id,temploc):
             print("Failed to convert file: ",scanfile.filename)
     return radar_list
 
-# * * * * * *
-def maskdata(p_var, NSSLMM):
-    p_um=NSSLMM[p_var].values
-    p_m=np.ma.masked_where(NSSLMM['qc_flag'].values>0, p_um)
-    return p_m, p_um
+###########################
+## PLOTTING DEFINTIONS  ###
+###########################
+def maskdata(p_var, platform_file, mask=True):
+    platform_unmasked= platform_file[p_var].values
+    
+    if mask== False:
+        platform_data= platform_unmasked
+    elif mask== True:
+        platform_name= str(platform_file.name)
+        if (platform_name in ['FFld','WinS','LIDR','Prb1','Prb2']):
+            platform_data= np.ma.masked_where(platform_file['qc_flag'].values>0, platform_unmasked)
+        elif (platform_name in ['CoMeT1','CoMeT2','CoMeT3']):
+            #for now
+            platform_data= platform_unmasked
+        elif (platform_name in ['Insert UAS filenames here']):
+            print("will be filled in")
+        else:
+            print("What platform are you trying to use?")
+    
+    return platform_data
 
-def getLocation(file, currentscantime,p_var,offset=0):
-    ''' Determine the location surrounding a given probe for a given offset
+#* * * * * 
+def getLocation(file, currentscantime, p_var, offsetkm, given_bearing= False):
+    ''' 
+    This definition has two functions:
+        1) If no bearing is specified it will return the max and min lat/lons 
+            to form a square surrounding the point indicated by lat1,lon1 by x km. 
+            In this scenario end_lat and end_lon will be returned as nan's. 
+        2) If a bearing is given then the defintion will return one set of lat/lon values 
+             (end_lat and end_lon) which is the location x km away from the point lat1, lon1
+             if an observer moved in a straight line the direction the bearing indicated. In 
+             this scenario the four  min/max_lat/lon will be returned as nan's. 
     '''
     #determine the position of the probe at the time of radar scan
     p_sub, lon_sub, lat_sub, u_sub, v_sub, p_deploy = grab_platform_subset(file, currentscantime, p_var)
     current_lon=lon_sub[int(len(lon_sub)/2)]
     current_lat=lat_sub[int(len(lat_sub)/2)]
 
-    lat_min,lat_max = current_lat-offset, current_lat+offset
-    lon_min,lon_max = current_lon-offset, current_lon+offset
+    lat1 = current_lat * np.pi / 180.0
+    lon1 = current_lon * np.pi / 180.0
     
-    return lat_min, lat_max, lon_min, lon_max
+    R = 6378.1 #earth radius
+    #R = ~ 3959 MilesR = 3959
+     
+    if given_bearing == False:
+        for brng in [0,90,180,270]:
+            bearing = (brng / 90.)* np.pi / 2.
 
+            new_lat = np.arcsin(np.sin(lat1) * np.cos(offsetkm/R) + np.cos(lat1) * np.sin(offsetkm/R) * np.cos(bearing))
+            new_lon = lon1 + np.arctan2(np.sin(bearing)*np.sin(offsetkm/R)*np.cos(lat1),np.cos(offsetkm/R)-np.sin(lat1)*np.sin(new_lat))
+            new_lon = 180.0 * new_lon / np.pi
+            new_lat = 180.0 * new_lat / np.pi
+
+            if brng == 0:
+                max_lat=new_lat
+            elif brng == 90:
+                max_lon= new_lon
+            elif brng == 180: 
+                min_lat= new_lat
+            elif brng == 270: 
+                min_lon=new_lon 
+        end_lat, end_lon = np.nan, np.nan 
+
+    else: 
+        #if a bearing is provided 
+        bearing = (given_bearing/ 90.)* np.pi / 2.
+
+        new_lat = np.arcsin(np.sin(lat1) * np.cos(offsetkm/R) + np.cos(lat1) * np.sin(offsetkm/R) * np.cos(bearing))
+        new_lon = lon1 + np.arctan2(np.sin(bearing)*np.sin(offsetkm/R)*np.cos(lat1),np.cos(offsetkm/R)-np.sin(lat1)*np.sin(new_lat))
+        end_lon = 180.0 * new_lon / np.pi
+        end_lat = 180.0 * new_lat / np.pi
+        min_lat, min_lon, max_lat, max_lon = np.nan, np.nan, np.nan, np.nan   
+
+    return min_lat, max_lat, min_lon, max_lon, end_lat, end_lon 
+
+#* * * * * 
 def legend_maker(p_name,m_style,m_color,leg_str,legend_elements):
-    if print_long== True: print('made it into legend_maker') 
-    if (p_name in ['ka1','ka2']): #the legend entries for the ka radars
+    if print_long== True: print('made it into legend_maker')
+    
+    if (p_name in ['Ka1','Ka2']): #the legend entries for the KA radars
         legend_entry=Line2D([], [], marker=m_style, markeredgecolor='black',markeredgewidth=3,label=leg_str,markerfacecolor=m_color, markersize=26)
     else:
-        legend_entry=Line2D([], [], marker=m_style, markeredgecolor=m_color,markeredgewidth=3,label=leg_str, markersize=26,path_effects=[patheffects.withStroke(linewidth=12,foreground='k')])
-    
-    #  if m_style == '8': #the legend entries for the KA radars
-        #  legend_entry=line2D([], [], marker=m_style, markeredgecolor='black',markeredgewidth=3,label=leg_str,markerfacecolor=m_color, markersize=26)
-    #  elif m_style == '1':
-        #  legend_entry=line2D([], [], marker=m_style, markeredgecolor=m_color,markeredgewidth=3,label=leg_str, markersize=26,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')])
+        legend_entry=Line2D([], [], marker=m_style, markeredgecolor=m_color,markeredgewidth=3,label=leg_str, markersize=26,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')])
     
     legend_elements=np.append(legend_elements,legend_entry)
-    if print_long== True: print('made it through legend maker')
     
+    if print_long== True: print('made it through legend maker')
     return legend_elements
 
+#* * * * * 
 def platform_attr(p_file,legend_elements,radar_m=False,r_s=False):
     if print_long== True: print('Made it into platform_attr')
+
+    #assign the atributes for non-radar markers
     if radar_m == False:
         if p_file.name == "Prb1":
             m_style, m_color, l_color, leg_str= '1','xkcd:lightblue','steelblue','Prb1'
@@ -186,21 +240,29 @@ def platform_attr(p_file,legend_elements,radar_m=False,r_s=False):
             m_style, m_color, l_color, leg_str= '1','xkcd:pastel purple','xkcd:light plum','LIDR'
         elif p_file.name == "WinS":
             m_style, m_color, l_color, leg_str= '1','xkcd:peach','xkcd:dark peach','WinS'
-        p_name=p_file.name
+        elif p_file.name == "CoMeT1":
+            m_style, m_color, l_color, leg_str= '1','brown','brown','CoMeT1'
+        elif p_file.name == "CoMeT2":
+            m_style, m_color, l_color, leg_str= '1','yellow','yellow','CoMeT2'
+        elif p_file.name == "CoMeT3":
+            m_style, m_color, l_color, leg_str= '1','black','black','CoMeT3'
+        p_name = p_file.name
 
+    #assign the atributes for the radar markers
     elif radar_m == True:
         if p_file == 'Ka2':
             m_style, m_color, l_color, leg_str= '8','xkcd:crimson','xkcd:crimson','Ka2'
         elif p_file == 'Ka1':
             m_style, m_color, l_color, leg_str= '8','mediumseagreen','mediumseagreen','Ka1'
-        p_name=p_file
+        p_name = p_file
 
     if r_s == True: #only add to the legend if the platform_attr def was called while making the radar subplots
-        legend_elements=legend_maker(p_name, m_style,m_color,leg_str,legend_elements)
-    if print_long==True: print('Made it through platform_attr')
-
+        legend_elements=legend_maker(p_name,m_style,m_color,leg_str,legend_elements)
+    
+    if print_long== True: print('Made it through platform_attr')
     return m_style, m_color, l_color, leg_str, legend_elements
 
+# * * * * * *
 def plot_colourline(x,y,c,cmap,ax,datacrs,color='k',amin=None,amax=None):
     if amin:
         pass
@@ -220,6 +282,7 @@ def plot_colourline(x,y,c,cmap,ax,datacrs,color='k',amin=None,amax=None):
     
     return
 
+# * * * * * *
 def grab_platform_subset(p_df, scan_time, p_var):
     ''' Grabs the observed thermo data +/-5 minutes around radar scan time
         (does not automatically control the gray vertical box on timeseries)
@@ -245,6 +308,7 @@ def grab_platform_subset(p_df, scan_time, p_var):
 
     return p_sub, lon_sub, lat_sub, U_sub, V_sub, p_deploy
 
+# * * * * * *
 def platform_plot(file,radartime,ax_n,color,m_color,p_var,e_test,labelbias=(0,0)):
     if print_long==True: print('made it into platform_plot')
 
@@ -267,14 +331,16 @@ def platform_plot(file,radartime,ax_n,color,m_color,p_var,e_test,labelbias=(0,0)
         except: error_printing(e_test)
 
     if print_long==True: print('made it through platform_plot')
-    
     return
 
-# **********************************
-def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_of_int,CS3,e_test,i,j):
-    if print_long==True: print('made it into ppiplot')
+
+
+##  #  #  #  #  #  #  #  #  #  #  #  #  # # # #  #  #  #  #  #  #  #  #  #  # #  #  #  # # #  #  #  #  #  #  #  #  # #  #
+##  #  #  #  #  #  #  #  #  #  #  #  #  # # # #  #  #  #  #  #  #  #  #  #  # #  #  #  # # #  #  #  #  #  #  #  #  # #  #
+def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_of_int,CS3,e_test):
+    if print_long== True: print('~~~~~~~~~~~Made it into ppiplot~~~~~~~~~~~~~~~~~~~~~')
     
-    SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 25, 30, 35, 50
+    SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 23, 28, 33, 50
     plt.rc('font', size=MEDIUM_SIZE)         # controls default text sizes
     plt.rc('axes', titlesize=MEDIUM_SIZE)    # fontsize of the axes title
     plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
@@ -283,84 +349,91 @@ def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_o
     plt.rc('legend', fontsize=MS_SIZE)       # legend fontsize
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-    sweep=0
+    ## Determine Sweep for radar data
+    swp=0
+
+    ## Gather radar metadata 
     # Find the beginning location of designated sweep in data array
-    index_at_start = radar.sweep_start_ray_index['data'][sweep]
+    index_at_start = radar.sweep_start_ray_index['data'][swp]
     # Time at which scanning began
-    time_at_start_of_radar = num2date(radar.time['data'][index_at_start],radar.time['units'])
-    print(time_at_start_of_radar)
+    currentscantime= num2date(radar.time['data'][index_at_start],radar.time['units'])
+    print(currentscantime)
     # Convert time into fancy date string to use in title
-    fancy_date_string_utc = time_at_start_of_radar.strftime('%Y-%m-%d %H:%M UTC')
+    fancy_date_string_utc = currentscantime.strftime('%Y-%m-%d %H:%M UTC')
     print(fancy_date_string_utc)
+    
+    ## Determine elevation tilt for a chosen sweep and round to a decimal place
+    elev=np.round(radar.get_elevation(swp)[0],1)
+
+    ## Determine the 4letter radar ID 
+    r_site=radar.metadata['instrument_name']
     print('Gathered Radar Data')
     
     ## Set up plot size
     if r_only == True:
-        fig = plt.figure(figsize=(40,150),facecolor='white')
+        fig = plt.figure(figsize=(10,8),facecolor='white')
+        gs= gridspec.GridSpec(nrows=2,ncols=1)      
     else:
-        fig = plt.figure(figsize=(30,20),facecolor='white')
+        ## Set up figure
+        fig = plt.figure(figsize=(32,20),facecolor='white')
+
+        ## Establish the gridspec layout 
+        gs= gridspec.GridSpec(nrows=2, ncols=5,width_ratios=[.5,8,1,8,.25],height_ratios=[3,2],wspace=.25,hspace=.1)
+        
+        ## There are extra columns which are spacers to allow the formating to work 
+        # Uncomment to visualize the spacers 
+        #  ax_c=fig.add_subplot(gs[0,2])
+        #  ax_l=fig.add_subplot(gs[0,0])
+        #  ax_s=fig.add_subplot(gs[0,4])
     display = pyart.graph.RadarMapDisplay(radar)
 
-    ## Bounding box, x km away from the radar in all directions (set number back to 21)
-    #xmin, xmax = getLocation(klat,klon,270,21)[1], getLocation(klat,klon,90,21)[1]
-    #ymin, ymax = getLocation(klat,klon,180,21)[0], getLocation(klat,klon,0,21)[0]
-
     ## Plot instuments on subplots
-    radar_subplots('refl',fig,display,time_at_start_of_radar,globalamin,globalamax,p_var,p_of_int,e_test)
-    radar_subplots('vel',fig,display,time_at_start_of_radar,globalamin,globalamax,p_var,p_of_int,e_test)
+    post=radar_subplots('refl',swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,e_test)
+    post=radar_subplots('vel',swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,e_test)
     if r_only == False:
-        time_series(filesys,day,fig,time_at_start_of_radar,globalamin, globalamax, p_var,radar_sub=True)
-    
-    # Dummy plot for scatter
-    # Make a scale covering max and min
-    #  cmap=cmocean.cm.curl
-    #  Z = [[0,0],[0,0]]
-    #  levels = np.arange(globalamin,globalamax+1,1)
-    #  print(Z)
-    #  print(levels)
-    #  print(cmap)
-    #  CS3 = plt.contourf(Z, levels, cmap=cmap)#,transform=datacrs)
-    #  plt.clf() # clear current figure
-#
-    # Plot colorbars
+        time_series(filesys,day,fig,currentscantime,globalamin, globalamax, p_var,gs,radar_sub=True)
+  
+    ## Plot platform colorbar
     if p_var == "Thetae":
         c_lab= "Equivalent Potential Temp [K]"
     elif p_var == "Thetav":
         c_lab= "Virtual Potential Temp [K]"
-    cbar_ax = plt.axes([.5265,.5356,.014, 0.405])#left, bottom, width, height
+    cbar_ax = plt.axes([.514, post.y0,.014, post.y1-post.y0])#left, bottom, width, height
     cbar=plt.colorbar(CS3,cax=cbar_ax, orientation='vertical', label=c_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(globalamin,globalamax+1,2))
-#
+
     ## Plot title
-    title=fancy_date_string_utc
-    plt.suptitle(title)
+    title=r_site+' '+str(elev)+r'$^{\circ}$ PPI '+ fancy_date_string_utc
+    plt.suptitle(title,y=.92)
 
     ## Finish plot 
-    plt.tight_layout()
-    plt.savefig('/Users/severe2/Research/TORUS_Data/'+day+'/radar/Nexrad/plots/goal'+str(i)+'_'+str(j)+'.png')
+    plt.savefig('/Users/severe2/Research/TORUS_Data/'+day+'/radar/Nexrad/plots/'+currentscantime.strftime('%m%d%H%M')+'_'+r_site+'_'+p_var+'.png' ,bbox_inches='tight',pad_inches=.3)
     plt.close()
 
-    if print_long== True: print('made it through ppiplot')
-    print('***********************************************************************************************************')
-    
+    if print_long== True: print('~~~~~~~~~~~made it through ppiplot~~~~~~~~~~~~~~~~~~')
+    print('Done Plotting')
+    print('******************************************************************************************************')
+
+    ## Makes a ding noise 
+    print('\a')
     return
 
-def radar_subplots(mom,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,e_test):
-    if print_long==True: print("made it into radar sub")
+def radar_subplots(mom,swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,e_test):
+    if print_long== True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
+
     ## SET UP PLOTTING CONTROLS
-    NSSLmm, NEBmm, UASd = True, False, False #which other platforms do you wish to plot 
+    NSSLmm, NEBmm, UASd = True, True, False #which other platforms do you wish to plot 
     country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
     legend_elements=[]
     ###########################
 
     ## SET UP VARS FOR EACH RADAR MOMENTS
     if mom == 'refl':
-        pos, swp_id, feild = 221, 0, 'reflectivity'
+        row, col, swp_id, feild = 0, 1, swp, 'reflectivity'
         c_scale, c_label = 'pyart_HomeyerRainbow', 'Radar Reflectivity [dbz]'
-        #vminb, vmaxb = -30., 30.
         vminb, vmaxb = -10., 75.
         p_title, leg = 'Reflectivity', True
     elif mom == 'vel':
-        pos, swp_id, feild = 222, 1, 'velocity'
+        row, col, swp_id, feild = 0, 3, swp+1, 'velocity' #velocity data contained in the sweep greater than the refl at same level 
         c_scale, c_label = 'pyart_balance', 'Velocity [m/s]'
         vminb, vmaxb = -40., 40.
         p_title, leg = 'Radial Velocity', False
@@ -369,79 +442,99 @@ def radar_subplots(mom,fig,display,currentscantime,globalamin,globalamax,p_var,p
         exit
 
     ## Bounding box, x km away from the probe of interest in all directions 
-    ymin,ymax,xmin,xmax=getLocation(p_of_int,currentscantime,p_var,offset=.75)    
-    
+    ymin,ymax,xmin,xmax,a,b=getLocation(p_of_int,currentscantime,p_var,offsetkm=40)    
+   
     # SET UP SUBPLOTS
-    ax_n = fig.add_subplot(pos, projection=display.grid_projection)
+    ax_n = fig.add_subplot(gs[row,col], projection=display.grid_projection)
     ax_n.text(.5,-.065,p_title, transform = ax_n.transAxes, horizontalalignment = 'center', fontsize = 40) #the radar subplot titles
-    display.plot_ppi_map(feild, swp_id, title_flag=False, cmap=c_scale, ax=ax_n,vmin=vminb,vmax=vmaxb,min_lon=xmin,max_lon=xmax,min_lat=ymin,max_lat=ymax,colorbar_label= c_label,embelish=False) 
+    #  display.plot_ppi_map(feild, swp_id, title_flag=False,colorbar_flag=False,cmap=c_scale,ax=ax_n,vmin=vminb,vmax=vmaxb,embelish=False)
+    display.plot_ppi_map(feild, swp_id, title_flag=False, colorbar_flag=False, cmap=c_scale, ax=ax_n,vmin=vminb,vmax=vmaxb,min_lon=xmin,max_lon=xmax,min_lat=ymin,max_lat=ymax,embelish=False)
     
     ## PLOT OTHER PLATFORMS             
     if NSSLmm == True:
         for NSSLMM in NSSLMM_df:
-            print(NSSLMM.name)
+            if print_long== True: print(NSSLMM.name)
             m_style,m_color,l_color,leg_str,legend_elements=platform_attr(NSSLMM,legend_elements,r_s=True)
             platform_plot(NSSLMM,currentscantime,ax_n,'xkcd:light grey',m_color,p_var,e_test, labelbias=(0,0))
     if NEBmm == True:
-        print('To be filled in')
+        for UNLMM in UNLMM_df:
+            if print_long== True: print(UNLMM.name)
+            m_style,m_color,l_color,leg_str,legend_elements=platform_attr(UNLMM,legend_elements,r_s=True)
+            platform_plot(UNLMM,currentscantime,ax_n,'xkcd:light grey',m_color,p_var,e_test, labelbias=(0,0))
     if UASd == True:
         for UAS in UAS_files:
             m_style,m_color,l_color,leg_str,legend_elements=platform_attr(UAS,legend_elements,r_s=True)
             platform_plot(UAS,currentscantime,ax_n,'xkcd:very pale green',p_var,labelbias=(0,0.01))
  
+    ## DEAL WITH COLORBARS
+    # Attach colorbar to each subplot 
+    divider = make_axes_locatable(plt.gca())
+    c_ax = divider.append_axes("right","5%", pad="2%",axes_class=plt.Axes)
+    sm = plt.cm.ScalarMappable(cmap=c_scale,norm=matplotlib.colors.Normalize(vmin=vminb,vmax=vmaxb))
+    sm._A = []
+    cb = plt.colorbar(sm,cax=c_ax,label=c_label)
     
+    ## Get position information to pass along to the remaining colorbar 
+    post=ax_n.get_position()
+
+
     ## SET UP LEGENDS
     l_list=legend_elements.tolist()
-    if leg == True: #add legend for platform markers
-        l=ax_n.legend(handles=l_list,loc='lower left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.45,0), handlelength=.1,title="Platforms",shadow=True,fancybox=True,ncol=1,edgecolor='black')
+    if leg == True: #this means you are currently making the left subplot 
+        #add legend for platform markers
+        l=ax_n.legend(handles=l_list,loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1,title="Platforms",shadow=True,fancybox=True,ncol=1,edgecolor='black')
         l.get_title().set_fontweight('bold')
-    else: #Set up an invisible legend in a jankey method to force the plots to be where I want them (#goodenoughforgovwork)
-        ax_n.legend([],[],loc='lower left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(1.3,1.017), handlelength=.25,frameon=False)
-    if print_long==True: print('made it through radar sub')
-
-    return
-
-def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,radar_sub=False):
-    if print_long==True: print('Made it into time_series')
-    if radar_sub == True:
-        ax_n, var1='ax3', 212
-        vline=currentscantime 
-        ax_n=fig.add_subplot(var1)
     
+    else: #this means you are currently making the right subplot 
+        pass
+
+    if print_long== True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
+    return post
+
+def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,gs,radar_sub=False):
+    if print_long== True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
+     
+    if radar_sub == True:
+        vline=currentscantime 
+        ax_n=fig.add_subplot(gs[1,:])
     else: #will only plot the time series (not the radar subplots)
-        ax_n='ax'
         fig, ax_n= plt.subplots()
     
-    #NSSLMM_files= sorted(glob.glob(filesys+'TORUS_Data/'+day+'/mesonets/NSSL/*.nc'))
-    for NSSLMM in NSSLMM_df:
-        #print(str(NSSLMM.name))
-        b_array=[] #blank array
-        m_style,m_color,l_color,leg_str,bb_array = platform_attr(NSSLMM,b_array) #get the attributes (color, label, etc)
+    ## MAKE THE TIME SERIES
+    for platform_df in [NSSLMM_df,UNLMM_df,UAS_df]: 
+        #can remove this if/else statement once you fill in the UAS portion
+        if platform_df == UAS_df:
+            # Need to come back and fill in UAS
+            # Can remove this if/else statement once you fill in the UAS portion
+            pass
+        else:
+            for platform_file in platform_df:
+                if print_long== True: print(str(platform_file.name))
+                
+                ## Set up line colors and legend labels 
+                b_array=[] #blank array
+                m_style,m_color,l_color,leg_str,bb_array = platform_attr(platform_file,b_array) #get the attributes (color, label, etc)
 
-        ## OPEN the file and pull out data we want
-        if p_var == "Thetae":
-            ylab = "Equivalent Potential Temp [K]"
-        elif p_var == "Thetav":
-            ylab = "Virtual Potential Temp [K]"
+                ## Should ploting data be masked?
+                # if you only want to mask certain platforms set up an if-statement to assign the "masking" variable
+                masking = True #True/False variable
+                plot_data= maskdata(p_var,platform_file,masking)
 
-        ## Plot
-        #should ploting data be masked?
-        mask = True #True/False variable
-        if mask == True:
-            p_mask, p_unmasked = maskdata(p_var, NSSLMM)
-            ax_n.plot(NSSLMM['datetime'],p_mask,linewidth=3,color=l_color,label=leg_str) #assigning label= is what allows the legend to work  
-        elif mask == False:
-            p_mask, p_unmasked = maskdata(p_var, NSSLMM)
-            ax_n.plot(NSSLMM['datetime'],p_unmasked,linewidth=3,color=l_color,label=leg_str) #assigning label= is what allows the legend to work  
-        
-        ## Set up XY axes tick locations
-        ax_n.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
-        ax_n.xaxis.set_major_locator(mdates.AutoDateLocator()) 
-        ax_n.xaxis.set_minor_locator(AutoMinorLocator(6)) # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
-        ax_n.yaxis.set_major_locator(MultipleLocator(5)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
-        ax_n.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
+                ## Plot
+                ax_n.plot(platform_file['datetime'],plot_data,linewidth=3,color=l_color,label=leg_str) #assigning label= is what allows the legend to work  
+                    
+    ## Set up XY axes tick locations
+    ax_n.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
+    ax_n.xaxis.set_major_locator(mdates.AutoDateLocator()) 
+    ax_n.xaxis.set_minor_locator(AutoMinorLocator(6)) # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
+    ax_n.yaxis.set_major_locator(MultipleLocator(5)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
+    ax_n.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
     
     ## Set up axes formats (lables/ ticks etc)
+    if p_var == "Thetae":
+        ylab = "Equivalent Potential Temp [K]"
+    elif p_var == "Thetav":
+        ylab = "Virtual Potential Temp [K]"
     ax_n.set_ylabel(ylab)
     ax_n.set_xlabel('Time (UTC)')
     ax_n.tick_params(which='major', width=2,length=20, color='black') 
@@ -463,56 +556,11 @@ def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,rada
     leg=ax_n.legend()
     for line in leg.get_lines():
         line.set_linewidth(12)
-    
-    if print_long==True: print('Made it through time_series')
+
+    if print_long== True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
     return
 
 #*****************************
-#****************************************
-
-def plot_with_WSR(radar,i,j):
-    # Loop through each radar volume to plot
-    sweep=0
-    # Find the beginning location of designated sweep in data array
-    index_at_start = radar.sweep_start_ray_index['data'][sweep]
-    # Time at which scanning began
-    time_at_start_of_radar = num2date(radar.time['data'][index_at_start],
-                                      radar.time['units'])
-    fancy_date_string_utc = time_at_start_of_radar.strftime('%Y-%m-%d %H:%M UTC')
-
-    # Grab the location data for both radars
-    # ka1_loc = k_loc[k_loc['radar']=='ka1'].reset_index()
-    # ka2_loc = k_loc[k_loc['radar']=='ka2'].reset_index()
-
-    # Begin figure
-    fig = plt.figure(figsize = [20,20])
-    display = pyart.graph.RadarMapDisplay(radar)
-    proj = display.grid_projection
-    lat_0 = display.loc[0] # Use radar data extent to define plot region
-    lon_0 = display.loc[1]
-    lat_1 = 33.96
-
-    # Plot reflectivity on the left
-    ax1 = fig.add_subplot(1,2,1,projection=proj)
-    plt.tight_layout()
-    field='reflectivity'
-    title = field+' \n'+fancy_date_string_utc#+fancy_date_string+' ('+fancy_date_string_utc+') '
-    offset = 0.75
-    #ax1.plot(klon1,klat1,color='r',markersize=200,transform=proj)
-    ax1.plot(transform=proj)
-    display.plot_ppi_map(field, 0, colorbar_flag=True,title=title, ax=ax1,vmin=-10, vmax=75)#min_lon=klon1-offset,max_lon=klon1+offset,
-            #min_lat=klat1-offset,max_lat=klat1+offset)
-    
-    ax2= fig.add_subplot(1,2,2,projection=proj)
-    feild='velocity'
-    title = field+' \n'+fancy_date_string_utc#+fancy_date_string+' ('+fancy_date_string_utc+') '
-    offset = 0.75
-    norm, cmap = ctables.registry.get_with_steps('NWSVelocity', 16, 16)
-    display.plot_ppi_map(field, 0, colorbar_flag=True,title=title, ax=ax2,vmin=-20, vmax=20)#min_lon=klon1-offset,max_lon=klon1+offset,
-
-    plt.savefig('/Users/severe2/Research/TORUS_Data/'+day+'/radar/Nexrad/plots/work'+str(i)+'_'+str(j)+'.png')
-
-    return
 #****************************************
 
 def daterange(start_time, duration, iteration):
@@ -735,63 +783,96 @@ def plot_nexrad_loc(station,start_time,end_time,kloc_file,dir_out,radar_1=True,r
     return 
 
 
+###############################################################################################
 ##########################################
 # Create new datasets for each platform ##
 ##########################################
+##Crop the mesonet timeframe?
+#crop the start or end time to a time you specify (comment out to do the whole day) 
+tstart = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),15,0,0)
+tend = None
 
-NSSLMM_df, max_array, min_array = [], [], []
-for MM in ['FFld','LIDR','Prb1','Prb2','WinS']:
+NSSLMM_df, UNLMM_df, max_array, min_array = [], [], [], []
+for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']:
     
-    #uncomment to plot only a sub section of the time (I think) 
-    #tstart, tend = dt.datetime(2019,5,21,0,50,0), dt.datetime(2019,5,21,1,0,0)
-    #tstart, tend = None, None
-    
-    try: 
-        MMfile='/Users/severe2/Research/TORUS_data/'+day+'/mesonets/NSSL/'+MM+'_'+day[2:]+'_QC_met.dat'
-        print(MMfile) 
-        if MM == 'FFld':
-            FFld_df = read_nsslmm(MMfile,tstart,tend)
-            FFld_df.name='FFld'
-            NSSLMM_df.append(FFld_df)
-            masked_df, unmasked_df = maskdata(p_var, FFld_df)
-            max_val, min_val= masked_df.max(), masked_df.min()
-        elif MM == 'LIDR':
-            LIDR_df = read_nsslmm(MMfile,tstart,tend)
-            LIDR_df.name='LIDR'
-            NSSLMM_df.append(LIDR_df)
-            masked_df, unmasked_df = maskdata(p_var, LIDR_df)
-            max_val, min_val= masked_df.max(), masked_df.min()
-        elif MM == 'Prb1':
-            Prb1_df = read_nsslmm(MMfile,tstart,tend)
-            Prb1_df.name='Prb1'
-            NSSLMM_df.append(Prb1_df)
-            masked_df, unmasked_df = maskdata(p_var, Prb1_df)
-            max_val, min_val= masked_df.max(), masked_df.min()
-        elif MM == 'Prb2':
-            Prb2_df = read_nsslmm(MMfile,tstart,tend)
-            Prb2_df.name='Prb2'
-            NSSLMM_df.append(Prb2_df)
-            masked_df, unmasked_df = maskdata(p_var, Prb2_df)
-            max_val, min_val= masked_df.max(), masked_df.min()
-        elif MM == 'WinS':
-            WinS_df = read_nsslmm(MMfile,tstart,tend)
-            WinS_df.name='WinS'
-            NSSLMM_df.append(WinS_df)
-            masked_df, unmasked_df = maskdata(p_var, WinS_df)
-            max_val, min_val= masked_df.max(), masked_df.min()
+    #load the NSSL mesonets 
+    if (MM in ['FFld','LIDR','Prb1','Prb2','WinS']):
+        try: 
+            MMfile='/Users/severe2/Research/TORUS_data/'+day+'/mesonets/NSSL/'+MM+'_'+day[2:]+'_QC_met.dat'
         
-        if MM == probe_of_interest:
-            p_of_int=NSSLMM_df[-1]
+            if MM == 'FFld':
+                FFld_df = read_nsslmm(MMfile,tstart,tend)
+                FFld_df.name='FFld'
+                NSSLMM_df.append(FFld_df)
+                masked_df = maskdata(p_var, FFld_df, mask=True)
+                max_val, min_val= masked_df.max(), masked_df.min()
+            elif MM == 'LIDR':
+                LIDR_df = read_nsslmm(MMfile,tstart,tend)
+                LIDR_df.name='LIDR'
+                NSSLMM_df.append(LIDR_df)
+                masked_df = maskdata(p_var, LIDR_df, mask=True)
+                max_val, min_val= masked_df.max(), masked_df.min()
+            elif MM == 'Prb1':
+                Prb1_df = read_nsslmm(MMfile,tstart,tend)
+                Prb1_df.name='Prb1'
+                NSSLMM_df.append(Prb1_df)
+                masked_df = maskdata(p_var, Prb1_df, mask=True)
+                max_val, min_val= masked_df.max(), masked_df.min()
+            elif MM == 'Prb2':
+                Prb2_df = read_nsslmm(MMfile,tstart,tend)
+                Prb2_df.name='Prb2'
+                NSSLMM_df.append(Prb2_df)
+                masked_df = maskdata(p_var, Prb2_df, mask=True)
+                max_val, min_val= masked_df.max(), masked_df.min()
+            elif MM == 'WinS':
+                WinS_df = read_nsslmm(MMfile,tstart,tend)
+                WinS_df.name='WinS'
+                NSSLMM_df.append(WinS_df)
+                masked_df = maskdata(p_var, WinS_df, mask=True)
+                max_val, min_val= masked_df.max(), masked_df.min()
+                #max_val, min_val= WinS_df[p_var].max(), WinS_df[p_var].min()
+            
+            if MM == probe_of_interest:
+                p_of_int=NSSLMM_df[-1]
+        
+        except: error_printing(e_test)
 
-    except: error_printing(e_test)
-    
-    try:
-        max_array.append(max_val)
-        min_array.append(min_val)
-    except: error_printing(e_test)
+    #load the UNL MM files 
+    elif (MM in ['CoMeT1', 'CoMeT2', 'CoMeT3']):
+        try: 
+            MMfile='/Volumes/Samsung_T5/Research/TORUS_Data/'+day+'/mesonets/UNL/UNL.'+MM+'.*'
+            
+            if MM == 'CoMeT1':
+                CoMeT1_df = read_unlmm(MMfile,tstart,tend)
+                CoMeT1_df.name='CoMeT1'
+                UNLMM_df.append(CoMeT1_df)
+                masked_df = maskdata(p_var, CoMeT1_df, mask=True)
+                max_val, min_val= masked_df.max(), masked_df.min()
+            elif MM == 'CoMeT2':
+                CoMeT2_df = read_unlmm(MMfile,tstart,tend)
+                CoMeT2_df.name='CoMeT2'
+                UNLMM_df.append(CoMeT2_df)
+                masked_df = maskdata(p_var, CoMeT2_df, mask=True)
+                max_val, min_val= masked_df.max(), masked_df.min()
+            elif MM == 'CoMeT3':
+                CoMeT3_df = read_unlmm(MMfile,tstart,tend)
+                CoMeT3_df.name='CoMeT3'
+                UNLMM_df.append(CoMeT3_df)
+                masked_df = maskdata(p_var, CoMeT3_df, mask=True)
+                max_val, min_val= masked_df.max(), masked_df.min()
 
-    #max_array.append(max_val)
-    #min_array.append(min_val)
+            if MM == probe_of_interest:
+                p_of_int=UNLMM_df[-1]
+
+        except: error_printing(e_test)
+
+    #load the UAS files
+    elif (MM in ['UAS','UAS_fillers']):
+        UAS_df='Will come back and fill in'
+
+    max_array.append(max_val)
+    min_array.append(min_val)
+
 #max an min values that will plot
 #if p_var =='Thetae':
 #    globalamin, globalamax=325, 360
@@ -801,16 +882,13 @@ for MM in ['FFld','LIDR','Prb1','Prb2','WinS']:
 #Alternate global variable max/min for plotting purposes
 globalamax = np.max(max_array)
 globalamin = np.min(min_array)
-print(p_of_int)
 
+#######################################################################################################
 #Dummy plot for scatter
 # Make a scale covering max and min
 cmap=cmocean.cm.curl
 Z = [[0,0],[0,0]]
 levels = np.arange(globalamin,globalamax+1,1)
-print(Z)
-print(levels)
-print(cmap)
 CS3 = plt.contourf(Z, levels, cmap=cmap)#,transform=datacrs)
 plt.clf() # clear current figure
 # ************************************
@@ -822,9 +900,7 @@ test=det_nearest_WSR(Prb1_df)
 r_ofintrest=test.Radar_ID.unique()
 
 timeranges_each_r=pd.DataFrame()
-i=0
 for r in r_ofintrest:
-    i=i+1
     print(r)
     t=test.loc[test.Radar_ID==r, ['datetime']].rename(columns={'datetime':r})
     ts,te=t.min(),t.max()
@@ -833,14 +909,13 @@ for r in r_ofintrest:
     print("end ",te[r])
     print("***")
     radar_list=get_WSR_from_AWS(ts[r],te[r],r,temploc)
-    j=0
     for radar in radar_list:
-        j=j+1
         #print(radar.info())
         #testing_plots(radar,i,j,r_only,globalamin,globalamax,p_var,e_test)
         #plot_with_WSR(radar,i,j)
 
-        ppiplot(r_only, radar_list,radar, filesys, day, globalamin,globalamax, p_var, p_of_int,CS3, e_test,i,j)
+        #why am i calling radar and radarlist to this function when I am in a loop that is interating through these to values?
+        ppiplot(r_only, radar_list,radar, filesys, day, globalamin,globalamax, p_var, p_of_int,CS3, e_test)
     #plot_with_WSR(test2)
     #print(timeranges_each_r)
     
