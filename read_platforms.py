@@ -61,6 +61,8 @@ def read_unlmm(file,tstart=None, tend=None):
 
     return data_unl 
 
+# *******************
+
 def read_nsslmm(file,tstart=None,tend=None):
     ''' Reads data files provided by NSSL on TORUS19 EOL site
         Important that datafiles and filenames follow TORUS19 readme
@@ -130,4 +132,27 @@ def read_nsslmm(file,tstart=None,tend=None):
 
     return data_nssl
 
+# *******************
 
+def maskdata(p_var, platform_file, mask=True):
+    ''' Read in a dataset and return the masked version of it 
+            Masking is based of QC flags etc and can be diff for each platform 
+            If mask= False then the defn will simply return the dataset unmodified
+    '''
+    platform_unmasked= platform_file[p_var].values
+    
+    if mask== False:
+        platform_data= platform_unmasked
+    elif mask== True:
+        platform_name= str(platform_file.name)
+        if (platform_name in ['FFld_df','WinS_df','LIDR_df','Prb1_df','Prb2_df']):
+            platform_data= np.ma.masked_where(platform_file['qc_flag'].values>0, platform_unmasked)
+        elif (platform_name in ['CoMeT1_df','CoMeT2_df','CoMeT3_df']):
+            #for now
+            platform_data= platform_unmasked
+        elif (platform_name in ['Insert UAS filenames here']):
+            print("will be filled in")
+        else:
+            print("What platform are you trying to use?")
+    
+    return platform_data
