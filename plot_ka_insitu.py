@@ -48,9 +48,9 @@ from scipy import interpolate
 from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 from matplotlib.lines import Line2D
-from read_platforms import read_unlmm, read_nsslmm, maskdata
 import read_platforms
 import sys, traceback
+from collections import namedtuple
 
 ##########################################################################
 ## VARIABLES
@@ -62,56 +62,20 @@ p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
 filesys='/Users/severe2/Research/'
 temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
 
+## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts
+from shared_defns import read_platforms, maskdata, platform_attr, error_printing
+
 #Troubleshooting y/n
 ####################
 #Set to True to print statements when entering/leaving definitions (helpful to understanding whats going on in the code but prints alot of lines to your terminal)
 print_long = True# True/False variable
 
 #Set to False to not print out the errors that tripped 'try' statements: set to True only while troubleshooting 
-  ##there will be 'valid' errors caused by looping through platforms etc.... hence needlessly confusing unless troubleshooting
+    ## To do do calls on defn from the shared_defns folder
+    ## there will be 'valid' errors caused by looping through platforms etc.... hence needlessly confusing unless troubleshooting
 e_test = True#True/False variable
 
-def error_printing(e_test):
-    ''' Basically I got sick of removing/replacing the try statements while troubleshooting 
-    '''
-    if e_test == True:
-        e = sys.exc_info()
-        traceback.print_tb(e[-1])
-        #print( "<p>Error: %s</p>" % e )
-        print("Error:", e[:-2])
-        print(' ')
-    else: pass
-    return 
-
-
 ##########################################################################
-#################################################
-# Defintions that are not used (at the moment) ##
-#################################################
-def format_axes(fig):
-    for i, ax in enumerate(fig.axes):
-        ax.text(0.5, 0.5, "ax%d" % (i+1), va="center", ha="center")
-        ax.tick_params(labelbottom=False, labelleft=False)
-    return
-#* * * * * 
-def resize_colorbar(event):
-    plt.draw()
-    posn = ax.get_position()
-    cbar_ax.set_position([posn.x0 + posn.width + 0.01, posn.y0,0.04, posn.height])
-    return
-#* * * * * 
-def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
-    new_cmap = colors.LinearSegmentedColormap.from_list(
-        'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
-        cmap(np.linspace(minval, maxval, n)))
-    return new_cmap
-#* * * * * 
-def find_nearest(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array-value)).argmin()
-    return idx
-
-
 #######################
 ## RADAR DEFINITIONS ##
 #######################
@@ -211,7 +175,7 @@ def getRadarPositionData(c_time, r_dep):
 def getLocation(current_lat, current_lon, offsetkm, given_bearing= False):
     ''' 
     This definition has two functions:
-        1) If no bearing is specified it will return a dict containing the max/min lat/lons 
+        1) If no bearing is specified it will return a namedtuple containing the max/min lat/lons 
             to form a square surrounding the point indicated by lat1,lon1 by x km. 
         2) If a bearing is given then the defintion will return one set of lat/lon values 
              (end_lat and end_lon) which is the location x km away from the point lat1, lon1
@@ -242,9 +206,11 @@ def getLocation(current_lat, current_lon, offsetkm, given_bearing= False):
             elif brng == 180: min_lat= new_lat
             elif brng == 270: min_lon=new_lon
         
-        bndry={'ymin': min_lat, 'ymax': max_lat, 'xmin': min_lon, 'xmax': max_lon}
-        #return both individual points and dict for ease of use [same info but sometimes one format is easier than the other]
-        return min_lat, max_lat, min_lon, max_lon, bndry
+        #set up a namedtuple object to hold the new info
+        box_extent = namedtuple('box_extent', ['ymin','ymax','xmin','xmax'])
+        box=box_extent(ymin=min_lat, ymax=max_lat, xmin=min_lon, xmax= max_lon)
+        
+        return box
     
     else:
         #if a bearing is provided 
@@ -270,7 +236,7 @@ def createCircleAroundWithRadius(clat, clon, radiuskm,sectorstart,sectorfinish,h
     return lonArray,latArray
 
 # * * * * * * 
-def rhi_spokes_rings(ka_info,display,box,print_long,e_test):
+def rhi_spokes_rings(ka_info,display,print_long,e_test):
     ''' Plot the RHI spoke and ring for the KA radars
     '''
     if print_long== True: print('made it into rhi_spokes_rings')
@@ -295,87 +261,6 @@ def rhi_spokes_rings(ka_info,display,box,print_long,e_test):
         except: error_printing(e_test)
     if print_long== True: print('made it through rhi_spokes_rings')
     return
-
-
-#* * * * * 
-def platform_attr(p_file, print_long, l_array= None, r_s= False, radar_m=False, rad_site=False):
-    ''' Assign attributes such as color, markershape, label etc to each platform 
-    ----
-    INPUTS:
-    p_file: pandas dataframe for the platform
-    l_array: Array, each platforms information is appended to this array which is used to plot the legend
-                    You should define this variable if you are calling the defn while in radar subplots otherwise leave blank.
-                    This prevents a platform being added to the legend twice
-    radar_m: True/False, UNL and NSSL require file.name to access their str identifier otherplatforms do not
-    rad_site: How I am handeling the labeling of NEXRAD at the moment ..... will prob come back and remove
-    r_s : ***********fill in comment 
-    ----
-    RETURNS:
-    legend_elements: Array 
-    P_Attr: dict, contains the attibute info for the given platform 
-    '''
-    if print_long== True: print('Made it into platform_attr')
-
-    #assign the atributes for non-radar markers
-    if radar_m == False:
-        if p_file.name == "Prb1":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:lightblue','steelblue','Prb1'
-        elif p_file.name == "Prb2":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:watermelon','xkcd:dusty red','Prb2'
-        elif p_file.name == "FFld":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:bubblegum pink','xkcd:pig pink','FFld'
-        elif p_file.name == "LIDR":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:pastel purple','xkcd:light plum','LIDR'
-        elif p_file.name == "WinS":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:peach','xkcd:dark peach','WinS'
-        elif p_file.name == "CoMeT1":
-            marker_style, marker_color, line_color, legend_str= '1','brown','brown','CoMeT1'
-        elif p_file.name == "CoMeT2":
-            marker_style, marker_color, line_color, legend_str= '1','yellow','yellow','CoMeT2'
-        elif p_file.name == "CoMeT3":
-            marker_style, marker_color, line_color, legend_str= '1','black','black','CoMeT3'
-        elif p_file.name == "WTx Mesonet":
-            marker_style, marker_color, line_color, legend_str= r'$\AA$' ,'black','black','WTM Site'   
-            #U+1278
-            #u20a9
-        p_name = p_file.name
-
-    #assign the atributes for the radar markers
-    elif radar_m == True:
-        if p_file == 'KA2':
-            marker_style, marker_color, line_color, legend_str= '8','xkcd:crimson','xkcd:crimson','Ka2'
-        elif p_file == 'KA1':
-            marker_style, marker_color, line_color, legend_str= '8','mediumseagreen','mediumseagreen','Ka1'
-        elif p_file == 'WSR88D':
-            marker_style, marker_color, line_color, legend_str= r'$\Omega$', 'white','black',rad_site
-        p_name = p_file
-    
-    #create a dict to allow for easy recall of attr 
-    P_Attr={'m_style': marker_style, 'm_color': marker_color, 'l_color': line_color, 'leg_str': legend_str}
-
-    #Add to the legend array is the populated legend array was provided when calling this defn
-    if r_s == True:
-        #  legend_elements=legend_maker(p_name,P_Attr,legend_elements,print_long)
-        if (p_name in ['KA1','KA2']): #the legend entries for the KA radars
-            legend_entry=Line2D([], [], marker=marker_style, markeredgecolor='black',markeredgewidth=3,label=legend_str,markerfacecolor=marker_color, markersize=26)
-        elif p_name == 'WSR88D':
-            legend_entry=Line2D([], [], marker=marker_style, markeredgecolor=marker_color,markeredgewidth=3,label=legend_str, markersize=26,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')])
-        elif p_name == 'WTx Mesonet':
-            legend_entry=Line2D([], [], marker=marker_style, markeredgecolor=marker_color,label=legend_str, markersize=26)
-        else:
-            legend_entry=Line2D([], [], marker=marker_style, markeredgecolor=marker_color,markeredgewidth=3,label=legend_str, markersize=26,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')])
-        
-        #Append the new entry to the array
-        legend_elements=np.append(l_array,legend_entry)
-        
-        #if you define legend_elements when calling the defn then it will return a new appended legend array
-        if print_long== True: print('Made it through platform_attr')
-        return P_Attr, legend_elements 
-    
-    else: 
-        #otherwise it this defn will return the P_Attr dict
-        if print_long== True: print('Made it through platform_attr')
-        return P_Attr
 
 # * * * * * *
 def plot_colourline(x,y,c,cmap,ax,datacrs,color,amin=None,amax=None):
@@ -623,22 +508,22 @@ def radar_subplots(mom, fig, gs, display, ka_info, var, pform, filesys, print_lo
     Main_R=ka_info['Main_Radar']
    
     ## Bounding box, x km away from the radar in all directions 
-    ymin,ymax,xmin,xmax,bbox=getLocation(ka_info[Main_R]['lat'],ka_info[Main_R]['lon'],offsetkm=21)    
+    box=getLocation(ka_info[Main_R]['lat'],ka_info[Main_R]['lon'],offsetkm=21)    
     
     ## SET UP SUBPLOTS   
     ax_n=fig.add_subplot(gs[row,col],projection=display.grid_projection)
     ax_n.plot(ka_info[Main_R]['lon'],ka_info[Main_R]['lat'],transform=display.grid_projection)
     ax_n.text(.5,-.065,p_title,transform=ax_n.transAxes,horizontalalignment='center',fontsize=40) #the radar subplot titles
-    display.plot_ppi_map(field, ka_info['Swp_ID'],title_flag=False,colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lon=xmin, max_lon=xmax, min_lat=ymin, max_lat=ymax, embelish=False) 
+    display.plot_ppi_map(field, ka_info['Swp_ID'],title_flag=False,colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lon=box.xmin, max_lon=box.xmax, min_lat=box.ymin, max_lat=box.ymax, embelish=False) 
         
     ## PLOT RHI SPOKES
     if rhi_ring == True:
-        rhi_spokes_rings(ka_info, display, bbox, print_long, e_test) #plot the spokes for radars
+        rhi_spokes_rings(ka_info, display, print_long, e_test) #plot the spokes for radars
 
     ## PLOT RADAR MARKERS
     for ka in ['KA1', 'KA2']:
         try:
-            if np.logical_and(ka_info[ka]['lat']>ymin,np.logical_and(ka_info[ka]['lat']<ymax,np.logical_and(ka_info[ka]['lon']>xmin,ka_info[ka]['lon']<xmax))):
+            if np.logical_and(ka_info[ka]['lat']>box.ymin,np.logical_and(ka_info[ka]['lat']<box.ymax,np.logical_and(ka_info[ka]['lon']>box.xmin,ka_info[ka]['lon']<box.xmax))):
                 P_Attr,legend_elements=platform_attr(ka,print_long,r_s=True,radar_m=True,l_array=legend_elements)
 
                 ax_n.plot(ka_info[ka]['lon'],ka_info[ka]['lat'],marker=P_Attr['m_style'], transform=ccrs.PlateCarree(),color=P_Attr['m_color'],markersize=18,markeredgewidth=5,path_effects=[PathEffects.withStroke(linewidth=15,foreground='k')],
@@ -687,7 +572,7 @@ def radar_subplots(mom, fig, gs, display, ka_info, var, pform, filesys, print_lo
     ## PLOT BACKGROUND FEATURES
     if country_roads == True:
         ox.config(log_file=True, log_console=True, use_cache=True)
-        G = ox.graph_from_bbox(ymax,ymin,xmax,xmin)
+        G = ox.graph_from_bbox(box.ymax,box.ymin,box.xmax,box.xmin)
         ox.save_load.save_graph_shapefile(G, filename='tmp'+str(0), folder=filesys+'radarproc/roads/', encoding='utf-8')
         fname = filesys+'radarproc/roads/tmp'+str(0)+'/edges/edges.shp'
         shape_feature = ShapelyFeature(Reader(fname).geometries(),ccrs.PlateCarree(), edgecolor='gray', linewidth=0.5)
@@ -810,19 +695,50 @@ pform={
     'UAS':{'UASFillers':{}
         }
     }
-#######
 
-#  pform_setup['UNL']['CoMeT3']['test']="Hello"
-#  pform_setup['UNL']['CoMeT1']['name']=p_var
-#  for p_type,p_info in pform_setup.items():
+class Pname:
+    
+    def __init__(self, Name, p_var, tstart, tend, day, filesys, print_long, e_test, mask=True):
+        '''setting the ojects attr anything with self.something= can be called using AAA.something in your code after you have initilized the object
+            this defn will only be run once per object
+        '''
+        #set up filepath for the platform
+        if Name in ['FFld','LIDR','Prb1','Prb2','WinS']:
+            File=filesys+'TORUS_data/'+day+'/mesonets/NSSL/'+Name+'_'+day[2:]+'_QC_met.dat'
+            Ptype='NSSL'
+        elif Name in ['CoMeT1', 'CoMeT2', 'CoMeT3']:
+            File='/Volumes/Samsung_T5/Research/TORUS_Data/'+day+'/mesonets/UNL/UNL.'+Name+'.*'
+            Ptype = 'UNL'
+        elif Name in ['UAS']:
+            print('Code for platform has not been written yet')
+        else:
+            print('There seems to have been error please check spelling and retry')
+        
+        #read in and intilize the dataset
+        self.df= read_platforms(Ptype, File, tstart, tend)
+        self.df.name='{}_df'.format(Name) #assign a name to the pandas dataframe itself 
+        
+        #get style info for the platforms marker
+        self.m_style, self.m_color, self.l_color, self.leg_str, self.leg_entry= platform_attr(Name, print_long) 
+        
+        # apply mask (if applicable) and find the min and max of p_var for this platform 
+        if mask== True: #mask is a bool, sent to True to by default
+            self.mask_df= maskdata(p_var,self.df) #add masked dataset to the object 
+            self.Min= self.mask_df.min()#use the masked dataset to find max and min of p_var
+            self.Max= self.mask_df.max()
+        elif mask == False:
+            self.Min= self.df.min()[p_var] #use the orig dataset to find max/min
+            self.Max= self.df.max()[p_var]
+
+
+FFld= Pname('FFld',p_var,tstart,tend,day, filesys, print_long,e_test)    
+print(FFld.Min)
+
+
+#######
 for p_type, p_info in pform.items():
-    #  print(p_type)
-    #  print('********')
-    #  print(p_info)
-    #  print('%%%%%%')
-    #  #  for pname,pp in p_info.items():
     for pname in p_info:
-        #  if print_long== True: print(pname)
+        if print_long== True: print(pname)
         
         #Read in the data 
         if p_type == 'NSSL':
@@ -866,6 +782,8 @@ for p_type, p_info in pform.items():
                 #set max and min off of the unmasked dataframe
                 pform[p_type][pname]['min']=p_df.min()[p_var]
                 pform[p_type][pname]['max']=p_df.max()[p_var]
+        testttt=pform[p_type][pname]
+        print(pname,testttt['min'])
 
 def find_by_key(data, target):
     for key, value in data.items():
@@ -877,18 +795,61 @@ def find_by_key(data, target):
             yield value 
 for x in find_by_key(pform, "min"):
     print(x)
-        #  print(p_info[pname])
-        #  print(p_info[pname]['min'])
-#  for p_type, pf in pform_setup.items():
-    #  print(p_type)
-    #  print('******')
-    #  print(pform_setup[p_type][pf])
+
+def gen_dict_extract(key, var):
+    if hasattr(var,'iteritems'):
+        for k, v in var.iteritems():
+            if k == key:
+                yield v
+            if isinstance(v, dict):
+                for result in gen_dict_extract(key, v):
+                    yield result
+            elif isinstance(v, list):
+                for d in v:
+                    for result in gen_dict_extract(key, d):
+                        yield result
+# Convert Nested dictionary to Mapped Tuple 
+# Using list comprehension + generator expression 
+res = [(key, tuple(sub[key] for sub in pform.values())) for key in pform['NSSL']['FFld']] 
+  
+# printing result  
+print("The grouped dictionary : " + str(res))  
+
+#  # Convert Nested dictionary to Mapped Tuple
+#  # Using defaultdict() + loop
+#  res = defaultdict(tuple)
+#  for key, val in test_dict.items():
+#      for ele in val:
+#          res[ele] += (val[ele], )
 #
-#  print(pform)
+#  # printing result
+#  print("The grouped dictionary : " + str(list(res.items()))
 #
-#  print(type(pform['NSSL']['FFld']['data']))
-#  testing=pform['NSSL']['FFld']['data']
-#  print(testing)
+# Unnest single Key Nested Dictionary List 
+# Using list comprehension 
+#  res = {x : y[data_key] for idx in test_list for x, y in idx.items()}
+testttt=pform['NSSL']['FFld']
+print(testtttt['min'])
+
+#  Unless I'm missing something you'd like to implement, I would go for a simple loop instead of using recursion:
+
+def nested_get(input_dict, nested_key):
+    internal_dict_value = input_dict
+    for k in nested_key:
+        internal_dict_value = internal_dict_value.get(k, None)
+        if internal_dict_value is None:
+            return None
+    return internal_dict_value
+
+print(nested_get({"a":{"b":{"c":1}}},["a","b","c"])) #1
+print(nested_get({"a":{"bar":{"c":1}}},["a","b","c"])) #None
+
+
+from jsonpath_rw import parse
+def nested_get(d, path):
+    result = parse(".".join(path)).find(d)
+    return result[0].value if result else None
+
 
 NSSLMM_df, UNLMM_df, max_array, min_array = [], [], [], []
 for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']:
