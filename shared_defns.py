@@ -37,7 +37,12 @@ def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array-value)).argmin()
     return idx
-    
+
+
+################################################################################################
+##################
+# TROUBLE SHOOTING
+##################
 def error_printing(e_test):
     ''' Basically I got sick of removing/replacing the try statements while troubleshooting 
     '''
@@ -49,9 +54,12 @@ def error_printing(e_test):
         print(' ')
     else: pass
     return 
-################################################################################################
+
 
 #**************
+###########
+# Data Prep
+###########
 def read_platforms(pname,day,print_long,e_test,tstart=None,tend=None,d_testing=False):
     ''' Reads data files provided on TORUS19 EOL site
         Important that datafiles and filenames follow TORUS19 readme
@@ -60,12 +68,13 @@ def read_platforms(pname,day,print_long,e_test,tstart=None,tend=None,d_testing=F
         OUTPUT: dataframe containing all data collected during desired times
     '''
     if pname in ['CoMeT1', 'CoMeT2', 'CoMeT3']:
+	ptype= 'UNL'
         mmfile= glob.glob('/Volumes/Samsung_T5/Research/TORUS_Data/'+day+'/mesonets/UNL/UNL.'+pname+'.*')
         #if there is no files this will will cause the script to fail (in a good way)
         mtest=mmfile[0]
         #if the code has not failed by this point there is data present; if calling defn in a testing capacity the defn will exit at this point (saving computing time) otherwise the defn will cont
         if d_testing==True:
-                return True
+	    return True
  
         #empty list to append to 
         data_hold=[]
@@ -120,20 +129,17 @@ def read_platforms(pname,day,print_long,e_test,tstart=None,tend=None,d_testing=F
         
         #convert the list holding the dataframes to one large dataframe 
         data_unl=pd.concat(data_hold)
-        return data_unl
+        return data_unl, ptype
     
     elif pname in ['FFld','LIDR','Prb1','Prb2','WinS']:
-
+	ptype= 'NSSL'
         mmfile=glob.glob('/Users/severe2/Research/TORUS_data/'+day+'/mesonets/NSSL/'+pname+'_'+day[2:]+'_QC_met.dat')
         file=mmfile[0]
-        
         #if the code has not failed by this point there is data present; if calling defn in a testing capacity the defn will exit at this point (saving computing time) otherwise the defn will cont
         if d_testing==True:
             return True
         
-        column_names = ['id','time','lat','lon','alt',
-                        'tfast','tslow','rh','p','dir',
-                        'spd','qc1','qc2','qc3','qc4']
+        column_names = ['id','time','lat','lon','alt','tfast','tslow','rh','p','dir','spd','qc1','qc2','qc3','qc4']
         # Read NSSL file using column names from readme
         data = pd.read_csv(file,header=0,delim_whitespace=True,names=column_names)
         data = data.drop_duplicates()
@@ -190,13 +196,15 @@ def read_platforms(pname,day,print_long,e_test,tstart=None,tend=None,d_testing=F
 
         q_list=['qc1','qc2','qc3','qc4']
         data_nssl['qc_flag']=data_nssl[q_list].sum(axis=1)
-
-        return data_nssl
+        return data_nssl, ptype
     
     elif pname in ['UAS']:
+	ptype= 'UAS'
         if print_long == True: print("no code for UAS yet")
         if d_testing==True:
             return False
+	return ptype 
+
     elif pname in  ['Ka1', 'Ka2']:
         #read in file
         if pname == 'Ka1':
@@ -216,22 +224,14 @@ def read_platforms(pname,day,print_long,e_test,tstart=None,tend=None,d_testing=F
         return radar 
 
 # *******************
-
 def platform_attr(pname, print_long):
-    ''' Assign attributes such as color, markershape, label etc to each platform 
-    ----
+    ''' 
     INPUTS:
     p_file: pandas dataframe for the platform
-    l_array: Array, each platforms information is appended to this array which is used to plot the legend
-                    You should define this variable if you are calling the defn while in radar subplots otherwise leave blank.
-                    This prevents a platform being added to the legend twice
-    radar_m: True/False, UNL and NSSL require file.name to access their str identifier otherplatforms do not
-    rad_site: How I am handeling the labeling of NEXRAD at the moment ..... will prob come back and remove
-    r_s : ***********fill in comment 
     ----
     RETURNS:
-    legend_elements: Array 
-    P_Attr: dict, contains the attibute info for the given platform 
+    legend_entry: The specifications regarding the legend presentation for each platform (will be appended latter to make the legend)
+    m_color,m_style etc : the specifications regarding platform presentation on the plots (markershape, color, etc)
     '''
     if print_long== True: print('Made it into platform_attr')
 
@@ -254,8 +254,7 @@ def platform_attr(pname, print_long):
         marker_style, marker_color, line_color, legend_str= '1','black','black','CoMeT3'
     elif pname == "WTx Mesonet":
         marker_style, marker_color, line_color, legend_str= r'$\AA$' ,'black','black','WTM Site'   
-        #U+1278
-        #u20a9
+        #U+1278, #u20a9
     elif pname == 'KA2':
         marker_style, marker_color, line_color, legend_str= '8','xkcd:crimson','xkcd:crimson','Ka2'
     elif pname == 'KA1':
@@ -276,27 +275,3 @@ def platform_attr(pname, print_long):
     if print_long== True: print('Made it through platform_attr')
     return marker_style,marker_color,line_color,legend_str,legend_entry
 
-# *******************
-
-def maskdata(p_var, platform_file, mask=True):
-    ''' Read in a dataset and return the masked version of it 
-            Masking is based of QC flags etc and can be diff for each platform 
-            If mask= False then the defn will simply return the dataset unmodified
-    '''
-    platform_unmasked= platform_file[p_var].values
-    
-    if mask== False:
-        platform_data= platform_unmasked
-    elif mask== True:
-        platform_name= str(platform_file.name)
-        if (platform_name in ['FFld_df','WinS_df','LIDR_df','Prb1_df','Prb2_df']):
-            platform_data= np.ma.masked_where(platform_file['qc_flag'].values>0, platform_unmasked)
-        elif (platform_name in ['CoMeT1_df','CoMeT2_df','CoMeT3_df']):
-            #for now
-            platform_data= platform_unmasked
-        elif (platform_name in ['Insert UAS filenames here']):
-            print("will be filled in")
-        else:
-            print("What platform are you trying to use?")
-    
-    return platform_data
