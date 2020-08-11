@@ -58,17 +58,6 @@ print_long = False # True/False variable
   ##there will be 'valid' errors caused by looping through platforms etc.... hence needlessly confusing unless troubleshooting
 e_test = False# True/False variable
 
-def error_printing(e_test):
-    ''' Basically I got sick of removing/replacing the try statements while troubleshooting 
-    '''
-    if e_test == True:
-        e = sys.exc_info()
-        traceback.print_tb(e[-1])
-        #print( "<p>Error: %s</p>" % e )
-        print("Error:", e[:-2])
-        print(' ')
-    else: pass
-    return
 
 ##########################################################################
 #################################
@@ -199,27 +188,6 @@ def get_WSR_from_AWS(start, end, radar_id,temploc):
 ###########################
 ## PLOTTING DEFINTIONS  ###
 ###########################
-def maskdata(p_var, platform_file, mask=True):
-    platform_unmasked= platform_file[p_var].values
-    
-    if mask== False:
-        platform_data= platform_unmasked
-    elif mask== True:
-        platform_name= str(platform_file.name)
-        if (platform_name in ['FFld_df','WinS_df','LIDR_df','Prb1_df','Prb2_df']):
-            platform_data= np.ma.masked_where(platform_file['qc_flag'].values>0, platform_unmasked)
-        elif (platform_name in ['CoMeT1_df','CoMeT2_df','CoMeT3_df']):
-            #for now
-            platform_data= platform_unmasked
-        elif (platform_name in ['Insert UAS filenames here']):
-            print("will be filled in")
-        else:
-            print("What platform are you trying to use?")
-    
-    return platform_data
-#
-
-#* * * * * 
 def getLocation(file, currentscantime, var, offsetkm, given_bearing= False):
     ''' 
     This definition has two functions:
@@ -283,86 +251,6 @@ def getLocation(file, currentscantime, var, offsetkm, given_bearing= False):
         end_lat = 180.0 * new_lat / np.pi
 
         return end_lat, end_lon 
-
-
-#* * * * 
-def platform_attr(p_file, print_long, l_array= None, radar_m=False, rad_site=False):
-    ''' Assign attributes such as color, markershape, label etc to each platform 
-    ----
-    INPUTS:
-    p_file: pandas dataframe for the platform
-    l_array: Array, each platforms information is appended to this array which is used to plot the legend
-                    You should define this variable if you are calling the defn while in radar subplots otherwise leave blank.
-                    This prevents a platform being added to the legend twice
-    radar_m: True/False, UNL and NSSL require file.name to access their str identifier otherplatforms do not
-    rad_site: How I am handeling the labeling of NEXRAD at the moment ..... will prob come back and remove
-    ----
-    RETURNS:
-    legend_elements: Array 
-    P_Attr: dict, contains the attibute info for the given platform 
-    '''
-    if print_long== True: print('Made it into platform_attr')
-
-    #assign the atributes for non-radar markers
-    if radar_m == False:
-        if p_file.name == "Prb1":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:lightblue','steelblue','Prb1'
-        elif p_file.name == "Prb2":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:watermelon','xkcd:dusty red','Prb2'
-        elif p_file.name == "FFld":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:bubblegum pink','xkcd:pig pink','FFld'
-        elif p_file.name == "LIDR":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:pastel purple','xkcd:light plum','LIDR'
-        elif p_file.name == "WinS":
-            marker_style, marker_color, line_color, legend_str= '1','xkcd:peach','xkcd:dark peach','WinS'
-        elif p_file.name == "CoMeT1":
-            marker_style, marker_color, line_color, legend_str= '1','brown','brown','CoMeT1'
-        elif p_file.name == "CoMeT2":
-            marker_style, marker_color, line_color, legend_str= '1','yellow','yellow','CoMeT2'
-        elif p_file.name == "CoMeT3":
-            marker_style, marker_color, line_color, legend_str= '1','black','black','CoMeT3'
-        elif p_file.name == "WTx Mesonet":
-            marker_style, marker_color, line_color, legend_str= r'$\AA$' ,'black','black','WTM Site'   
-            #U+1278
-            #u20a9
-        p_name = p_file.name
-
-    #assign the atributes for the radar markers
-    elif radar_m == True:
-        if p_file == 'KA2':
-            marker_style, marker_color, line_color, legend_str= '8','xkcd:crimson','xkcd:crimson','Ka2'
-        elif p_file == 'KA1':
-            marker_style, marker_color, line_color, legend_str= '8','mediumseagreen','mediumseagreen','Ka1'
-        elif p_file == 'WSR88D':
-            marker_style, marker_color, line_color, legend_str= r'$\Omega$', 'white','black',rad_site
-        p_name = p_file
-    
-    #create a dict to allow for easy recall of attr 
-    P_Attr={'m_style': marker_style, 'm_color': marker_color, 'l_color': line_color, 'leg_str': legend_str}
-
-    #Add to the legend array is the populated legend array was provided when calling this defn
-    if l_array != None:
-        #  legend_elements=legend_maker(p_name,P_Attr,legend_elements,print_long)
-        if (p_name in ['KA1','KA2']): #the legend entries for the KA radars
-            legend_entry=Line2D([], [], marker=marker_style, markeredgecolor='black',markeredgewidth=3,label=legend_str,markerfacecolor=marker_color, markersize=26)
-        elif p_name == 'WSR88D':
-            legend_entry=Line2D([], [], marker=marker_style, markeredgecolor=marker_color,markeredgewidth=3,label=legend_str, markersize=26,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')])
-        elif p_name == 'WTx Mesonet':
-            legend_entry=Line2D([], [], marker=marker_style, markeredgecolor=marker_color,label=legend_str, markersize=26)
-        else:
-            legend_entry=Line2D([], [], marker=marker_style, markeredgecolor=marker_color,markeredgewidth=3,label=legend_str, markersize=26,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')])
-        
-        #Append the new entry to the array
-        legend_elements=np.append(l_array,legend_entry)
-        
-        #if you define legend_elements when calling the defn then it will return a new appended legend array
-        if print_long== True: print('Made it through platform_attr')
-        return P_Attr, legend_elements 
-    
-    else: 
-        #otherwise it this defn will return the P_Attr dict
-        if print_long== True: print('Made it through platform_attr')
-        return P_Attr
 
 # * * * * * *
 def plot_colourline(x,y,c,cmap,ax,datacrs,color,amin=None,amax=None):
@@ -1104,11 +992,6 @@ for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']:
     max_array.append(max_val)
     min_array.append(min_val)
 
-#max an min values that will plot
-#if p_var =='Thetae':
-#    globalamin, globalamax=325, 360
-#elif p_var =='Thetav':
-#    globalamin, globalamax=295, 315
 
 #Alternate global variable max/min for plotting purposes
 globalamax = np.max(max_array)

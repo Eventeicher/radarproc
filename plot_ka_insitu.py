@@ -2,87 +2,52 @@
 ######################
 import matplotlib
 matplotlib.use('agg')
-import numpy as np
-import numpy.ma as ma
-from netCDF4 import Dataset
-import xarray as xr
-from xarray.backends import NetCDF4DataStore
 import matplotlib.pyplot as plt
-import cmocean
-import gc
-import os.path
-from datetime import datetime
-from datetime import date
-import datetime as dt
-from matplotlib.colors import ListedColormap
-import matplotlib.pylab as pl
 import matplotlib.dates as mdates
-import matplotlib.gridspec as gridspec
-from matplotlib.ticker import MaxNLocator
-from datetime import timedelta
-from mpl_toolkits import axes_grid1
+import matplotlib.patheffects as PathEffects
+from matplotlib.ticker import (MaxNLocator, MultipleLocator, FormatStrFormatter, AutoMinorLocator)
+from matplotlib.colors import ListedColormap, Normalize
+from matplotlib.lines import Line2D
+from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-import cartopy.crs as ccrs
+import datetime as dt
+from datetime import datetime, date, timedelta
 import cartopy
+import cartopy.crs as ccrs
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from cartopy.feature import ShapelyFeature,NaturalEarthFeature
+from cartopy.io.shapereader import Reader
 from shapely.geometry import Polygon
 from shapely.ops import cascaded_union
-from cartopy.io.shapereader import Reader
-import matplotlib.patheffects as PathEffects
-import glob
-import pyart
-import os
-import cartopy.io.shapereader as shpreader
-from matplotlib.colors import Normalize
-from metpy.plots import ctables
 import metpy
-import metpy.calc as mpcalc
+from metpy.plots import ctables
 from metpy.units import units
-from scipy import ndimage
+import metpy.calc as mpcalc
 import pandas as pd
+import numpy as np
+import numpy.ma as ma
+import xarray as xr
 import osmnx as ox
-import shutil
+import os, os.path
+from scipy import ndimage, interpolate
 from operator import attrgetter
-from os import path
-from scipy import interpolate
-from matplotlib.gridspec import GridSpec
-from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, AutoMinorLocator)
-from matplotlib.lines import Line2D
-import read_platforms
-import sys, traceback
 from collections import namedtuple
+import pyart, sys, traceback, shutil, glob, gc
 
-##########################################################################
-## VARIABLES
-############
-## File paths
-filesys='/Users/severe2/Research/'
-temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
+## Imports form other files 
+############################
+import config #this is the file with the plotting controls to access any of the vars in that file use config.var
 
-## Plot layout controls 
-radar_plotting= True #would you like to plot radar images? (set to False to only plot timeseries)
-r_only=False #set to true if you want the radar plots only
-
-## Timeframe
-day = '20190524' #'YYYYMMDD'
-#crop the start or end time to a time you specify (set to None to do the whole day)
-tstart = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),15,0,0)
-tend = None
-
-## Other Vars
-p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
-
-
-## Troubleshooting 
-#Set to True to print statements when entering/leaving definitions (helpful to understanding whats going on in the code but prints alot of lines to your terminal)
-print_long = False #True/False variable
-#Set to False to not print out the errors that tripped 'try' statements: set to True only while troubleshooting
-    ## there will be 'valid' errors caused by looping through platforms etc.... hence needlessly confusing unless troubleshooting
-e_test = True #True/False variable
+#rename a few commonly used vars so that the config.var does not have to be used repeatedly 
+print_long=config.print_long
+e_test=config.e_test
+p_var=config.p_var
+filesys=config.filesys
+temploc=config.temploc
+day=config.day
 
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
-from shared_defns import read_platforms, platform_attr, error_printing
+from shared_defns import Add_to_DATA, pform_names, error_printing
 
 ##########################################################################
 #######################
@@ -100,8 +65,7 @@ def det_radar_feilds(radar):
     normal_mask = (normal.flatten() < 0.4)
     range_mask = np.zeros(np.shape(reflectivity))
 
-    for i in range(0,len(range_mask[:,0])):
-        range_mask[i,:] = radar.range['data']>(radar.range['data'][-1]-1000.)
+    for i in range(0,len(range_mask[:,0])): range_mask[i,:] = radar.range['data']>(radar.range['data'][-1]-1000.)
 
     range_mask = range_mask.astype(bool)
     total_mask = [any(t) for t in zip(range_mask.flatten(), normal_mask.flatten())]
@@ -116,8 +80,6 @@ def det_radar_feilds(radar):
     radar.add_field('refl_fix',refl_dict)
     radar.add_field('sw_fix',sw_dict)
     radar.add_field('vel_fix',vel_dict)
-
-    return
 
 # * * * * * * *
 def det_radar_deps(currentscantime, r_testing, e_test):
@@ -174,7 +136,6 @@ def getRadarPositionData(c_time, r_dep):
     if define_check == 0:
         KLAT, KLON, HEAD, RHIB, RHIE = np.nan, np.nan, np.nan, np.nan, np.nan
     else: pass
-
     return KLAT, KLON, HEAD, RHIB, RHIE
 
 
@@ -182,24 +143,20 @@ def getRadarPositionData(c_time, r_dep):
 ## PLOTTING DEFINTIONS  ###
 ###########################
 def getLocation(current_lat, current_lon, offsetkm, given_bearing= False):
-    '''
-    This definition has two functions:
-        1) If no bearing is specified it will return a namedtuple containing the max/min lat/lons
-            to form a square surrounding the point indicated by lat1,lon1 by x km.
-        2) If a bearing is given then the defintion will return one set of lat/lon values
-             (end_lat and end_lon) which is the location x km away from the point lat1, lon1
-             if an observer moved in a straight line the direction the bearing indicated.
+    ''' This definition has two functions:
+            1) If no bearing is specified it will return a namedtuple containing the max/min lat/lons
+                to form a square surrounding the point indicated by lat1,lon1 by x km.
+            2) If a bearing is given then the defintion will return one set of lat/lon values
+                 (end_lat and end_lon) which is the location x km away from the point lat1, lon1
+                 if an observer moved in a straight line the direction the bearing indicated.
     ----
-    INPUTS
-    current_lon & current_lat: the starting position
-    offsetkm: distance traveled from the starting point to the new locations
-    given_bearing: True/False, are you given a specified direction of "travel"
+    INPUTS: current_lon & current_lat: the starting position
+            offsetkm: distance traveled from the starting point to the new locations
+            given_bearing: True/False, are you given a specified direction of "travel"
     '''
     lat1 = current_lat * np.pi / 180.0
     lon1 = current_lon * np.pi / 180.0
-
-    R = 6378.1 #earth radius
-    #R = ~ 3959 MilesR = 3959
+    R = 6378.1 #earth radius (R = ~ 3959 MilesR = 3959)
 
     if given_bearing == False:
         for brng in [0,90,180,270]:
@@ -218,7 +175,6 @@ def getLocation(current_lat, current_lon, offsetkm, given_bearing= False):
         #set up a namedtuple object to hold the new info
         box_extent = namedtuple('box_extent', ['ymin','ymax','xmin','xmax'])
         box=box_extent(ymin=min_lat, ymax=max_lat, xmin=min_lon, xmax= max_lon)
-
         return box
 
     else:
@@ -229,19 +185,15 @@ def getLocation(current_lat, current_lon, offsetkm, given_bearing= False):
         new_lon = lon1 + np.arctan2(np.sin(bearing)*np.sin(offsetkm/R)*np.cos(lat1),np.cos(offsetkm/R)-np.sin(lat1)*np.sin(new_lat))
         end_lon = 180.0 * new_lon / np.pi
         end_lat = 180.0 * new_lat / np.pi
-
         return end_lat, end_lon
 
 #* * * * *
 def createCircleAroundWithRadius(clat, clon, radiuskm,sectorstart,sectorfinish,heading):
-    #    ring = ogr.Geometry(ogr.wkbLinearRing)
-    latArray = []
-    lonArray = []
+    latArray,lonArray = [], []
     for bearing in range(int(heading+sectorstart),int(heading+sectorfinish)): #degrees of sector
         lat2, lon2 = getLocation(clat,clon,radiuskm,given_bearing=bearing)
         latArray.append(lat2)
         lonArray.append(lon2)
-
     return lonArray,latArray
 
 # * * * * * *
@@ -254,11 +206,8 @@ def rhi_spokes_rings(ka_info,display,print_long,e_test):
         try:
             #produce spoke and ring
             for j in range(int(ka_info[ka]['rhib']),int(ka_info[ka]['rhie'])+1,10):
-                #  print(j)
                 ang= ka_info[ka]['head'] + j
-                #  print(ang)
-                if ang > 360.:
-                    ang=int(ang-360.)
+                if ang > 360.: ang=int(ang-360.)
 
                 #this plots a circle that connects the spokes
                 A,B = createCircleAroundWithRadius(ka_info[ka]['lat'],ka_info[ka]['lon'],(ka_info['Rfile'].range['data'][-1]-500.)/1000., ka_info[ka]['rhib'],ka_info[ka]['rhie']+1,ka_info[ka]['head'])
@@ -276,17 +225,15 @@ def plot_colourline(x,y,c,cmap,ax,datacrs,color,amin=None,amax=None):
     ''' This defintion plots line extending out from the platform marker +/- in time
             The colorfill indicates values of the specifiec p_var (ie Thetae etc)
         ---
-        INPUTS
-        x & y: the loction of the probe at a given time
-        c: the value of p_var at a given time (will correspond eith the colorfill)
-        cmap: the colormap for the colorfill,
-        ax & datacrs: the subplot to plot the line on, the projection of the data
-        color: color of the border
-        amin & amax: max and min value of p_var. prevents outliers from sckewing the color scale.
+        INPUTS: x & y: the loction of the probe at a given time
+                c: the value of p_var at a given time (will correspond eith the colorfill)
+                cmap: the colormap for the colorfill,
+                ax & datacrs: the subplot to plot the line on, the projection of the data
+                color: color of the border
+                amin & amax: max and min value of p_var. prevents outliers from sckewing the color scale.
     '''
     if amin: pass
     else: amin=np.nanmin(c)
-
     if amax: pass
     else: amax=np.nanmax(c)
 
@@ -296,7 +243,6 @@ def plot_colourline(x,y,c,cmap,ax,datacrs,color,amin=None,amax=None):
         ax.plot([x[i],x[i+1]], [y[i],y[i+1]], c=color, linewidth=10.5, transform=datacrs, zorder=3)
     for i in np.arange(len(x)-1): #This is the colorramp colorline
         ax.plot([x[i],x[i+1]], [y[i],y[i+1]], c=c[i], linewidth=7.5, transform=datacrs, zorder=4)
-
     return
 
 # * * * * * *
@@ -385,7 +331,6 @@ def platform_plot(file, radartime, var, p_attr, ax, print_long, e_test, border_c
             #p_sub.iloc[::x,col_index] returns every x'th value
             stationplot = metpy.plots.StationPlot(ax, p_sub.iloc[::30,col_lon], p_sub.iloc[::30,col_lat], clip_on=True, transform=ccrs.PlateCarree())
             stationplot.plot_barb(p_sub.iloc[::30,col_U], p_sub.iloc[::30,col_V],sizes=dict(emptybarb= 0),length=7)
-            pass
         except: error_printing(e_test)
 
     elif p_deploy == False:
@@ -398,9 +343,8 @@ def platform_plot(file, radartime, var, p_attr, ax, print_long, e_test, border_c
 
 ##  #  #  #  #  #  #  #  #  #  #  #  #  # # # #  #  #  #  #  #  #  #  #  #  # #  #  #  # # #  #  #  #  #  #  #  #  # #  #
 ##  #  #  #  #  #  #  #  #  #  #  #  #  # # # #  #  #  #  #  #  #  #  #  #  # #  #  #  # # #  #  #  #  #  #  #  #  # #  #
-def ppiplot(ka_info, var, pform, r_only, filesys, day, print_long, e_test):
-    '''
-    Initial plotting defenition: sets up fig size, layout, font size etc and will call timeseries and radar subplots
+def ppiplot(ka_info, var, pform, filesys, day, print_long, e_test):
+    ''' Initial plotting defenition: sets up fig size, layout, font size etc and will call timeseries and radar subplots
     ----------
     INPUTS
     ka_info : dictionary
@@ -409,9 +353,9 @@ def ppiplot(ka_info, var, pform, r_only, filesys, day, print_long, e_test):
         contains info about the variable being overlayed (ie Thetae etc). Contains name and the max and min value
     pform: dictionary
         contains the pandas dataframes of the initu platforms
-    r_only : string
-        true/false variable that indicates whether only radar should be plotted (aka no Timeseries if True)
-        (I have not actually tried this yet .... but in theroy this should work (you would need to play with formating))
+    #t_plotting, r_plotting : string (description not right)
+    #    true/false variable that indicates whether only radar should be plotted (aka no Timeseries if True)
+    #    (I have not actually tried this yet .... but in theroy this should work (you would need to play with formating))
     filesys & day: string
         base path to data and strorage, day of deployment YYYYMMDD
     print_long & e_test: strings
@@ -429,7 +373,7 @@ def ppiplot(ka_info, var, pform, r_only, filesys, day, print_long, e_test):
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
     ## Set up plot size
-    if r_only == True:
+    if t_plotting == False:
         fig = plt.figure(figsize=(20,10), facecolor='white')
         gs= gridspec.GridSpec(nrows=2,ncols=1)
     else:
@@ -451,14 +395,11 @@ def ppiplot(ka_info, var, pform, r_only, filesys, day, print_long, e_test):
     post=radar_subplots('vel', fig, gs, display, ka_info, var, pform, filesys, print_long, e_test)
 
     ## Plot timeseries
-    if r_only == False:
-        time_series(fig, gs, ka_info, var, pform, print_long, e_test)
+    if t_plotting == True: time_series(fig, gs, ka_info, var, pform, print_long, e_test)
 
     ## Plot platform colorbar
-    if var['name'] == "Thetae":
-        c_lab= "Equivalent Potential Temp [K]"
-    elif var['name'] == "Thetav":
-        c_lab= "Virtual Potential Temp [K]"
+    if var['name'] == "Thetae": c_lab= "Equivalent Potential Temp [K]"
+    elif var['name'] == "Thetav": c_lab= "Virtual Potential Temp [K]"
     cbar_ax = plt.axes([.514, post.y0,.014, post.y1-post.y0])#left, bottom, width, height
     cbar=plt.colorbar(CS3,cax=cbar_ax, orientation='vertical', label=c_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(globalamin,globalamax+1,2))
 
@@ -472,8 +413,7 @@ def ppiplot(ka_info, var, pform, r_only, filesys, day, print_long, e_test):
     plt.close()
 
     if print_long== True: print('~~~~~~~~~~~made it through ppiplot~~~~~~~~~~~~~~~~~~')
-    print('Done Plotting')
-    print('******************************************************************************************************')
+    print('Done Plotting \n ***************************************************************************************************')
 
     ## Makes a ding noise
     print('\a')
@@ -483,11 +423,10 @@ def ppiplot(ka_info, var, pform, r_only, filesys, day, print_long, e_test):
 def radar_subplots(mom, fig, gs, display, ka_info, var, pform, filesys, print_long, e_test):
     ''' Plots each of the radar subplots and calls for the markers to be plotted for all the additional platforms
     ----
-    INPUTS
-    mom: str, indicates which radar moment you would like to plot (ie Reflectivity, Velocity, Spectrum Width etc)
-    fig, gs, & display: information about the plot
-    ka_info, var, & pform: dictionarys, as described in the ppiplot comment
-            **** NOTE: I need to come back and do more with pform****
+    INPUTS: mom: str, indicates which radar moment you would like to plot (ie Reflectivity, Velocity, Spectrum Width etc)
+            fig, gs, & display: information about the plot
+            ka_info, var, & pform: dictionarys, as described in the ppiplot comment
+                    **** NOTE: I need to come back and do more with pform****
     '''
     if print_long== True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
 
@@ -526,14 +465,13 @@ def radar_subplots(mom, fig, gs, display, ka_info, var, pform, filesys, print_lo
     display.plot_ppi_map(field, ka_info['Swp_ID'],title_flag=False,colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lon=box.xmin, max_lon=box.xmax, min_lat=box.ymin, max_lat=box.ymax, embelish=False)
 
     ## PLOT RHI SPOKES
-    if rhi_ring == True:
-        rhi_spokes_rings(ka_info, display, print_long, e_test) #plot the spokes for radars
+    if rhi_ring == True: rhi_spokes_rings(ka_info, display, print_long, e_test) #plot the spokes for radars
 
     ## PLOT RADAR MARKERS
     for ka in ['KA1', 'KA2']:
         try:
             if np.logical_and(ka_info[ka]['lat']>box.ymin,np.logical_and(ka_info[ka]['lat']<box.ymax,np.logical_and(ka_info[ka]['lon']>box.xmin,ka_info[ka]['lon']<box.xmax))):
-                P_Attr,legend_elements=platform_attr(ka,print_long,r_s=True,radar_m=True,l_array=legend_elements)
+                P_Attr,legend_elements=pform_attr(ka,print_long,r_s=True,radar_m=True,l_array=legend_elements)
 
                 ax_n.plot(ka_info[ka]['lon'],ka_info[ka]['lat'],marker=P_Attr['m_style'], transform=ccrs.PlateCarree(),color=P_Attr['m_color'],markersize=18,markeredgewidth=5,path_effects=[PathEffects.withStroke(linewidth=15,foreground='k')],
                         zorder=10)
@@ -544,16 +482,16 @@ def radar_subplots(mom, fig, gs, display, ka_info, var, pform, filesys, print_lo
     if NSSLmm == True:
         for NSSLMM in NSSLMM_df:
             if print_long== True: print(NSSLMM.name)
-            P_Attr,legend_elements=platform_attr(NSSLMM, print_long, r_s=True, l_array=legend_elements)
+            P_Attr,legend_elements=pform_attr(NSSLMM, print_long, r_s=True, l_array=legend_elements)
             platform_plot(NSSLMM, ka_info['Time'], var, P_Attr, ax_n, print_long, e_test)
     if NEBmm == True:
         for UNLMM in UNLMM_df:
             if print_long== True: print(UNLMM.name)
-            P_Attr,legend_elements=platform_attr(UNLMM, print_long, r_s=True, l_array=legend_elements)
+            P_Attr,legend_elements=pform_attr(UNLMM, print_long, r_s=True, l_array=legend_elements)
             platform_plot(UNLMM, ka_info['Time'], var, P_Attr, ax_n, print_long, e_test)
     if UASd == True:
         for UAS in UAS_files:
-            P_Attr,legend_elements=platform_attr(UAS, print_long, r_s=True, l_array=legend_elements)
+            P_Attr,legend_elements=pform_attr(UAS, print_long, r_s=True, l_array=legend_elements)
             platform_plot(UAS, ka_info['Time'], var, P_Attr, ax_n, border_c='xkcd:very pale green', labelbias=(0,0.01))
 
 
@@ -574,9 +512,7 @@ def radar_subplots(mom, fig, gs, display, ka_info, var, pform, filesys, print_lo
         #add legend for platform markers
         l=ax_n.legend(handles=l_list,loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1,title="Platforms",shadow=True,fancybox=True,ncol=1,edgecolor='black')
         l.get_title().set_fontweight('bold')
-
-    else: #this means you are currently making the right subplot
-        pass
+    else: pass #this means you are currently making the right subplot
 
     ## PLOT BACKGROUND FEATURES
     if country_roads == True:
@@ -603,36 +539,30 @@ def radar_subplots(mom, fig, gs, display, ka_info, var, pform, filesys, print_lo
     return post
 
 # * * * * * * *
-def time_series(fig, gs, ka_info, var, pform, print_long, e_test, radar_sub=True):
+def time_series(fig, gs, ka_info, var, pform, print_long, e_test, r_plotting=True):
     ''' Plot the time series of p_var from the various instrument platforms
     ----
-    INPUTS
-    fig & gs: relating to the plot layout
-    ka_info, var, & pform: dictionarys, as described in the ppiplot comment
-            **** NOTE: I need to come back and do more with pform****
-    radar_sub: True/False, If False will only plot timeseries (no radar).. In theroy have not actually done this yet
+    INPUTS; fig & gs: relating to the plot layout
+            ka_info, var, & pform: dictionarys, as described in the ppiplot comment
+                **** NOTE: I need to come back and do more with pform****
+            r_plotting: True/False, If False will only plot timeseries (no radar).. In theroy have not actually done this yet
     '''
     if print_long== True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
 
-    if radar_sub == True:
-        ax_n=fig.add_subplot(gs[1,:])
-
-    else: #will only plot the time series (not the radar subplots)
-        fig, ax_n= plt.subplots()
+    if r_plotting == True: ax_n=fig.add_subplot(gs[1,:])
+    else: fig, ax_n= plt.subplots() #will only plot the time series (not the radar subplots)
 
     ## MAKE THE TIMESERIES
     for platform_df in [NSSLMM_df,UNLMM_df,UAS_df]:
         #can remove this if/else statement once you fill in the UAS portion
         if platform_df == UAS_df:
             # Need to come back and fill in UAS
-            # Can remove this if/else statement once you fill in the UAS portion
             pass
         else:
             for platform_file in platform_df:
                 if print_long== True: print(str(platform_file.name))
-
                 ## Set up line colors and legend labels
-                P_Attr = platform_attr(platform_file, print_long)
+                P_Attr = pform_attr(platform_file, print_long)
 
                 ## Should ploting data be masked?
                 # if you only want to mask certain platforms set up an if-statement to assign the "masking" variable
@@ -650,10 +580,8 @@ def time_series(fig, gs, ka_info, var, pform, print_long, e_test, radar_sub=True
     ax_n.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
 
     ## Set up axes formats (lables/ ticks etc)
-    if var['name'] == "Thetae":
-        ylab = "Equivalent Potential Temp [K]"
-    elif var['name'] == "Thetav":
-        ylab = "Virtual Potential Temp [K]"
+    if var['name'] == "Thetae": ylab = "Equivalent Potential Temp [K]"
+    elif var['name'] == "Thetav": ylab = "Virtual Potential Temp [K]"
     ax_n.set_ylabel(ylab)
     ax_n.set_xlabel('Time (UTC)')
     ax_n.tick_params(which='major', width=2,length=20, color='black')
@@ -673,280 +601,89 @@ def time_series(fig, gs, ka_info, var, pform, print_long, e_test, radar_sub=True
 
     ## Include the legend
     leg=ax_n.legend()
-    for line in leg.get_lines():
-        line.set_linewidth(12)
+    for line in leg.get_lines(): line.set_linewidth(12)
 
     if print_long== True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
     return
 
 
-###############################################################################################
-##########################################
-# Create new datasets for each platform ##
-##########################################
+##############################################################################################
+#####################################################
+# Read in Data that does not change for each image ##
+#####################################################
 
-class Platform:
-    #variables defined in this block (until ######) reamain constant for any object initilized via calling Platform or any Platform subclass
-        #self.var can be retreived latter via typing obj.day etc , vars without self. can be used within Platform or 
-        #  Platform subclass methods but not for external retrieval
-    Day= day #Class variables
-    Tstart=tstart
-    Tend=tend
-    Print_long=print_long
-    E_test=e_test
-    ######
-
-    def __init__(self, Name):
-        '''setting the ojects attr, __init__ defns will only be run once per object (and will be unique for each object)
-        '''
-        self.name=Name #Instance variables
-        #get style info for the platforms marker
-        self.m_style, self.m_color, self.l_color, self.leg_str, self.leg_entry= platform_attr(Name, self.Print_long)
-    
-    @classmethod
-    def test_data(self, pname):
-        '''test if there is a datafile for the platform 
-        @classmethod allows you to call the defn without creating an object yet via Platforms.test_data 
-        '''
-        try:
-            print(pname)
-            data_avail=read_platforms(pname, self.Day, self.Print_long, self.E_test, self.Tstart, self.Tend, d_testing=True)
-            return data_avail
-        except:
-            error_printing(e_test)
-            data_avail=False
-            return data_avail
-
-####
-class Torus_Insitu(Platform):
-    def __init__(self, Name):
-        #read in and intilize the dataset
-        self.df= read_platforms(Name, self.Day, self.Print_long, self.E_test, self.Tstart, self.Tend)
-        self.df.name='{}_df'.format(Name) #assign a name to the pandas dataframe itself
-        Platform.__init__(self, Name)
-    #  def __repr__(self):
-        #  try:
-            #  p_st="df=% s m_style =% s m_color =% s l_color =% s leg_str =% s leg_entry =% s \n" % (type(self.df), self.m_style, self.m_color, self.l_color, self.leg_str, self.leg_entry)
-            #  print('')
-            #  return p_st
-        #  except: return "Platform %s did not deploy" % (self.name)
-
-# *  *  *
-class NSSL(Torus_Insitu, Platform):
-    '''Since this class has no init it is passed the init from a level up (in this case Torus_Insitu) 
-    so to initilize an object of this class use format x=NSSL('arguments that Torus_Insitu __init__ calls for')
-    '''
-    def min_max(self,p_var,mask=False):
-        #Mask the dataset(if applicable) and determine the max and min values of pvar: Masking is based of QC flags etc and can be diff for each platform 
-        if mask== True: #mask is a bool, sent to False to by default
-            self.mask_df= np.ma.masked_where(self.df['qc_flag'].values>0, self.df[p_var].values) #add masked dataset to the object
-            self.Min, self.Max = self.mask_df.min(), self.mask_df.max()#use the masked dataset to find max and min of p_var
-        elif mask == False:
-            self.Min, self.Max = self.df.min()[p_var], self.df.max()[p_var] #use the orig dataset to find max/min
-class UNL(Torus_Insitu,Platform):
-    def min_max(self,p_var,mask=False):
-        if mask== True:  print('no code written for this yet')
-        elif mask == False:
-            self.Min, self.Max = self.df.min()[p_var], self.df.max()[p_var] #use the orig dataset to find max/min
-class UAS(Torus_Insitu,Platform):
-    def min_max(self,p_var,mask=False):
-        if mask== True:  print('no code written for this yet')
-        elif mask == False: print('code not written yet')
-
-####
-class Radar(Platform):
-    #  azimuth= p_azimuth #class variable
-    def __init__(self, Name):
-        self.df= read_platforms(Name, self.Day, self.Print_long, self.E_test, self.Tstart, self.Tend)
-        self.scantime= 'pass'
-    print('code not written yet')
-    pass
-
-# *  *  *
-class KA(Radar,Platform):
-    print('code not written yet')
-class NOXP(Radar,Platform):
-    print('code not written yet')
-    pass
-class WSR88D(Radar,Platform):
-    print('code not written yet')
-    pass
-
-######################################
-all_pnames= ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']#list of ALL possible platforms 
+#print(pform_names('ALL')) #list of ALL possible platforms 
 subset_pnames=[] #array of platforms that actually have data for the time range we are plotting 
-Data={} #The dictionary that the new objects will be placed into 
+Data={} #dictionary in which all the class objects will be stored (will contain platform data, locations, plotting variables etc)
 
-for pname in all_pnames:
-    #for each platform test to see if we have data for that day 
-    data_avail=Platform.test_data(pname)
-
-    if data_avail==True:
-        if print_long==True: print("Data can be read in for platform %s" %(pname))
-        subset_pnames.append(pname) #append the pname to the subset_pnames list 
-        
-        #now load data for the platform (aka initialize an object by calling the appropriate class); place in dict with key of pname
-        if pname in ['CoMeT1', 'CoMeT2', 'CoMeT3']:
-            Data.update({pname: UNL(pname)}) 
-        elif pname in ['FFld','LIDR','Prb1','Prb2','WinS']:
-            Data.update({pname: NSSL(pname)}) 
-        else:
-            print('code not written yet')
-            pass
-    else:
-        if print_long==True: print("No data avaible to be read in for platform %s" %(pname))
-        pass
-
-#  print(subset_pnames) #uncomment to check yourself
-#  print(Data)
-#  print(Data['FFld'].m_color)
-
-#go through the values stored in Data. If any are part of the Torus_Insitu Classes then it will add a max/min value, 
-#if the object was created using the NSSL class it will apply a mask (this can be easily changed/ mask applied to other platforms)
-for p in Data.values():
-    if isinstance(p,Torus_Insitu):
-        if isinstance(p, NSSL):
-            p.min_max(p_var,mask=True)
-        else:p.min_max(p_var)
-    #  print(p.Min)
+## Read in the data for the TORUS Insitu platforms (if available)
+Data, subset_pnames = Add_to_DATA('TInsitu',Data,subset_pnames,print_long)
+## Establish info for the plotting variable (aka max min etc) 
+Data, subset_pnames = Add_to_DATA('PVar',Data,subset_pnames,print_long)
 
 
-#########################################
-### set up Pvar class (this is not a subclass of Platform)
-class Pvar:
-    def __init__(self,p_var):
-        self.name=p_var 
-    def find_global_max_min(self, Dict):
-        #determine the global max and min across all platforms for p_var
-        val_hold = []
-        for p in Dict.values():
-            if hasattr(p,'Min')==True: val_hold.append(p.Min)
-            if hasattr(p,'Max')== True:val_hold.append(p.Max)
-        self.global_min, self.global_max=min(val_hold), max(val_hold)
-
-#Create a Pvar object add it to the data dict and find the global max and min 
-Data.update({'Thetav': Pvar('Thetav')})
-Data['Thetav'].find_global_max_min(Data)
-print(Data['Thetav'].global_max)
-
-
-
-#  print(vars(Data['FFld']))
-#  mx_batch =  max(cookies.values(), key=operator.attrgetter('batch')).batch
-#  print(vars(Data['FFld']))
-#  print(isinstance (Data.iterkeys,Torus_Insitu))
-#  sorted(Data, key=hasattr())
-
-## a few useful built in functions 
-    #dir(object): return all the properties and methods (including methods that are built in by default) of an object
-    #getattr(abject,attribute): get the attibute value of the object
-        #  print(getattr(Ka1,lat))
-    #hasattr(object, attribute)
-    #vars(object)
-    #isinstance
-    #issubclass
-
-#################
-# Create Plots ##
-#################
-
-if radar_plotting == True:
+###################################
+# Create Plot for each radarfile ##
+###################################
+## If Radar will be plotted 
+if config.r_plotting == True:
     print('\n Yes Print Radar \n')
-
-    #get radar files
+    ## Get radar files
     ka1_files =sorted(glob.glob(filesys+'TORUS_Data/'+day+'/radar/TTUKa/netcdf/ka1/dealiased_*'))
     ka2_files =sorted(glob.glob(filesys+'TORUS_Data/'+day+'/radar/TTUKa/netcdf/ka2/dealiased_*'))
     fil= ka1_files + ka2_files
 
-    ####dummy plot for scatter
-    cmap=cmocean.cm.curl
-    Z = [[0,0],[0,0]]
-    levels = np.arange(globalamin,globalamax+1,1)
-    CS3 = plt.contourf(Z, levels, cmap=cmap)#,transform=datacrs)
-    plt.clf()
-
-
-    #### what azimuth scan do you want to plot
-    p_azimuth= 1.0
-
-    #open radar data
+    ## Read in and check each radarfile in fil 
+    #### + + + + + + + + + + + + + + + + + + +
     for thefile in fil[:]:
         print(str(thefile))
-        radar = pyart.io.read(thefile)
+        radar = pyart.io.read(thefile) ## Read the radar file
 
-        if radar.scan_type == 'ppi':
-
+        ## We are currently not interested in plotting the RHI scans 
+        if radar.scan_type == 'rhi': print("This scan is an RHI \n **********************************")
+        ## If file contains a ppi scan proceed 
+        elif radar.scan_type == 'ppi':
             n_swps = radar.nsweeps
             for swp_id in range(n_swps):
                 plotter = pyart.graph.RadarDisplay(radar)
-                azimuth = radar.fixed_angle['data'][swp_id]
+                azimuth = radar.fixed_angle['data'][swp_id] #det the actual azimuth of a given sweep 
 
-                if np.around(azimuth, decimals=1) == p_azimuth:
-                    print(str(thefile))
+                ## Check to see if the radarfile matches the azimuth we are interested in 
+                if np.around(azimuth, decimals=1) == config.p_azimuth: 
                     print("Producing Radar Plot")
-                    #assign radar feilds and masking
-                    det_radar_feilds(radar)
+                    det_radar_feilds(radar)  #Assign radar feilds and masking
 
-                    #get radar location data
-                    currentscantime = datetime.strptime(radar.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S")
-                    try:
-                        klat1, klon1, head1, rhib1, rhie1= det_radar_deps(currentscantime,'ka1',e_test)
-                    except: error_printing(e_test)
-                    try:
-                        klat2, klon2, head2, rhib2, rhie2= det_radar_deps(currentscantime,'ka2',e_test)
-                    except: error_printing(e_test)
+                    ## Det Main plotting radar (aka which radar is associated with rfile) 
+                    ##### + + +  + + + + + + + + + + + + + + + + + + + + + + + + + + + +
+                    if thefile.split("/")[-1][10:13] == 'Ka1': P_Rname = 'Ka1'
+                    elif thefile.split("/")[-1][10:13] == 'Ka2': P_Rname = 'Ka2'
+                    else: print('What radar are we using?')
 
-                    #create dictionary containing the radar deployment data
-                    ka_info = {
-                        'Main_Radar': 'Place Holder',
-                        'Rfile': radar,
-                        'Time': currentscantime,
-                        'Swp_ID': swp_id,
-                        'Azimuth': azimuth,
-                        'KA1' : {
-                            'lat': klat1,
-                            'lon': klon1,
-                            'head': head1,
-                            'rhib': rhib1,
-                            'rhie': rhie1,
-                        },
-                        'KA2' : {
-                            'lat': klat2,
-                            'lon': klon2,
-                            'head': head2,
-                            'rhib': rhib2,
-                            'rhie': rhie2,
-                        }
-                    }
+                    ## Read in radar data and add to Data dict
+                    ##### + + + + + + + + + + + + + + + + + + +
+                    #  Establish info for the main plotting radar (aka scantime, azimuth, name, loc, etc)
+                    Data, subset_pnames = Add_to_DATA('Plotting_Radar',Data,subset_pnames,print_long, rfile=radar, rname=P_Rname, swp=swp_id)
+                    #  Establish locations for other radars (if deployed)
+                    Data, subset_pnames = Add_to_DATA('RADAR',Data,subset_pnames,print_long)
+       
+                    ## Proceed to plot the radar
+                    ##### + + + + + + + + + + + +
+                    #  ppiplot(Data, print_long, e_test)
 
-                    #Det which radar is the main plotting radar and redefine the 'main_radar' var for that radar's dict
-                    if thefile.split("/")[-1][10:13] == 'Ka1':
-                        ka_info['Main_Radar']= 'KA1'
-                    elif thefile.split("/")[-1][10:13] == 'Ka2':
-                        ka_info['Main_Radar']= 'KA2'
-                    else:
-                        print('What radar are we using?')
-
-                    #proceed to plot the radar
-                    ppiplot(ka_info, var, pform, r_only, filesys, day, print_long, e_test)
-
-                else:
-                    print("Scan does not match the azimuth currently being plotted")
-                    print("Currently plotting: azimuth= " + str(p_azimuth))
-                    print("This scan: azimuth= "+ str(azimuth))
-                    print('**********************************')
-
-        elif radar.scan_type == 'rhi':
-            print("This scan is an RHI")
-            print('**********************************')
-
-    print("all finished")
-
-else:
-#Only plotting timeseries (this code isn't fully fleshed out but in theroy this code is built in such a way to allow for this)
-    print("no radar plotted")
-    time_series(filesys,day,fig,p_var,radar_sub=False)
-    #print(str(filesys+'TORUS_Data/'+day+'/mesonets/NSSL/*.nc'))
-
+                ## If the scans azimuth does not match the one we are plotting
+                else: print("Scan does not match the azimuth currently being plotted \n Currently plotting: azimuth= " 
+                             + str(config.p_azimuth) +"\n This scan: azimuth= "+ str(azimuth)+'\n**********************************')
+print(Data)
+print(subset_pnames)
+################################
+# Create Timeseries only plot ##
+################################
+#Only plot timeseries (this code isn't fully fleshed out but in theroy this code is built in such a way to allow for this)
+if config.r_plotting == False and config.t_plotting== True:
+    print("Plot Timeseries only \n"+ str(filesys+'TORUS_Data/'+day+'/mesonets/NSSL/*.nc'))
+    time_series(Data,r_plotting=False)
     fig.savefig('test2.png')
     plt.close()
+
+###########################
+print("ALL FINISHED")
