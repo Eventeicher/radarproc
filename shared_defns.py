@@ -7,8 +7,10 @@ import matplotlib.patheffects as PathEffects
 import pandas as pd
 import datetime as dt
 from datetime import datetime, date, timedelta
+import metpy
 import metpy.calc as mpcalc
 from metpy.units import units
+import cartopy.crs as ccrs
 import xarray as xr
 from collections import namedtuple
 import sys, traceback, glob, cmocean
@@ -18,12 +20,8 @@ import sys, traceback, glob, cmocean
 import config #this is the file with the plotting controls to access any of the vars in that file use config.var 
 
 #rename a few commonly used vars so that the config.var does not have to be used repeatedly 
-print_long=config.print_long
-e_test=config.e_test
-p_var=config.p_var
-filesys=config.filesys
-temploc=config.temploc
-            
+print_long, e_test, p_var = config.print_long, config.e_test, config.p_var
+
 
 ################################################################################################
 ##################
@@ -86,7 +84,148 @@ def getLocation(current_lat, current_lon, offsetkm, given_bearing= False):
         end_lat = 180.0 * new_lat / np.pi
         return end_lat, end_lon
 
-   
+#* * * * *
+def createCircleAroundWithRadius(clat, clon, radiuskm, sectorstart, sectorfinish, heading):
+    latArray,lonArray = [], []
+    for bearing in range(int(heading+sectorstart),int(heading+sectorfinish)): #degrees of sector
+        lat2, lon2 = getLocation(clat,clon,radiuskm,given_bearing=bearing)
+        latArray.append(lat2)
+        lonArray.append(lon2)
+    return lonArray,latArray
+
+# * * * * * *
+def rhi_spokes_rings(Data, pform, display, print_long, e_test):
+    ''' Plot the RHI spoke and ring for the KA radars
+    '''
+    if print_long== True: print('made it into rhi_spokes_rings')
+
+    #produce spoke and ring
+    for j in range(int(pform.rhib), int(pform.rhie)+1, 10):
+        ang= pform.head + j
+        if ang > 360.: ang=int(ang-360.)
+
+        #this plots a circle that connects the spokes
+        A,B = createCircleAroundWithRadius(pform.lat, pform.lon, (Data['P_Radar'].rfile.range['data'][-1]-500.)/1000., pform.rhib, pform.rhie+1, pform.head)
+        C,D = getLocation(pform.lat, pform.lon, (Data['P_Radar'].rfile.range['data'][-1]-500.)/1000., given_bearing=ang)
+        display.plot_line_geo(A, B, marker=None, color='grey', linewidth=.25) #this plots a circle that connects the spokes
+        display.plot_line_geo([pform.lon, D], [pform.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
+        #if np.logical_and(C>ymin,np.logical_and(C<ymax,np.logical_and(D>xmin,D<xmax))):
+                #d1=plt.text(D, C, str(ang),horizontalalignment='center',transform=ccrs.PlateCarree(),fontsize=10,zorder=9,path_effects=([PathEffects.withStroke(linewidth=4,foreground='xkcd:pale blue')])
+    if print_long== True: print('made it through rhi_spokes_rings')
+
+# * * * * * *
+def plot_colorline(x,y,c,cmap,ax,datacrs,color,amin=None,amax=None):
+    ''' This defintion plots line extending out from the platform marker +/- in time
+            The colorfill indicates values of the specifiec p_var (ie Thetae etc)
+        ---
+        INPUTS: x & y: the loction of the probe at a given time
+                c: the value of p_var at a given time (will correspond eith the colorfill)
+                cmap: the colormap for the colorfill,
+                ax & datacrs: the subplot to plot the line on, the projection of the data
+                color: color of the border
+                amin & amax: max and min value of p_var. prevents outliers from sckewing the color scale.
+    '''
+    if amin: pass
+    else: amin=np.nanmin(c)
+    if amax: pass
+    else: amax=np.nanmax(c)
+
+    c = cmap((c-amin)/(amax-amin))
+    ax = plt.gca()
+    for i in np.arange(len(x)-1): #This is the border of the colorline
+        ax.plot([x[i],x[i+1]], [y[i],y[i+1]], c=color, linewidth=10.5, transform=datacrs, zorder=3)
+    for i in np.arange(len(x)-1): #This is the colorramp colorline
+        ax.plot([x[i],x[i+1]], [y[i],y[i+1]], c=c[i], linewidth=7.5, transform=datacrs, zorder=4)
+
+# * * * * * *
+def grab_platform_subset(df, print_long, e_test, bounding=None, scan_time= None, time_offset=None):
+    ''' This def will take a given dataset and subset it either spatially or temporially
+            1) If scan_time is given the data will be subset temporally
+                    Grabs the observed thermo data +/- x seconds around radar scan_time.
+                    The length of the subset is det by time_offset which is defaults to +/- 300 secs.
+                    This means that unless a different time_offeset is specified the subset will span 10 min.
+                **NOTE: This does not automatically control the gray vertical box on the timeseries**
+            2) If bounding is given the data will be subset spacially
+                    will return the data points that fall within the box defined by ymin,ymax,xmin,xmax
+            3) If both scan_time and a bounding region are provided the dataset should be subset both
+                    temporally and spatially. (This has not been tested yet so double check if using)
+    -----
+    Returns: The subset dataset (df_sub) and a True/False statement regarding any data in the original dataset
+                matched the subsetting criteria (p_deploy)
+    '''
+    #Temporal subset
+    if scan_time != None:
+        aaa = df.loc[(df['datetime']>=scan_time-dt.timedelta(minutes=time_offset))]
+        df_sub = aaa.loc[(aaa['datetime']<=scan_time+dt.timedelta(minutes=time_offset))]
+        if print_long == True: print('Dataset has been temporally subset')
+
+    #Spatial Subset
+    if bounding != None:
+        #if both a scan_time and bounding area is given then the spatial subset start from the already
+            #temporally subset dataframe... if not will start with the full platform dataframe
+        if scan_time != None: aaa= df_sub.loc[(df['lat']>=bounding['ymin'])]
+        else: aaa = df.loc[(df['lat']>=bounding['ymin'])]
+
+        bbb = aaa.loc[(aaa['lat']<=bounding['ymax'])]
+        ccc = bbb.loc[(bbb['lon']>=bounding['xmin'])]
+        df_sub = ccc.loc[(ccc['lon']<=bounding['xmax'])]
+        if print_long == True: print('Dataset has been spatially subset')
+
+    #Test to ensure that there is valid data in the subrange
+    #  (aka the platform was deployed during the time of radarscan or that any of the points fall within the map area)
+    try:
+        p_test= df_sub.iloc[1]
+        p_deploy = True
+    except:
+        p_deploy = False
+        error_printing(e_test)
+    return df_sub, p_deploy
+    
+# * * * * ** *
+def platform_plot(Data, pform, ax, print_long, e_test, border_c='xkcd:light grey',labelbias=(0,0)):
+    ''' Plot the in situ platform markers, barbs and pathline
+    ----
+    INPUTS: file: the in situ pandas dataframe
+            var: dictionary containing info relating to p_var (ie name, max, min)
+            p_attr: dictionary containing platform styling info (color, shape etc)
+            ax: axes of the subplot to plot on
+
+    Optional Inputs: border_c, labelbias: color of background for the pathline, if you want to add labels directly to the plot this can offset it from the point
+    '''
+    if print_long== True: print('made it into platform_plot')
+
+    #grab the subset of data of +- interval around radar scan
+    p_sub, p_deploy = grab_platform_subset(pform.df, print_long, e_test, scan_time=Data['P_Radar'].time, time_offset=config.cline_extent)
+
+    if p_deploy == False:
+        if print_long==True: print('The platform was not deployed at this time')
+
+    elif p_deploy == True:
+        #plot the line that extends +/- min from the platform location
+        plot_colorline(p_sub['lon'].values, p_sub['lat'].values, p_sub[config.p_var].values, cmocean.cm.curl, ax, ccrs.PlateCarree(), color=border_c, amin=Data[p_var].global_min, amax=Data[p_var].global_max)
+
+        #find the value of the index that is halfway through the dataset (this will be the index associated with radar_scantime)
+        mid_point=(p_sub.index[-1]-p_sub.index[0])/2
+        col_lon, col_lat =p_sub.columns.get_loc('lon'), p_sub.columns.get_loc('lat')
+        col_U, col_V =p_sub.columns.get_loc('U'), p_sub.columns.get_loc('V')
+
+        #plot the platform marker at the time closest to the scantime (aka the time at the halfway point of the subset platform dataframe)
+        ax.plot(p_sub.iloc[mid_point,col_lon], p_sub.iloc[mid_point,col_lat], transform=ccrs.PlateCarree(), marker=pform.m_style, markersize=20, markeredgewidth='3',color=pform.m_color, path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')], zorder=10)
+        #plot labels for the marker on the plot itself
+        #  d2=plt.text(p_sub.iloc[mid_point,col_lon]+labelbias[0], p_sub.iloc[mid_point,col_lat]+labelbias[1], p.name, transform=ccrs.PlateCarree(), fontsize=20, zorder=9, path_effects=[patheffects.withstroke(linewidth=4,foreground=color)])
+
+        #plot a dot at the end of the colorline in the direction the platform is moving (aka the last time in the subset dataframe)
+        ax.plot(p_sub.iloc[-1,col_lon], p_sub.iloc[-1,col_lat],transform=ccrs.PlateCarree(), marker='.',markersize=10, markeredgewidth='3',color='k',zorder=9)
+
+        #plot windbarbs
+        try:
+            #p_sub.iloc[::x,col_index] returns every x'th value
+            stationplot = metpy.plots.StationPlot(ax, p_sub.iloc[::30,col_lon], p_sub.iloc[::30,col_lat], clip_on=True, transform=ccrs.PlateCarree())
+            stationplot.plot_barb(p_sub.iloc[::30,col_U], p_sub.iloc[::30,col_V],sizes=dict(emptybarb= 0),length=7)
+        except: error_printing(e_test)
+
+    if print_long== True: print('made it through platform_plot')
+
 
 
 ################################################################################################
@@ -146,7 +285,7 @@ def pform_attr(pname, print_long):
     return marker_style,marker_color,line_color,legend_str,legend_entry
 
 #**************
-def read_TInsitu(pname,day,print_long,e_test,tstart=None,tend=None,d_testing=False):
+def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=False):
     ''' Reads data files provided on TORUS19 EOL site (Important that datafiles and filenames follow TORUS19 readme)
         ---
         INPUT: filename string (following readme conventions for each platform) 
@@ -154,7 +293,7 @@ def read_TInsitu(pname,day,print_long,e_test,tstart=None,tend=None,d_testing=Fal
         OUTPUT: dataframe containing all data collected during desired times
     '''
     if pname in pform_names('UNL'): 
-        mmfile= glob.glob(temploc+'TORUS_Data/'+day+'/mesonets/UNL/UNL.'+pname+'.*')
+        mmfile= glob.glob(config.temploc+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
         mtest=mmfile[0] #if there is no files this will will cause the script to fail (in a good way)
         #if the code has not failed by this point there is data present; if calling defn in a testing capacity 
         #  the defn will exit at this point (saving computing time) otherwise the defn will cont
@@ -211,7 +350,7 @@ def read_TInsitu(pname,day,print_long,e_test,tstart=None,tend=None,d_testing=Fal
 
     # * * * 
     elif pname in pform_names('NSSL'): 
-        mmfile=glob.glob(filesys+'TORUS_Data/'+day+'/mesonets/NSSL/'+pname+'_'+day[2:]+'_QC_met.dat')
+        mmfile=glob.glob(config.filesys+'TORUS_Data/'+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
         file=mmfile[0]
         #if the code has not failed by this point there is data present; if calling defn in a testing capacity 
         #  the defn will exit at this point (saving computing time) otherwise the defn will cont
@@ -283,7 +422,7 @@ def read_TInsitu(pname,day,print_long,e_test,tstart=None,tend=None,d_testing=Fal
 	return 'UAS' 
 
 #**************
-def radar_dep(pname,scantime,day,print_long,e_test,d_testing=False): 
+def radar_dep(pname,scantime,print_long,e_test,d_testing=False): 
     ''' Determine if a given radar is deployed and if so assign the correct location values to it.
     '''
     if pname in pform_names('KA'): 
@@ -291,7 +430,7 @@ def radar_dep(pname,scantime,day,print_long,e_test,d_testing=False):
         if pname == 'Ka1': r_testing='ka1' # r_testing is the name of the radar you are testing to see if deployed
         elif pname == 'Ka2': r_testing='ka2'
         #  read in the csv file; if the Ka radar didn't deploy there will be no csv file and the defn will fail
-        kadep=pd.read_csv(filesys+'TORUS_Data/'+day+'/radar/TTUKa/csv/'+day+'_deployments_'+r_testing+'.csv')
+        kadep=pd.read_csv(config.filesys+'TORUS_Data/'+config.day+'/radar/TTUKa/csv/'+config.day+'_deployments_'+r_testing+'.csv')
         #  if testing for data availability (and the defn has not failed yet) the func will end here
         if d_testing==True: return True
         # + + + + + + + + + + + + ++ + +
@@ -350,8 +489,8 @@ def Add_to_DATA(DType,Data,subset_pnames,print_long,rfile=None,rname=None,swp=No
         #  if the object has type NSSL it will apply a mask (this can be easily changed/ mask applied to other platforms)
         for p in Data.values():
             if isinstance(p,Torus_Insitu):
-                if p.type == 'NSSL': p.min_max(p_var,mask=True)
-                else: p.min_max(p_var)
+                if p.type == 'NSSL': p.min_max(config.p_var,mask=True)
+                else: p.min_max(config.p_var)
     
     # * * * 
     elif DType == 'RADAR':
@@ -380,7 +519,8 @@ def Add_to_DATA(DType,Data,subset_pnames,print_long,rfile=None,rname=None,swp=No
         Data.update({'P_Radar':Radar(rname, Rfile=rfile,Swp=swp,Plotting_Radar=True)})
 
     # * * * 
-    elif DType == 'PVar': 
+    elif DType == 'PVar':
+        p_var=config.p_var
         #Create a Pvar object add it to the data dict and find the global max and min
         #  This object will only be once updated once (aka same for all images for a given run)
         Data.update({p_var: Pvar(p_var)})
@@ -437,9 +577,9 @@ class Platform:
         '''
         try:
             if pname in pform_names('TInsitu'):
-                data_avail=read_TInsitu(pname, self.Day, self.Print_long, self.E_test, self.Tstart, self.Tend, d_testing=True)
+                data_avail=read_TInsitu(pname, self.Print_long, self.E_test, self.Tstart, self.Tend, d_testing=True)
             elif pname in pform_names('RADAR'):
-                data_avail=radar_dep(pname, Data['P_Radar'].time, self.Day, self.Print_long, self.E_test, d_testing=True)
+                data_avail=radar_dep(pname, Data['P_Radar'].time, self.Print_long, self.E_test, d_testing=True)
             return data_avail
         except: 
             error_printing(e_test)
@@ -449,7 +589,7 @@ class Platform:
 class Torus_Insitu(Platform):
     def __init__(self, Name):
         #read in and intilize the dataset; type is the platform type (aka NSSL, UNL, UAS) 
-        self.df, self.type= read_TInsitu(Name, self.Day, self.Print_long, self.E_test, self.Tstart, self.Tend)
+        self.df, self.type= read_TInsitu(Name, self.Print_long, self.E_test, self.Tstart, self.Tend)
         self.df.name='{}_df'.format(Name) #assign a name to the pandas dataframe itself
         Platform.__init__(self, Name)
 
@@ -478,13 +618,16 @@ class Torus_Insitu(Platform):
 class Radar(Platform):
     def __init__(self, Name, Data=None, Rfile= None, Swp=None, Plotting_Radar= False):
         if Plotting_Radar == False:
-            self.R_Loc, self.type = radar_dep(Name, Data['P_Radar'].time, self.Day, self.Print_long, self.E_test)
+            Rloc, self.type = radar_dep(Name, Data['P_Radar'].time, self.Print_long, self.E_test)
+            self.lat, self.lon= Rloc.lat, Rloc.lon
+            if self.type == 'KA':
+                self.head, self.rhib, self.rhie=Rloc.head, Rloc.rhib, Rloc.rhie
             Platform.__init__(self, Name)
 
         if Plotting_Radar==True:
             # Determine the key attributes of the main plotting radar (such as scantime etc)
             self.rfile, self.name, self.swp= Rfile, Name, Swp 
-
+            self.type='MRADAR'
             if self.name in pform_names('KA'):
                 self.azimuth = self.rfile.fixed_angle['data'][self.swp]
                 self.time= datetime.strptime(self.rfile.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S") #Time at which scanning began
