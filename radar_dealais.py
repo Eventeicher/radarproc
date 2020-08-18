@@ -14,7 +14,7 @@ import pathlib
 ############################
 cachedir='./cachedir'
 mem= Memory(cachedir,verbose=1)
-
+how_many_fail= 0
 
 def dealias_radar(radar_pickled):
 
@@ -54,15 +54,20 @@ def dealias_radar_files(prefix, files):
               " Input File: " + str(radar_file) +
               " Output File: " + out_filename)
 
+        if radar_file == '.': 
+            how_many_fail = how_many_fail + 1
+            continue;
 
         radar = pyart.io.read(radar_file)
 
         if radar.scan_type == 'rhi':
+            print('Skipping, we are not dealiasing RHI files at this time \n')
             continue;
 
         try:
             if radar.iter_field('corrected_velocity'):
-                print('Skipping, already contains dealias data in field corrected_velocity \n')
+                print('Input file already contains dealias data in field corrected_velocity...... so just creating a copy with the specified prefix \n')
+                pyart.io.write_cfradial(out_filename, radar)
                 continue;
         except:
             print('')
@@ -101,3 +106,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+print('*****************\n', how_many_fail,'\n***********************')
