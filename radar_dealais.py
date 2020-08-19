@@ -8,13 +8,14 @@ import os
 import fire
 import pyart
 
+from pprint import pprint
+
 import pathlib
 
 ###Set Up Temporary Directory
 ############################
 cachedir='./cachedir'
 mem= Memory(cachedir,verbose=1)
-how_many_fail= 0
 
 def dealias_radar(radar_pickled):
 
@@ -37,6 +38,9 @@ def info_radar_files(level, files):
 
 
 def dealias_radar_files(prefix, files):
+    dealiased_files = []
+    duplicated_files = []
+    skipped_files = []
 
     #joblib dealias stuff
     persistant_dealias_radar = mem.cache( dealias_radar )
@@ -55,27 +59,39 @@ def dealias_radar_files(prefix, files):
               " Output File: " + out_filename)
 
         if radar_file == '.':
-            how_many_fail = how_many_fail + 1
+            skipped_files.append(radar_file)
             continue;
 
         radar = pyart.io.read(radar_file)
 
         if radar.scan_type == 'rhi':
             print('Skipping, we are not dealiasing RHI files at this time \n')
+            skipped_files.append(radar_file)
             continue;
 
-        try:
-            if radar.iter_field('corrected_velocity'):
-                print('Input file already contains dealias data in field corrected_velocity...... so just creating a copy with the specified prefix \n')
-                pyart.io.write_cfradial(out_filename, radar)
-                continue;
-        except:
-            print('')
 
-        dealias_data = persistant_dealias_radar( pickle.dumps(radar) )
-        radar.add_field('corrected_velocity', dealias_data, replace_existing=True)
+        if 'corrected_velocity' in radar.fields:
+            print('Input file already contains dealias data in field corrected_velocity......'
+                      ' so just creating a copy with the specified prefix \n')
+            duplicated_files.append(out_filename)
+        else:
+            dealias_data = persistant_dealias_radar( pickle.dumps(radar) )
+            radar.add_field('corrected_velocity', dealias_data, replace_existing=True)
+            dealiased_files.append(out_filename)
 
         pyart.io.write_cfradial(out_filename, radar)
+
+    print()
+    print("dealiased_files:")
+    pprint(dealiased_files)
+
+    print()
+    print("skipped_files:")
+    pprint(skipped_files)
+
+    print()
+    print("duplicated_files:")
+    pprint(duplicated_files)
 
 class Radar_File_Functions(object):
 
@@ -107,4 +123,3 @@ def main():
 if __name__ == '__main__':
     main()
 
-print('*****************\n', how_many_fail,'\n***********************')
