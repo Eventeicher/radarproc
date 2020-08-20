@@ -428,7 +428,7 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
   
     #Dont download files that you alrady have ....
-    path = config.filesys+ 'TORUS_Data/'+ config.day + '/radar/Nexrad/Nexrad_files'
+    path = config.filesys+ 'TORUS_Data/'+ config.day + '/radar/Nexrad/test_Nexrad_files'
 
     if not os.path.exists(path): 
         #  Path(path).mkdir(parents=True, exist_ok=True)
@@ -554,9 +554,7 @@ if config.r_plotting == True:
             t = Data[config.Centered_Pform].df.loc[Data[config.Centered_Pform].df.Radar_ID == r, ['datetime']].rename(columns={'datetime':r})
             ts, te = t.min(), t.max()
             timeranges_each_r = pd.concat([timeranges_each_r, t], axis=1)
-            print("start ", ts[r])
-            print("end ", te[r])
-            print("***")
+            print("start ", ts[r], "\n end ", te[r], "\n ***")
 
             radar_files = get_WSR_from_AWS(ts[r], te[r], r, config.filesys)
 
