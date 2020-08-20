@@ -105,30 +105,33 @@ def read_nsslmm(file,tstart=None,tend=None):
     for i in np.arange(len(data_nssl)):
         j = data_nssl['time'].iloc[i]
         time_deltas = np.append(time_deltas,date+dt.timedelta(hours=int(j),minutes=int((j*60) % 60),seconds=int((j*3600) % 60)))
-    data_nssl['datetime']=time_deltas
+    data_nssl.loc[:,'datetime']=time_deltas  # This form is faster and prevents warnings
 
     # Caclulate desired variables
     p,t   = data_nssl['p'].values*units.hectopascal, data_nssl['tfast'].values*units.degC
     theta = mpcalc.potential_temperature(p,t)
-    data_nssl['Theta'] = theta.magnitude
+    data_nssl.loc[:,'Theta'] = theta.magnitude
 
     r_h     = data_nssl['rh'].values/100
     mixing = mpcalc.mixing_ratio_from_relative_humidity(r_h,t,p)
     thetav = mpcalc.virtual_potential_temperature(p,t,mixing)
-    data_nssl['Thetav'] = thetav.magnitude
+    data_nssl.loc[:,'Thetav'] = thetav.magnitude
 
     td     = mpcalc.dewpoint_rh(temperature=t, rh=r_h)
     thetae = mpcalc.equivalent_potential_temperature(p,t,td)
-    data_nssl['Thetae'] = thetae.magnitude
+    data_nssl.loc[:,'Thetae'] = thetae.magnitude
 
     Spd =data_nssl['spd'].values*units('m/s')
     dire =data_nssl['dir'].values*units('degrees')
     u,v =mpcalc.wind_components(Spd,dire)
-    data_nssl['U']=u.to('knot')
-    data_nssl['V']=v.to('knot')
+    #data_nssl['U']=u.to('knot')
+    data_nssl.loc[:,'U'] = u.to('knot')
+
+    #data_nssl['V']=v.to('knot')
+    data_nssl.loc[:,'V'] = v.to('knot')
 
     q_list=['qc1','qc2','qc3','qc4']
-    data_nssl['qc_flag']=data_nssl[q_list].sum(axis=1)
+    data_nssl.loc[:,'qc_flag']=data_nssl[q_list].sum(axis=1)
 
     return data_nssl
 
