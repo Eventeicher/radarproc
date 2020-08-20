@@ -100,9 +100,9 @@ def ppiplot(Data, print_long, e_test, start_comptime):
 
     ## Finish plot
     if Data['P_Radar'].name in pform_names('KA'):
-        output_name = config.temploc+config.day+'/mesonets/plots/KA/'+Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
+        output_name = config.g_plots_directory+config.day+'/mesonets/plots/KA/'+Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
     if Data['P_Radar'].name == 'WSR88D':
-        output_name = config.temploc+config.day+'/mesonets/plots/WSR/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
+        output_name = config.g_plots_directory+config.day+'/mesonets/plots/WSR/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
     print(output_name)
     
     ''' 
@@ -217,17 +217,17 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
     if config.country_roads == True:
         ox.config(log_file=True, log_console=True, use_cache=True) #the config in this line has nothing to do with config.py
         G = ox.graph_from_bbox(PLT.Domain.ymax, PLT.Domain.ymin, PLT.Domain.xmax, PLT.Domain.xmin)
-        ox.save_load.save_graph_shapefile(G, filename='tmp'+str(0), folder=config.filesys+'radarproc/roads/', encoding='utf-8')
-        fname = config.filesys+'radarproc/roads/tmp'+str(0)+'/edges/edges.shp'
+        ox.save_load.save_graph_shapefile(G, filename='tmp'+str(0), folder=config.g_roads_directory , encoding='utf-8')
+        fname = config.g_roads_directory + 'tmp'+str(0)+'/edges/edges.shp'
         shape_feature = ShapelyFeature(Reader(fname).geometries(), ccrs.PlateCarree(), edgecolor='gray', linewidth=0.5)
         ax_n.add_feature(shape_feature, facecolor='none')
-        shutil.rmtree(config.filesys+'radarproc/roads/tmp'+str(0)+'/')
+        shutil.rmtree(config.g_roads_directory+'tmp'+str(0)+'/')
     if config.hwys == True:
-        fname = config.filesys+'radarproc/roads/GPhighways.shp'
+        fname = config.g_roads_directory+'GPhighways.shp'
         shape_feature = ShapelyFeature(Reader(fname).geometries(), ccrs.PlateCarree(), edgecolor='grey')#edgecolor='black')
         ax_n.add_feature(shape_feature, facecolor='none')
     if config.county_lines == True:
-        fname = config.filesys+'radarproc/roads/cb_2017_us_county_5m.shp'
+        fname = config.g_roads_directory+'cb_2017_us_county_5m.shp'
         shape_feature = ShapelyFeature(Reader(fname).geometries(), ccrs.PlateCarree(), edgecolor='gray')
         ax_n.add_feature(shape_feature, facecolor='none', linewidth=1.5, linestyle="--")
     if config.state_lines == True:
@@ -444,8 +444,8 @@ def read_from_KA_file(radar_file):
     return radar
 # Note: Cached version is cached on the file name, not the file contents.
 # If file contents change you need to invalidate the cache or pass in the file contents directly to this function
-#  function_cache_memory = Memory(config.g_cache_directory,verbose=1)
-function_cache_memory = Memory(config.temploc, verbose=1)
+# function_cache_memory = Memory(config.temploc, verbose=1)
+function_cache_memory = Memory(config.g_cache_directory,verbose=1)
 cached_read_from_nexrad_file = function_cache_memory.cache( read_from_nexrad_file )
 cached_read_from_KA_file = function_cache_memory.cache( read_from_KA_file )
 
@@ -513,7 +513,10 @@ if config.r_plotting == True:
     # * * *
     if config.Radar_Plot_Type == 'KA_Plotting':
         ## Get radar files
-        radar_files = sorted(glob.glob(config.filesys+'TORUS_Data/'+config.day+'/radar/TTUKa/netcdf/*/dealiased_*'))
+        path = config.g_mesonet_directory + config.day+'/radar/TTUKa/netcdf/*/dealiased_*'
+        
+        radar_files = sorted(glob.glob(path))
+        
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)
@@ -556,7 +559,7 @@ if config.r_plotting == True:
 ################################
 #Only plot timeseries (this code isn't fully fleshed out but in theroy this code is built in such a way to allow for this)
 if config.r_plotting == False and config.t_plotting == True:
-    print("Plot Timeseries only \n"+ str(config.filesys+'TORUS_Data/'+config.day+'/mesonets/NSSL/*.nc'))
+    print("Plot Timeseries only \n"+ str(config.g_mesonet_directory+config.day+'/mesonets/NSSL/*.nc'))
     time_series(Data)
     fig.savefig('test2.png')
     plt.close()
