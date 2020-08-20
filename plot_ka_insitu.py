@@ -438,7 +438,18 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     # (directory, directory+filename) [-1] returns the directory+filename
     missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
 
-    # missing files is the list of filenames of files we need to download create_filepath returns tuple of 
+    # missing files is the list of filenames of files we need to download 
+    missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
+    print("missing", len(missing_files), "of ", len(scans), "files")
+    print(missing_files)
+
+    results=conn.download(missing_scans, path, keep_aws_folders=False)
+
+    print(results.success)
+    print('{} downloads failed: {}\n'.format(results.failed_count, results.failed))
+    #print("Results.iter_success : {}\n".format(reults.iter_success()))
+
+    # missing_scans_after is a list of scans we don't have (download failed) create_filepath returns tuple of 
     # (directory, directory+filename) [-1] returns the directory+filename
     missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
 
