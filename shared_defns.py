@@ -23,7 +23,6 @@ import config #this is the file with the plotting controls to access any of the 
 #rename a few commonly used vars so that the config.var does not have to be used repeatedly 
 print_long, e_test, p_var = config.print_long, config.e_test, config.p_var
 
-
 ################################################################################################
 ##################
 # TROUBLE SHOOTING
@@ -36,11 +35,6 @@ def error_printing(e_test):
         traceback.print_tb(e[-1])
         #print( "<p>Error: %s</p>" % e )
         print("Error:", e[:-2], '\n')
-
-################################################################################################
-###########
-# Plotting
-###########
 
 ################################################################################################
 ###########
@@ -749,6 +743,26 @@ class Radar(Platform):
                     #d1=plt.text(D, C, str(ang),horizontalalignment='center',transform=ccrs.PlateCarree(),fontsize=10,zorder=9,path_effects=([PathEffects.withStroke(linewidth=4,foreground='xkcd:pale blue')])
         if print_long == True: print('made it through rhi_spokes_rings')
 
+    def det_nearest_WSR(self, Cen_Pform_df):
+        '''
+        Function to locate the nearest WSR88D site to the insitu instruments
+        '''
+        #find the locations of all WSR88D sites (outputs dictionary in format {Site_ID:{lat:...,lon:...,elav:...], ...}
+        all_WSR_locs = pyart.io.nexrad_common.NEXRAD_LOCATIONS
+        #print(json.dumps(locs, sort_keys=True, indent=4))
+
+        #set up empty dataframe with site Ids as column names
+        d_from_all_r = pd.DataFrame(columns=all_WSR_locs.keys())
+
+        #fill in dataframe with the distance from all 88D sites from each probe measurement
+        for key in all_WSR_locs:
+            d_from_r=np.square(Cen_Pform_df['lat']-all_WSR_locs[key]['lat']) + np.square(Cen_Pform_df['lon']-all_WSR_locs[key]['lon'])
+            d_from_all_r[key]=d_from_r
+
+        #Determine which WS88D site is closest to the probe and add to the original probe dataframe
+        Cen_Pform_df['Radar_ID']=d_from_all_r.idxmin(axis=1)
+        #print(p_df)
+        return Cen_Pform_df
 #########################################
 ### set up Pvar class (this is not a subclass of Platform)
 class Pvar:

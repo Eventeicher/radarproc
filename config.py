@@ -11,6 +11,7 @@ import datetime as dt
 # ************
 filesys='/Users/severe2/Research/'
 temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
+KA_Plot, WSR_Plot = False, True
 
 ## Timeframe
 # ***********
@@ -33,7 +34,7 @@ num_of_tseries= 1 #how many timeseries would you like included in layout (I envi
 # *******************************************
 p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
 offsetkm = 21
-Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar') 
+Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar') 
 p_tilt= 1.0 #what radar elevation tilt (deg) do you want to plot
 rhi_ring= True #do you want the rhi spokes for the KA radars
 r_mom =['refl','vel'] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
@@ -48,7 +49,7 @@ country_roads, hwys, county_lines, state_lines = False, False, False, False #bac
 #list; include in the list the type names for the pforms you would like masked (this only controls whats plotted on the Tseries) 
 #  if none leave as blank list, will not work if a mask had not been previously applied to the dataset (which can be done in the classes)
 TS_masking= ['NSSL']
-wind = True
+wind = False
 pri_tseries='p_var' #what would you like to plot in the first time series (if num_of_tseries=1 this is the only tseries to be plotted)
 sec_tseries='wind' #what would you like in the second time series (only used if num_of_tseries =2)
 # would you like to restrict the time series to display only a timespan +/- x time from the scantime (functionalitly not coded yet)
