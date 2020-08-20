@@ -114,7 +114,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         OUTPUT: dataframe containing all data collected during desired times
     '''
     if pname in pform_names('UNL'):
-        mmfile = glob.glob(config.temploc+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
+        mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
         mtest = mmfile[0] #if there is no files this will will cause the script to fail (in a good way)
         #if the code has not failed by this point there is data present; if calling defn in a testing capacity
         #  the defn will exit at this point (saving computing time) otherwise the defn will cont
@@ -169,7 +169,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
 
     # * * *
     elif pname in pform_names('NSSL'):
-        mmfile = glob.glob(config.filesys+'TORUS_Data/'+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
+        mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
         file = mmfile[0]
         #if the code has not failed by this point there is data present; if calling defn in a testing capacity
         #  the defn will exit at this point (saving computing time) otherwise the defn will cont
@@ -241,8 +241,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
     elif pname == 'UAS':
         if print_long == True: print("no code for reading UAS yet")
         if d_testing == True: return False
-        # + + + + + + + + + + + + ++ + +
-	return 'UAS'
+        return 'UAS'
 
 #**************
 def read_Stationary(pname, print_long, e_test, d_testing=False):
@@ -306,7 +305,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             if pname == 'Ka1': r_testing='ka1' # r_testing is the name of the radar you are testing to see if deployed
             elif pname == 'Ka2': r_testing='ka2'
             #  read in the csv file; if radar didn't dep that day there will be no csv file and the defn will fail (which is ok)
-            kadep = pd.read_csv(config.filesys+'TORUS_Data/'+config.day+'/radar/TTUKa/csv/'+config.day+'_deployments_'+r_testing+'.csv')
+            kadep = pd.read_csv(config.g_mesonet_directory+config.day+'/radar/TTUKa/csv/'+config.day+'_deployments_'+r_testing+'.csv')
 
             ## If Radar did dep this day det more info about the deployments
             for t in range(kadep.time_begin.count()):

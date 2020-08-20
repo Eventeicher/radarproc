@@ -4,15 +4,16 @@
 ######################
 import datetime as dt
 
+import os
+from pathlib import Path
+from os.path import expanduser
+
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
 ## VARIABLES ##
 ###############
 ## File paths
 # ************
-filesys='/Users/severe2/Research/'
-temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
-#KA_Plotting, NOXP_Plotting or WSR_Plotting
-#  Radar_Plot_Type = 'NOXP_Plotting'
+#KA_Plotting or WSR_Plotting
 Radar_Plot_Type = 'KA_Plotting'
 #  Radar_Plot_Type = 'WSR_Plotting'
 print_radar_info= True
@@ -25,6 +26,40 @@ print_radar_info= True
 #  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 20, 30, 0)
 #  tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),22,45,0)
 tstart, tend = None, None
+
+#g_mesonet_directory ='/Users/severe2/Research/TORUS_Data'
+#g_plots_directory ='/Users/severe2/Research/TORUS_Data'
+#g_download_directory ='/Users/severe2/Research/TORUS_Data'
+#filesys='/Users/severe2/Research/'
+#temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
+
+g_home = expanduser("~")
+
+#g_root = g_home + '/radar_data'   # Chris
+#g_root = g_home + '/Research'     # Ellie Macbook
+g_root = '/Volumes/Samsung_T5/Research' # Ellie External SSD
+
+g_mesonet_directory = g_root + '/TORUS_Data/'   # Our Data
+g_download_directory = g_root + '/downloads/'    # Download Storage
+g_plots_directory = g_root + '/plots/' # Plot Output
+g_cache_directory = g_root + '/cache/' # Cache
+g_roads_directory = g_root + '/roads/' # Roads data
+
+#
+# Note  Ellie needs to move roads data from /Users/sever2/radarproc/roads to /Volumes/Samsung_T5/Research/roads
+#
+# Note  Ellie needs to move cache data from previous to /Volues/Samsunt_T5/Research/cache
+#
+
+#
+# Remember to erase all plots for completely new versions as they are not regenerated if the file already exists
+# Plots are stored in g_root + /plots
+#
+
+# Setup Function Cache for speedup
+if not os.path.exists(g_cache_directory):
+    Path(g_cache_directory).mkdir(parents=True, exist_ok=True)
+
 
 ## Plot layout controls
 # ***********************
