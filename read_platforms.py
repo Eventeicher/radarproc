@@ -12,6 +12,8 @@ warnings.filterwarnings(action='ignore')
 def read_unlmm(file,tstart=None, tend=None):
     mmfile= glob.glob(file)
     print(np.shape(mmfile))
+    print("mmfile = ", mmfile)
+
     ds = xr.open_dataset(mmfile[0])
 
     #convert form epoch time to utc datetime object
@@ -148,11 +150,24 @@ def maskdata(p_var, platform_file, mask=True):
         platform_data= platform_unmasked
     elif mask== True:
         platform_name= str(platform_file.name)
+        print("platform_name = ", platform_name)
+
         if (platform_name in ['FFld_df','WinS_df','LIDR_df','Prb1_df','Prb2_df']):
             platform_data= np.ma.masked_where(platform_file['qc_flag'].values>0, platform_unmasked)
+
+        # This was needed to work with the nextrad code in it's present form
+        elif (platform_name in ['FFld','WinS','LIDR','Prb1','Prb2']):
+            platform_data= np.ma.masked_where(platform_file['qc_flag'].values>0, platform_unmasked)
+
         elif (platform_name in ['CoMeT1_df','CoMeT2_df','CoMeT3_df']):
             #for now
             platform_data= platform_unmasked
+
+        # This was needed to work with the nextrad code in it's present form
+        elif (platform_name in ['CoMeT1','CoMeT2','CoMeT3']):
+            #for now
+            platform_data= platform_unmasked
+
         elif (platform_name in ['Insert UAS filenames here']):
             print("will be filled in")
         else:
