@@ -18,6 +18,7 @@ import matplotlib.patheffects as PathEffects
 import matplotlib.dates as mdates
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 from metpy.plots import ctables
+import metpy
 import matplotlib.patheffects as patheffects
 import cartopy
 import cartopy.crs as ccrs
@@ -29,25 +30,47 @@ from matplotlib.axes import Axes
 from cartopy.mpl.geoaxes import GeoAxes
 GeoAxes._pcolormesh_patched = Axes.pcolormesh
 import sys, traceback
-from read_platforms import read_nsslmm, read_unlmm
+from read_platforms import read_nsslmm, read_unlmm, maskdata
 import json
 import nexradaws
 import pytz
 import matplotlib.gridspec as gridspec
 from matplotlib.lines import Line2D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-conn = nexradaws.NexradAwsInterface()
+
+import cftime
+
+## Imports form other files
+############################
+import config #this is the file with the plotting controls to access any of the vars in that file use config.var
+
+#rename a few commonly used vars so that the config.var does not have to be used repeatedly
+print_long, e_test = config.print_long, config.e_test
+
+## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
+from shared_defns import Add_to_DATA, pform_names, error_printing, Platform, Radar, R_Plt, Torus_Insitu, Stationary_Insitu
+
+
+from pathlib import Path
+from os.path import expanduser
+
+from joblib import Memory
+
+# To run with a) warnings and b) stack trace on abort
+# python3 -Walways  -q -X faulthandler plot_nexrad_insitu.py
 
 ##########################################################################
 ## VARIABLES
 ############
-day='20190524' #'YYYYMMDD'
+#day='20190524' #'YYYYMMDD'
+day='20190517' #'YYYYMMDD'    # CV - These are the only files I have...
+
 radar_plotting= True #would you like to plot radar images? (set to False to only plot timeseries)
 r_only= False #Set to True for only radar as output, Set to False for Radar + Timeseries
 p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
 probe_of_interest='Prb1'
-filesys='/Users/severe2/Research/'
-temploc='/Volumes/Samsung_T5/Research/TORUS_Data/'
+
+function_cache_memory = Memory(config.g_cache_directory,verbose=1)
 
 #Troubleshooting y/n
 ####################
@@ -69,7 +92,7 @@ def det_radar_deps(currentscantime, r_testing, e_test):
     '''
     #test if radar deployed
     try:
-        kadep=pd.read_csv(filesys+'TORUS_Data/'+day+'/radar/TTUKa/csv/'+day+'_deployments_'+r_testing+'.csv')
+        kadep=pd.read_csv(config.g_root + 'TORUS_Data/'+day+'/radar/TTUKa/csv/'+day+'_deployments_'+r_testing+'.csv')
 
         #get radar positioning data
         k_lat, k_lon, head_ing, rhi_b, rhi_e = getRadarPositionData(currentscantime, kadep)
@@ -147,7 +170,7 @@ def det_nearest_WSR(p_df):
 
     return p_df
 
-def get_WSR_from_AWS(start, end, radar_id,temploc):
+def get_WSR_from_AWS(start, end, radar_id, download_directory):
     '''
     Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
     ----------
@@ -158,12 +181,17 @@ def get_WSR_from_AWS(start, end, radar_id,temploc):
         start of the desired timerange
     end: datetime
         end of the desired timerange
-    temploc: string
+    download_directory: string
         location for the downloaded radarfiles
     -------
     RETURN
     radar_list : Py-ART Radar Objects
     '''
+
+    # Create this at the point of use
+    # Otherwise it saves everything and eventually crashes
+    conn = nexradaws.NexradAwsInterface()
+
     #Determine the radar scans that fall within the time range for a given radar site
     scans = conn.get_avail_scans_in_range(start, end, radar_id)
     print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
@@ -171,24 +199,53 @@ def get_WSR_from_AWS(start, end, radar_id,temploc):
     #download the files that were identified
     #results = conn.download(scans[0:4], filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
     #results = conn.download(scans, filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
-    results = conn.download(scans[0:4], temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+    #results = conn.download(scans[0:4], temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+
+    #
+    # Don't download files that you already have...
+    #
+    path =  download_directory + day +'/radar/Nexrad/Nexrad_files/'
+
+    if not os.path.exists(path):
+        Path(path).mkdir(parents=True, exist_ok=True)
+
+    # missing_scans is a list of scans we don't have and need to download
+    # create_filepath returns tuple of (directory, directory+filename)
+    # [-1] returns the directory+filename
+    missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
+
+
+    # missing files is the list of filenames of files we need to down load
+    missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
+    print("missing ", len(missing_files), "of ", len(scans), " files")
+    print(missing_files)
+
+    results = conn.download(missing_scans, path, keep_aws_folders=False)
+
+    print(results.success)
     print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
     #print("Results.iter_success : {}\n".format(results.iter_success()))
 
-    #open the downloaded files as pyart objects
-    radar_list=[]
-    for i,scanfile in enumerate(results.iter_success()):
-        #print("[{}] open_pyart, scan file_name = {}\n".format(i, scanfile.filename))
-        try:
-            radar_list.append(scanfile.open_pyart())
-        except:
-            print("Failed to convert file: ",scanfile.filename)
-    return radar_list
+    # missing_scans_after is a list of scans we don't have (download failed)
+    # create_filepath returns tuple of (directory, directory+filename)
+    # [-1] returns the directory+filename
+    missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
+
+    if len(missing_files_after) > 0:
+        print("ERROR: Some Radar Scans Missing")
+        print(missing_files_after)
+        exit()
+
+    radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
+
+    # Return list of files
+    return radar_files
+
 
 ###########################
 ## PLOTTING DEFINTIONS  ###
 ###########################
-def getLocation(file, currentscantime, var, offsetkm, given_bearing= False):
+def getLocation(file, currentscantime, e_test, offsetkm, given_bearing=False):
     '''
     This definition has two functions:
         1) If no bearing is specified it will return a dict containing the max/min lat/lons
@@ -203,18 +260,14 @@ def getLocation(file, currentscantime, var, offsetkm, given_bearing= False):
     offsetkm: distance traveled from the starting point to the new locations
     given_bearing: True/False, are you given a specified direction of "travel"
     '''
-    try:
-        #determine the position of the probe at the time of radar scan
-        df_sub, p_deploy = grab_platform_subset(file, currentscantime, var['name'])
-        current_lon=df_sub['lon'][int(len(df_sub['lon'])/2)]
-        current_lat=df_sub['lat'][int(len(df_sub['lat'])/2)]
 
-    except:
-        pass
-        #  for probe in []
-        #  try:
+    #determine the position of the probe at the time of radar scan
+    df_sub, p_deploy = cached_grab_platform_subset(file, print_long, e_test, scan_time=currentscantime)
 
-        error_printing(e_test)
+    current_lon=df_sub['lon'][int(len(df_sub['lon'])/2)]
+    current_lat=df_sub['lat'][int(len(df_sub['lat'])/2)]
+
+    #    error_printing(e_test)
 
 
     lat1 = current_lat * np.pi / 180.0
@@ -252,6 +305,72 @@ def getLocation(file, currentscantime, var, offsetkm, given_bearing= False):
 
         return end_lat, end_lon
 
+#* * * * *
+# This was removed but still seems to be needed???
+# So I brought it back to get it to complie.
+#
+
+def legend_maker(p_name,m_style,m_color,leg_str,legend_elements):
+    if print_long== True: print('made it into legend_maker')
+
+    if (p_name in ['Ka1','Ka2']): #the legend entries for the KA radars
+        legend_entry=Line2D([], [], marker=m_style, markeredgecolor='black',markeredgewidth=3,label=leg_str,markerfacecolor=m_color, markersize=26)
+    else:
+        legend_entry=Line2D([], [], marker=m_style, markeredgecolor=m_color,markeredgewidth=3,label=leg_str, markersize=26,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')])
+
+    legend_elements=np.append(legend_elements,legend_entry)
+
+    if print_long== True: print('made it through legend maker')
+    return legend_elements
+
+
+# This was removed but still seems to be needed???
+# So I brought it back to get it to complie.
+
+def platform_attr(file_type,legend_elements,radar_m=False,r_s=False):
+    if print_long== True: print('Made it into platform_attr')
+
+    print("file_type = ", file_type)
+
+    m_style, m_color, l_color, leg_str= '1','red','red','FixMe! There was not a case for this file type'
+
+    #assign the atributes for non-radar markers
+    if radar_m == False:
+        if file_type == "Prb1":
+            m_style, m_color, l_color, leg_str= '1','xkcd:lightblue','steelblue','Prb1'
+        elif file_type == "Prb2":
+            m_style, m_color, l_color, leg_str= '1','xkcd:watermelon','xkcd:dusty red','Prb2'
+        elif file_type == "FFld":
+            m_style, m_color, l_color, leg_str= '1','xkcd:bubblegum pink','xkcd:pig pink','FFld'
+        elif file_type == "LIDR":
+            m_style, m_color, l_color, leg_str= '1','xkcd:pastel purple','xkcd:light plum','LIDR'
+        elif file_type == "WinS":
+            m_style, m_color, l_color, leg_str= '1','xkcd:peach','xkcd:dark peach','WinS'
+        elif file_type == "CoMeT1":
+            m_style, m_color, l_color, leg_str= '1','brown','brown','CoMeT1'
+        elif file_type == "CoMeT2":
+            m_style, m_color, l_color, leg_str= '1','yellow','yellow','CoMeT2'
+        elif file_type == "CoMeT3":
+            m_style, m_color, l_color, leg_str= '1','black','black','CoMeT3'
+
+    #assign the atributes for the radar markers
+    elif radar_m == True:
+        if file_type == 'Ka2':
+            m_style, m_color, l_color, leg_str= '8','xkcd:crimson','xkcd:crimson','Ka2'
+        elif file_type == 'Ka1':
+            m_style, m_color, l_color, leg_str= '8','mediumseagreen','mediumseagreen','Ka1'
+
+    if r_s == True: #only add to the legend if the platform_attr def was called while making the radar subplots
+        legend_elements=legend_maker(file_type, m_style,m_color,leg_str,legend_elements)
+
+    if print_long== True: print('Made it through platform_attr')
+
+    p_attr = {'m_style': m_style, 'm_color': m_color, 'l_color': l_color, 'leg_str': leg_str}
+
+    # return m_style, m_color, l_color, leg_str, legend_elements
+
+    return p_attr, legend_elements
+
 # * * * * * *
 def plot_colourline(x,y,c,cmap,ax,datacrs,color,amin=None,amax=None):
     ''' This defintion plots line extending out from the platform marker +/- in time
@@ -281,7 +400,7 @@ def plot_colourline(x,y,c,cmap,ax,datacrs,color,amin=None,amax=None):
     return
 
 # * * * * * *
-def grab_platform_subset(p_df, print_long, e_test, bounding=None, scan_time= None, time_offset= 300):
+def grab_platform_subset(p_df, print_long, e_test, bounding=None, scan_time=None, time_offset= 300):
     ''' This def will take a given dataset and subset it either spatially or temporially
             1) If scan_time is given the data will be subset temporally
                     Grabs the observed thermo data +/- x seconds around radar scan_time.
@@ -296,11 +415,27 @@ def grab_platform_subset(p_df, print_long, e_test, bounding=None, scan_time= Non
     Returns: The subset dataset (df_sub) and a True/False statement regarding any data in the original dataset
                 matched the subsetting criteria (p_deploy)
     '''
+
     #Temporal subset
     if scan_time != None:
-        aaa = p_df.loc[(p_df['datetime']>=scan_time-dt.timedelta(seconds=time_offset))]
-        df_sub = aaa.loc[(aaa['datetime']<=scan_time+dt.timedelta(seconds=time_offset))]
-        if print_long == True: print('Dataset has been temporally subset')
+        #aaa = p_df.loc[(p_df['datetime']>=scan_time-dt.timedelta(seconds=time_offset))]
+        #df_sub = aaa.loc[(aaa['datetime']<=scan_time+dt.timedelta(seconds=time_offset))]
+        #if print_long == True: print('Dataset has been temporally subset')
+
+
+        # Convert scan_time from netcdf cftime to python standard datetime
+        scan_time = pd.to_datetime(scan_time.strftime())
+
+        td = dt.timedelta(seconds=time_offset)
+        start = scan_time - td;
+        end = scan_time + td;
+
+        # Extract scans that fall in time range
+        p_df['datetime'] = pd.to_datetime(p_df['datetime']) # Normalize time to pandas prefered format
+        p_df = p_df.set_index('datetime').sort_index() # Index on time
+        df_sub = p_df.loc[start:end] # Get the subset
+
+
 
     #Spatial Subset
     if bounding != None:
@@ -317,35 +452,46 @@ def grab_platform_subset(p_df, print_long, e_test, bounding=None, scan_time= Non
 
     #Test to ensure that there is valid data in the subrange
         #(aka the platform was deployed during the time of radarscan or that any of the points fall within the map area)
-    try:
-        p_test= df_sub.iloc[1]
-        p_deploy = True
-    except:
-        p_deploy = False
-        error_printing(e_test)
+#    try:
+#        p_test= df_sub.iloc[1]
+#        p_deploy = True
+#    except:
+#        p_deploy = False
+#        error_printing(e_test)
+
+    # test to ensure that there is valid data in the subrange (aka the platform was deployed during the time of radarscan)
+    p_deploy = (df_sub.size > 0)
+
+    if not p_deploy:
+        print('The platform was not deployed at this time')
 
     return df_sub, p_deploy
 
+# Cache backed version
+cached_grab_platform_subset = function_cache_memory.cache( grab_platform_subset )
+
+
 # * * * * * *
-def platform_plot(file, radartime, var, ax, p_attr, print_long, e_test, border_c='xkcd:light grey',labelbias=(0,0)):
+def platform_plot(file, radartime, var, ax_n, p_attr, print_long, e_test, border_c='xkcd:light grey',labelbias=(0,0)):
     ''' Plot the in situ platform markers, barbs and pathline
     ----
     INPUTS:
     file: the in situ pandas dataframe
-    var: dictionary containing info relating to p_var (ie name, max, min)
+    var: dictionary containing info relatinto p_var (ie name, max, min)
     p_attr: dictionary containing platform styling info (color, shape etc)
     radartime, ax: time of the radar scan, axes of the subplot to plot on
 
     Optional Inputs:
     border_c, labelbias: color of background for the pathline, if you want to add labels directly to the plot this can offset it from the point
     '''
-    if print_long==True: print('made it into platform_plot')
+
 
     #grab the subset of data of +- interval around radar scan
-    p_sub, p_deploy = grab_platform_subset(file, print_long, e_test, scan_time=radartime)
+    p_sub, p_deploy = cached_grab_platform_subset(file, print_long, e_test, scan_time=radartime)
 
     if p_deploy == True:
         #plot the line that extends +/- min from the platform location
+        print("p_sub = ", p_sub)
         plot_colourline(p_sub['lon'],p_sub['lat'],p_sub[var['name']],cmocean.cm.curl,ax_n,ccrs.PlateCarree(),color=border_c,amin=var['min'],amax=['max'])
 
         #plot the platform marker at the time closest to the scantime (aka the time at the halfway point of the subset platform dataframe)
@@ -373,7 +519,7 @@ def platform_plot(file, radartime, var, ax, p_attr, print_long, e_test, border_c
 
 ##  #  #  #  #  #  #  #  #  #  #  #  #  # # # #  #  #  #  #  #  #  #  #  #  # #  #  #  # # #  #  #  #  #  #  #  #  # #  #
 ##  #  #  #  #  #  #  #  #  #  #  #  #  # # # #  #  #  #  #  #  #  #  #  #  # #  #  #  # # #  #  #  #  #  #  #  #  # #  #
-def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_of_int,CS3,e_test):
+def ppiplot(r_only,radar,download_dir,day,globalamin, globalamax,p_var,p_of_int,CS3,e_test):
     if print_long== True: print('~~~~~~~~~~~Made it into ppiplot~~~~~~~~~~~~~~~~~~~~~')
 
     SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 23, 28, 33, 50
@@ -427,7 +573,7 @@ def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_o
     post=radar_subplots('refl',swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,r_site,e_test)
     post=radar_subplots('vel',swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,r_site,e_test)
     if r_only == False:
-        time_series(filesys,day,fig,currentscantime,globalamin, globalamax, p_var,gs,radar_sub=True)
+        time_series(day,fig,currentscantime,globalamin, globalamax, p_var,gs,radar_sub=True)
 
     ## Plot platform colorbar
     if p_var == "Thetae":
@@ -442,8 +588,14 @@ def ppiplot(r_only,radar_list,radar,filesys,day,globalamin, globalamax,p_var,p_o
     title=r_site+' '+str(elev)+r'$^{\circ}$ PPI '+ fancy_date_string_utc
     plt.suptitle(title,y=.92)
 
+    save_dir = config.g_plots_directory + day + '/radar/Nexrad/plots/'
+
+    if not os.path.exists(save_dir):
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+
+
     ## Finish plot
-    plt.savefig('/Users/severe2/Research/TORUS_Data/'+day+'/radar/Nexrad/plots/'+currentscantime.strftime('%m%d%H%M')+'_'+r_site+'_'+p_var+'.png' ,bbox_inches='tight',pad_inches=.3)
+    plt.savefig(save_dir+currentscantime.strftime('%m%d%H%M')+'_'+r_site+'_'+p_var+'.png' ,bbox_inches='tight',pad_inches=.3)
     plt.close()
 
     if print_long== True: print('~~~~~~~~~~~made it through ppiplot~~~~~~~~~~~~~~~~~~')
@@ -480,18 +632,28 @@ def radar_subplots(mom,swp,fig,display,currentscantime,globalamin,globalamax,p_v
         exit
 
     ## Bounding box, x km away from the probe of interest in all directions
-    ymin,ymax,xmin,xmax,a,b=getLocation(p_of_int,currentscantime,p_var,offsetkm=40)
+    ymin,ymax,xmin,xmax,bndry = getLocation(p_of_int,currentscantime, e_test, offsetkm=40)
 
     # SET UP SUBPLOTS
     ax_n = fig.add_subplot(gs[row,col], projection=display.grid_projection)
     ax_n.text(.5,-.065,p_title, transform = ax_n.transAxes, horizontalalignment = 'center', fontsize = 40) #the radar subplot titles
     #  display.plot_ppi_map(feild, swp_id, title_flag=False,colorbar_flag=False,cmap=c_scale,ax=ax_n,vmin=vminb,vmax=vmaxb,embelish=False)
-    display.plot_ppi_map(feild, swp_id, title_flag=False, colorbar_flag=False, cmap=c_scale, ax=ax_n,vmin=vminb,vmax=vmaxb,min_lon=xmin,max_lon=xmax,min_lat=ymin,max_lat=ymax,embelish=False)
+    display.plot_ppi_map(feild, swp_id, title_flag=False, colorbar_flag=False, cmap=c_scale,
+                         ax=ax_n,vmin=vminb,vmax=vmaxb,
+                         min_lon=xmin,max_lon=xmax,min_lat=ymin,max_lat=ymax,
+                         embelish=False)
 
     ## PLOT RADAR MARKERS
     if WSR88D_m == True:
         #add markers for the WSR88D site
-        m_style,m_color,l_color,leg_str,legend_elements=platform_attr('WSR88D',legend_elements,radar_m=True, r_s=True,rad_site=r_site)
+        #m_style,m_color,l_color,leg_str,legend_elements=platform_attr('WSR88D',legend_elements,radar_m=True, r_s=True,rad_site=r_site)
+        p_attr,legend_elements=platform_attr('WSR88D',legend_elements,radar_m=True, r_s=True)
+        m_style = p_attr['m_style']
+        m_color = p_attr['m_color']
+        l_color = p_attr['l_color']
+        leg_str = p_attr['leg_str']
+
+
         ax_n.plot(radar.longitude['data'],radar.latitude['data'],marker=m_style, transform=ccrs.PlateCarree(),color=m_color,markersize=18,markeredgewidth=5,path_effects=[PathEffects.withStroke(linewidth=12,foreground='k')],zorder=10)
     if KA_m == True:
         print('Ka:made it into the loop')
@@ -513,24 +675,46 @@ def radar_subplots(mom,swp,fig,display,currentscantime,globalamin,globalamax,p_v
         try:
             if np.logical_and(klat2>ymin,np.logical_and(klat2<ymax,np.logical_and(klon2>xmin,klon2<xmax))):
                 print('made it in into ka2 marker')
-                m_style,m_color,l_color,leg_str,legend_elements=platform_attr('Ka2',legend_elements,radar_m=True, r_s=True)
+                p_attr,legend_elements=platform_attr('Ka2',legend_elements,radar_m=True, r_s=True)
+                m_style = p_attr['m_style']
+                m_color = p_attr['m_color']
+                l_color = p_attr['l_color']
+                leg_str = p_attr['leg_str']
+
                 ax_n.plot(klon2,klat2,marker=m_style, transform=ccrs.PlateCarree(),color=m_color,markersize=18,markeredgewidth=5,path_effects=[PathEffects.withStroke(linewidth=15,foreground='k')],
                         zorder=10)
                 #d2=ax_n.text(klon2+0.006, klat2-0.011,'Ka2',transform=ccrs.PlateCarree(), zorder=10, path_effects=[PathEffects.withStroke(linewidth=4,foreground='xkcd:pale blue')]) #textlabel on plot
         except:
             print('did not make it into ka2 marker')
-            m_style,m_color,l_color,leg_str,legend_elements=platform_attr('Ka2',legend_elements,radar_m=True, r_s=True)
+            p_attr,legend_elements=platform_attr('Ka2',legend_elements,radar_m=True, r_s=True)
+            m_style = p_attr['m_style']
+            m_color = p_attr['m_color']
+            l_color = p_attr['l_color']
+            leg_str = p_attr['leg_str']
+
+
             error_printing(e_test)
         try:
             if np.logical_and(klat1>ymin,np.logical_and(klat1<ymax,np.logical_and(klon1>xmin,klon1<xmax))):
                 print('made it in into ka1 marker')
-                m_style,m_color,l_color,leg_str,legend_elements=platform_attr('Ka1',legend_elements,radar_m=True, r_s=True)
+                p_attr,legend_elements=platform_attr('Ka1',legend_elements,radar_m=True, r_s=True)
+                m_style = p_attr['m_style']
+                m_color = p_attr['m_color']
+                l_color = p_attr['l_color']
+                leg_str = p_attr['leg_str']
+
                 ax_n.plot(klon1,klat1,marker=m_style, transform=ccrs.PlateCarree(),color=m_color,markersize=18,markeredgewidth=5,path_effects=[PathEffects.withStroke(linewidth=15,foreground='k')],
                         zorder=10)
                 #d1=ax_n.text(klon1+0.006, klat1+0.005, 'Ka1',transform=ccrs.PlateCarree(), zorder=10, path_effects=[PathEffects.withStroke(linewidth=4,foreground='xkcd:pale blue')])
         except:
             print('did not make it into ka1 marker')
-            m_style,m_color,l_color,leg_str,legend_elements=platform_attr('Ka1',legend_elements,radar_m=True, r_s=True)
+            p_attr, legend_elements=platform_attr('Ka1',legend_elements,radar_m=True, r_s=True)
+            m_style = p_attr['m_style']
+            m_color = p_attr['m_color']
+            l_color = p_attr['l_color']
+            leg_str = p_attr['leg_str']
+
+
             error_printing(e_test)
     if NOXP_m == True:
         print('To be filled in')
@@ -538,50 +722,70 @@ def radar_subplots(mom,swp,fig,display,currentscantime,globalamin,globalamax,p_v
     ## PLOT OTHER MARKERS
     if MESONETS_m == True:
         print("To Be filled in ")
-        WTM=pd.read_csv(filesys+'radarproc/West_TX_mesonets.csv')
-        WTM.name="WTx Mesonet"
-        #ax_n.plot(WTM['Lon'],WTM['Lat'], transform=ccrs.PlateCarree(), marker=r'$\AA$',markersize=10, color='k',zorder=9)
-        m_style,m_color,l_color,leg_str,legend_elements=platform_attr(WTM,legend_elements,r_s=True)
-        ax_n.plot('Lon','Lat',data=WTM, transform=ccrs.PlateCarree(), marker=m_style,linestyle='None', markersize=15, color='k')
-        proj=display.grid_projection
-        WTM_sub=grab_platform_area_subset(WTM,ymin,ymax,xmin,xmax,p_var)
-        for x,y,lab in zip(WTM_sub['Lon'],WTM_sub['Lat'],WTM_sub['Stn_ID']):
-            #  print(lab)
-            #  print(x)
-            #  print(y)
-            #  print(lab)
-            trans =proj.transform_point(x,y,ccrs.Geodetic())
-            print(trans)
-            ax_n.text(trans[0],trans[1],lab)
-        #  print(ax_n.transData.transform_point((31,-100)))
-        #  print(ax_n.get_xlim())
-        #  print(ax_n.get_ylim())
-        #  print(ax_n.transData.transform((30,100)))
-        #  print(ax_n.transData.transform_point((30,-100,ccrs.Geodetic())))
-        #  print(ax_n.projection.get_projection_class())
-        #      #ax_n.text(x,y,lab,transform=ax_n.transData)
-        #  text = [ax_n.text(*item) for item in zip(WTM['Lon'], WTM['Lat'], WTM['Stn_ID'])]
-        #ax_n.text(WTM['Lon'].all(),WTM['Lat'].all(), WTM['Stn_ID'].all(),transform=ccrs.PlateCarree())
+        #WTM=pd.read_csv(filesys+'radarproc/West_TX_mesonets.csv')
+        mesonet_file = config.g_mesonet_directory + 'radarproc/West_TX_mesonets.csv'
+        if os.path.exists(mesonet_file):
+            WTM=pd.read_csv(mesonet_file)
+            WTM.name="WTx Mesonet"
+            #ax_n.plot(WTM['Lon'],WTM['Lat'], transform=ccrs.PlateCarree(), marker=r'$\AA$',markersize=10, color='k',zorder=9)
+            p_attr,legend_elements=platform_attr(WTM.name,legend_elements,r_s=True)
+            m_style = p_attr['m_style']
+            m_color = p_attr['m_color']
+            l_color = p_attr['l_color']
+            leg_str = p_attr['leg_str']
+
+
+            ax_n.plot('Lon','Lat',data=WTM, transform=ccrs.PlateCarree(), marker=m_style,linestyle='None', markersize=15, color='k')
+            proj=display.grid_projection
+            WTM_sub=grab_platform_area_subset(WTM,ymin,ymax,xmin,xmax,p_var)
+            for x,y,lab in zip(WTM_sub['Lon'],WTM_sub['Lat'],WTM_sub['Stn_ID']):
+                #  print(lab)
+                #  print(x)
+                #  print(y)
+                #  print(lab)
+                trans =proj.transform_point(x,y,ccrs.Geodetic())
+                print(trans)
+                ax_n.text(trans[0],trans[1],lab)
+            #  print(ax_n.transData.transform_point((31,-100)))
+            #  print(ax_n.get_xlim())
+            #  print(ax_n.get_ylim())
+            #  print(ax_n.transData.transform((30,100)))
+            #  print(ax_n.transData.transform_point((30,-100,ccrs.Geodetic())))
+            #  print(ax_n.projection.get_projection_class())
+            #      #ax_n.text(x,y,lab,transform=ax_n.transData)
+            #  text = [ax_n.text(*item) for item in zip(WTM['Lon'], WTM['Lat'], WTM['Stn_ID'])]
+            #ax_n.text(WTM['Lon'].all(),WTM['Lat'].all(), WTM['Stn_ID'].all(),transform=ccrs.PlateCarree())
     if METAR_m == True:
         print("To Be filled in ")
     if ASOS_AWOS_m == True:
         print("To Be filled in ")
 
+
+    radartime = currentscantime
+
     ## PLOT INSITU TORUS PLATFORMS
     if NSSLmm == True:
         for NSSLMM in NSSLMM_df:
             if print_long== True: print(NSSLMM.name)
-            P_Attr,legend_elements=platform_attr(NSSLMM,legend_elements,print_long,r_s=True)
-            platform_plot(NSSLMM,ka_info['Time'],P_Attr,ax_n,print_long,e_test)
+            P_Attr,legend_elements=platform_attr(NSSLMM.name,legend_elements,print_long,r_s=True)
+
+            var = {'name': 'fixthisname', 'max': 1000.0, 'min': 0.0}
+            print("fix me I am broken A")
+            #platform_plot(NSSLMM, radartime, var, ax_n, P_Attr, print_long, e_test )
     if NEBmm == True:
         for UNLMM in UNLMM_df:
             if print_long== True: print(UNLMM.name)
-            P_Attr,legend_elements=platform_attr(UNLMM,legend_elements,print_long,r_s=True)
-            platform_plot(UNLMM,ka_info['Time'],P_Attr,ax_n,print_long,e_test)
+            P_Attr,legend_elements=platform_attr(UNLMM.name,legend_elements,print_long,r_s=True)
+            var = {'name': 'fixthisname', 'max': 1000.0, 'min': 0.0}
+            print("fix me I am broken B")
+            #platform_plot(UNLMM,radartime, var, ax_n, P_Attr, print_long,e_test)
     if UASd == True:
         for UAS in UAS_files:
-            P_Attr,legend_elements=platform_attr(UAS,legend_elements,print_long,r_s=True)
-            platform_plot(UAS,ka_info['Time'],P_Attr,ax_n,border_c='xkcd:very pale green',labelbias=(0,0.01))
+            P_Attr,legend_elements=platform_attr(UAS.name,legend_elements,print_long,r_s=True)
+            var = {'name': 'fixthisname', 'max': 1000.0, 'min': 0.0}
+            print("fix me I am broken C")
+            #platform_plot(UAS,radartime, var, ax_n, P_Attr, print_long, e_test)
+                         # border_c='xkcd:very pale green',labelbias=(0,0.01))
 
 
     ## DEAL WITH COLORBARS
@@ -610,8 +814,11 @@ def radar_subplots(mom,swp,fig,display,currentscantime,globalamin,globalamax,p_v
     return post
 
 # * * * * * *
-def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,gs,radar_sub=False):
+def time_series(day,fig,currentscantime,globalamin,globalamax,p_var,gs,radar_sub=False):
     if print_long== True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
+
+    # Convert scan_time from netcdf cftime to python standard datetime
+    currentscantime = pd.to_datetime(currentscantime.strftime())
 
     if radar_sub == True:
         ax_n=fig.add_subplot(gs[1,:])
@@ -631,7 +838,7 @@ def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,gs,r
 
                 ## Set up line colors and legend labels
                 b_array=[] #blank array
-                m_style,m_color,l_color,leg_str,bb_array = platform_attr(platform_file,b_array) #get the attributes (color, label, etc)
+                p_attr, legend_elements = platform_attr(platform_file.name,b_array) #get the attributes (color, label, etc)
 
                 ## Should ploting data be masked?
                 # if you only want to mask certain platforms set up an if-statement to assign the "masking" variable
@@ -639,7 +846,7 @@ def time_series(filesys,day,fig,currentscantime,globalamin,globalamax,p_var,gs,r
                 plot_data= maskdata(p_var,platform_file,masking)
 
                 ## Plot
-                ax_n.plot(platform_file['datetime'],plot_data,linewidth=3,color=l_color,label=leg_str) #assigning label= is what allows the legend to work
+                ax_n.plot(platform_file['datetime'],plot_data,linewidth=3,color=p_attr['l_color'],label=p_attr['leg_str']) #assigning label= is what allows the legend to work
 
     ## Set up XY axes tick locations
     ax_n.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
@@ -900,6 +1107,16 @@ def plot_nexrad_loc(station,start_time,end_time,kloc_file,dir_out,radar_1=True,r
         plt.close()
     return
 
+def radar_from_nextrad_file(radar_file):
+    radar = pyart.io.read_nexrad_archive(radar_file)
+    return radar
+
+# Note: Cached version is cached on the file name, not the file contents.
+# If file contents change you need to invalidate the cache or pass in the file contents directly to this function
+cached_radar_from_nextrad_file = function_cache_memory.cache( radar_from_nextrad_file )
+
+
+
 
 ###############################################################################################
 ##########################################
@@ -911,87 +1128,77 @@ tstart = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),15,0,0)
 tend = None
 
 NSSLMM_df, UNLMM_df, max_array, min_array = [], [], [], []
+
 for MM in ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']:
+
+    max_val = None
+    min_val = None
 
     #load the NSSL mesonets
     if (MM in ['FFld','LIDR','Prb1','Prb2','WinS']):
-        try:
-            MMfile='/Users/severe2/Research/TORUS_data/'+day+'/mesonets/NSSL/'+MM+'_'+day[2:]+'_QC_met.dat'
+        #try:
+            MMfile= config.g_mesonet_directory + day +'/mesonets/NSSL/'+MM+'_'+day[2:]+'_QC_met.dat'
 
-            if MM == 'FFld':
-                FFld_df = read_nsslmm(MMfile,tstart,tend)
-                FFld_df.name='FFld'
-                NSSLMM_df.append(FFld_df)
-                masked_df = maskdata(p_var, FFld_df, mask=True)
+            files = glob.glob(MMfile)
+            print("B: files: ", files)
+
+            if len(files) > 0:
+                file = files[0]  # Use first file only !!!!!! ??????
+
+                df = read_nsslmm(file,tstart,tend)
+
+                df.name = MM
+
+                if MM == 'Prb1':
+                    Prb1_df = df
+
+                NSSLMM_df.append(df)
+
+                masked_df = maskdata(p_var, df, mask=True)
                 max_val, min_val= masked_df.max(), masked_df.min()
-            elif MM == 'LIDR':
-                LIDR_df = read_nsslmm(MMfile,tstart,tend)
-                LIDR_df.name='LIDR'
-                NSSLMM_df.append(LIDR_df)
-                masked_df = maskdata(p_var, LIDR_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
-            elif MM == 'Prb1':
-                Prb1_df = read_nsslmm(MMfile,tstart,tend)
-                Prb1_df.name='Prb1'
-                NSSLMM_df.append(Prb1_df)
-                masked_df = maskdata(p_var, Prb1_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
-            elif MM == 'Prb2':
-                Prb2_df = read_nsslmm(MMfile,tstart,tend)
-                Prb2_df.name='Prb2'
-                NSSLMM_df.append(Prb2_df)
-                masked_df = maskdata(p_var, Prb2_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
-            elif MM == 'WinS':
-                WinS_df = read_nsslmm(MMfile,tstart,tend)
-                WinS_df.name='WinS'
-                NSSLMM_df.append(WinS_df)
-                masked_df = maskdata(p_var, WinS_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
-                #max_val, min_val= WinS_df[p_var].max(), WinS_df[p_var].min()
 
             if MM == probe_of_interest:
                 p_of_int=NSSLMM_df[-1]
 
-        except: error_printing(e_test)
+        #except: error_printing(e_test)
 
     #load the UNL MM files
     elif (MM in ['CoMeT1', 'CoMeT2', 'CoMeT3']):
-        try:
-            MMfile='/Volumes/Samsung_T5/Research/TORUS_Data/'+day+'/mesonets/UNL/UNL.'+MM+'.*'
+        #try:
+            MMfile=config.g_mesonet_directory + day +'/mesonets/UNL/UNL.'+MM+'.*'
+            files = glob.glob(MMfile)
+            print("C: files: ", files)
 
-            if MM == 'CoMeT1':
-                CoMeT1_df = read_unlmm(MMfile,tstart,tend)
-                CoMeT1_df.name='CoMeT1'
-                UNLMM_df.append(CoMeT1_df)
-                masked_df = maskdata(p_var, CoMeT1_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
-            elif MM == 'CoMeT2':
-                CoMeT2_df = read_unlmm(MMfile,tstart,tend)
-                CoMeT2_df.name='CoMeT2'
-                UNLMM_df.append(CoMeT2_df)
-                masked_df = maskdata(p_var, CoMeT2_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
-            elif MM == 'CoMeT3':
-                CoMeT3_df = read_unlmm(MMfile,tstart,tend)
-                CoMeT3_df.name='CoMeT3'
-                UNLMM_df.append(CoMeT3_df)
-                masked_df = maskdata(p_var, CoMeT3_df, mask=True)
-                max_val, min_val= masked_df.max(), masked_df.min()
+            if len(files) > 0:
+                file = files[0]  # Use first file only !!
 
+                df = read_unlmm(file,tstart,tend)
+
+                df.name = MM
+
+                UNLMM_df.append(df)
+
+                masked_df = maskdata(p_var, df, mask=True)
+                max_val, min_val= masked_df.max(), masked_df.min()
 
             if MM == probe_of_interest:
                 p_of_int=UNLMM_df[-1]
 
-        except: error_printing(e_test)
+        #except: error_printing(e_test)
 
     #load the UAS files
     elif (MM in ['UAS','UAS_fillers']):
         UAS_df='Will come back and fill in'
 
-    max_array.append(max_val)
-    min_array.append(min_val)
 
+    if max_val is not None:
+        max_array.append(max_val)
+
+    if min_val is not None:
+        min_array.append(min_val)
+
+print("max_array= ", max_array)
+print("min_array= ", min_array)
 
 #Alternate global variable max/min for plotting purposes
 globalamax = np.max(max_array)
@@ -1006,6 +1213,9 @@ levels = np.arange(globalamin,globalamax+1,1)
 CS3 = plt.contourf(Z, levels, cmap=cmap)#,transform=datacrs)
 plt.clf() # clear current figure
 # ************************************
+
+
+# ???? is Prb1_df really what you think it is?
 
 #print(Prb1_df)
 #for i in len(Prb1_df):
@@ -1022,14 +1232,29 @@ for r in r_ofintrest:
     print("start ",ts[r])
     print("end ",te[r])
     print("***")
-    radar_list=get_WSR_from_AWS(ts[r],te[r],r,temploc)
-    for radar in radar_list:
-        #print(radar.info())
+
+    radar_files = get_WSR_from_AWS(ts[r],te[r],r,config.g_download_directory)
+
+    print("Radar files to process:")
+    print(radar_files)
+
+    #open the downloaded files as pyart objects
+    radar_list=[]
+    i=0
+    for radar_file in radar_files:
+        i = i+1
+        print("[{}] open_pyart, scan file_name = {}\n".format(i, radar_file))
+        try:
+            radar = cached_radar_from_nextrad_file (radar_file)
+        except:
+            print("Failed to convert file: ", radar_file)
+
+        print(i,radar.info())
         #testing_plots(radar,i,j,r_only,globalamin,globalamax,p_var,e_test)
         #plot_with_WSR(radar,i,j)
 
         #why am i calling radar and radarlist to this function when I am in a loop that is interating through these to values?
-        ppiplot(r_only, radar_list,radar, filesys, day, globalamin,globalamax, p_var, p_of_int,CS3, e_test)
+        ppiplot(r_only, radar, config.g_download_directory, day, globalamin,globalamax, p_var, p_of_int,CS3, e_test)
     #plot_with_WSR(test2)
     #print(timeranges_each_r)
 
