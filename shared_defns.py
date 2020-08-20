@@ -80,7 +80,7 @@ def pform_attr(pname):
     elif pname == "CoMeT1": marker_style, marker_color, line_color, legend_str= '1','brown','brown','CoMeT1'
     elif pname == "CoMeT2": marker_style, marker_color, line_color, legend_str= '1','yellow','yellow','CoMeT2'
     elif pname == "CoMeT3": marker_style, marker_color, line_color, legend_str= '1','black','black','CoMeT3'
-    elif pname == "WTx_M": marker_style, marker_color, line_color, legend_str= r'$\AA$' ,'black','black','WTxM Site'   
+    elif pname == "WTx_M": marker_style, marker_color, line_color, legend_str= r'$\AA$' ,'black','black','WTxM'   
         #U+1278, #u20a9
     elif pname == 'Ka2': marker_style, marker_color, line_color, legend_str= '8','xkcd:crimson','xkcd:crimson','Ka2'
     elif pname == 'Ka1': marker_style, marker_color, line_color, legend_str= '8','mediumseagreen','mediumseagreen','Ka1'
@@ -193,7 +193,6 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         
         # Save only desired iop data
         data_nssl = data.loc[(data['time'] >= hstart_dec) & (data['time'] <= hend)]
-
         # Convert time into timedeltas
         date = dt.datetime.strptime('2019-'+file[-15:-13]+'-'+file[-13:-11],'%Y-%m-%d')
         time_deltas = []
@@ -223,11 +222,11 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         q_list = ['qc1','qc2','qc3','qc4']
         data_nssl['qc_flag'] = data_nssl[q_list].sum(axis=1)
 
-        t = []
-        for i in range(0, len(data_nssl)):
-            t.append([i] *30)
-        data_nssl['group'] = tuple(t)
-        data_nssl['wmax'] = data_nssl.groupby(['group'])['spd'].transform(max)
+        #  t = []
+        #  for i in range(0, len(data_nssl)):
+            #  t.append([i] *120)
+        #  data_nssl['group'] = tuple(t)
+        #  data_nssl['wmax'] = data_nssl.groupby(['group'])['spd'].transform(max)
         return data_nssl, 'NSSL'
     
     # * * * 
@@ -257,7 +256,29 @@ def read_Radar(pname, print_long, e_test, rfile= None, d_testing=False):
     if pname in pform_names('KA'):
         #  rfile will only be provided if the object being initilized is the main plotting radar
         if rfile != None: 
-            #maybe fit in the det_radar_feilds text here
+            ##  Assign radar feilds and masking
+            #creating the mask for attenuation
+            reflectivity = rfile.fields['reflectivity']['data']
+            spectrum_width = rfile.fields['spectrum_width']['data']
+            velocity = rfile.fields['corrected_velocity']['data']
+            total_power = rfile.fields['total_power']['data']
+            normal = rfile.fields['normalized_coherent_power']['data']
+            normal_mask = (normal.flatten() < 0.4)
+            range_mask = np.zeros(np.shape(reflectivity))
+
+            for i in range(0, len(range_mask[:,0])): range_mask[i,:]= rfile.range['data'] > (rfile.range['data'][-1]-1000.)
+
+            range_mask = range_mask.astype(bool)
+            total_mask = [any(t) for t in zip(range_mask.flatten(), normal_mask.flatten())]
+            refl_mask = np.ma.MaskedArray(reflectivity, mask=normal_mask)
+            sw_mask = np.ma.MaskedArray(spectrum_width, mask=normal_mask)
+            vel_mask = np.ma.MaskedArray(velocity, mask=normal_mask)
+
+            #create the dictionary for the masks
+            refl_dict, sw_dict, vel_dict = {'data':refl_mask}, {'data':sw_mask}, {'data':vel_mask}
+            rfile.add_field('refl_fix', refl_dict)
+            rfile.add_field('sw_fix', sw_dict)
+            rfile.add_field('vel_fix', vel_dict)
             
             ## Det the attribute of the Main Radar (MR)
             #det the scantime 
@@ -307,18 +328,17 @@ def read_Radar(pname, print_long, e_test, rfile= None, d_testing=False):
 
         # Determine what other WSR sites could fall withing the plotting domain 
         if rfile == None: 
-            print('made it here')
             #save the nexrad locations to an array from the PyART library
-            locs = pyart.io.nexrad_common.NEXRAD_LOCATIONS
-            print(type(locs))
-            print(locs)
-            data_WSR88D, pdeploy = grab_pform_subset(print_long, e_test, Data, d_test_df= locs, bounding= p_domain, Dataframe=True)
-            print('!!!!!')
+            wsr_locs = pyart.io.nexrad_common.NEXRAD_LOCATIONS
+            WSR_df= pd.DataFrame.from_dict(wsr_locs, orient= 'index')
+            #  WSR_df.reset_index(self, level=None, drop=False, inplace=False, col_level=0, col_fill='')
+            WSR_df.index.name = 'R_Name'
+            WSR_df.reset_index(inplace= True, drop=False)
             #if no sites in domain this will cause a failure for d_testing 
-            p_test = data_WSR88D.iloc[1]
+            p_test = WSR_df.iloc[1]
             #  if testing for data availability (and the defn has not failed yet) the func will end here
             if d_testing == True: return True
-            else: return data_wtm, 'WSR' 
+            else: return WSR_df, 'WSR' 
 
     # * * * 
     elif pname == 'NOXP ': print('code for reading NOXP not written yet')
@@ -693,7 +713,8 @@ class Radar(Platform):
                 self.lat, self.lon, self.head, self.rhib, self.rhie = Rloc.lat, Rloc.lon, Rloc.head, Rloc.rhib, Rloc.rhie
             elif self.type == 'WSR': 
                 #Rloc is a dataframe containing the lats and lons of each WSR88D that is within the plotting domain
-                self.WSR_df = Rloc
+                self.df = Rloc
+                self.df.name = '{}_df'.format(Name) #assign a name to the pandas dataframe itself
 
         Platform.__init__(self, Name)
 
@@ -733,7 +754,7 @@ class Radar(Platform):
 class Pvar:
     def __init__(self, p_var):
         self.name = p_var
-        #establish lable for the colorbar and tseries ylabel 
+        #establish label for the colorbar and tseries ylabel 
         if self.name == "Thetae": self.v_lab = "Equivalent Potential Temp [K]"
         elif self.name == "Thetav": self.v_lab = "Virtual Potential Temp [K]"
 
@@ -777,7 +798,6 @@ class R_Plt(Master_Plt):
         #  self.display.set_limits(xlim=(self.Domain.xmin, self.Domain.xmax), ylim=(self.Domain.ymin, self.Domain.ymax))
         # Set the projection of the radar plot 
         self.R_Proj = self.display.grid_projection 
-        
         Master_Plt.__init__(self, Data)
 
 class TS_Plt(Master_Plt):

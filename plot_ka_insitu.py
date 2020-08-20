@@ -70,7 +70,9 @@ def ppiplot(Data, print_long, e_test):
         True/False vars that control how much information is printed out to the terminal window. Helpful for debugging but can be overkill
     '''
     if print_long == True: print('~~~~~~~~~~~Made it into ppiplot~~~~~~~~~~~~~~~~~~~~~')
-
+    #  print('******')
+    #  print(matplotlib.rcParams)
+    #  print('******')
     SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 23, 28, 33, 50
     plt.rc('font', size=MEDIUM_SIZE)         # controls default text sizes
     plt.rc('axes', titlesize=MEDIUM_SIZE)    # fontsize of the axes title
@@ -124,10 +126,10 @@ def ppiplot(Data, print_long, e_test):
     plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
 
     ## Finish plot
-    output_name = config.filesys+'TORUS_Data/'+config.day+'/mesonets/plots/'+Data['P_Radar'].name+'_'+config.p_var+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'.png'
+    output_name = config.filesys+'TORUS_Data/'+config.day+'/mesonets/plots/'+Data['P_Radar'].name+'_wind_'+config.p_var+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'.png'
+    #  output_name = config.filesys+'TORUS_Data/'+config.day+'/mesonets/plots/'+Data['P_Radar'].name+'_'+config.p_var+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'.png'
     print(output_name)
     start_time = time.time()
-    print('test')
     plt.savefig(output_name, bbox_inches='tight', pad_inches=.3)
     print("My line took", time.time() - start_time, "to run")
     plt.close()
@@ -157,10 +159,6 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
 
     ## SET UP SUBPLOTS
     ax_n = fig.add_subplot(sub_pos, projection= t_R.R_Proj)
-    #  t_R.display.set_limits(xlim=(t_R.Domain.xmin, t_R.Domain.xmax), ylim=(t_R.Domain.ymin, t_R.Domain.ymax))
-    #  ax_n.update_datalim_bounds(t_R.Domain_Bbox)
-    #  ax_n.set_xlimits(left=t_R.Domain.xmin, right=t_R.Domain.xmax)
-    #  ax_n.set_ylimits(bottom=t_R.Domain.ymin, top=t_R.Domain.ymax)
     ax_n.text(.5, -.065, p_title, transform= ax_n.transAxes, horizontalalignment='center', fontsize=40) #the radar subplot titles
     t_R.display.plot_ppi_map(field, Data['P_Radar'].swp, title_flag=False, colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lat=t_R.Domain.ymin, max_lat=t_R.Domain.ymax, min_lon=t_R.Domain.xmin, max_lon=t_R.Domain.xmax, embelish=False)
 
@@ -203,22 +201,12 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
                     # if there are sites within the domain plot the markers and include in the legend
                     if valid_sites == True:
                         legend_elements.append(p.leg_entry)
-                        ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=ccrs.PlateCarree(), marker=p.m_style, linestyle='None', markersize=45, color=p.m_color)
+                        ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=ccrs.PlateCarree(), marker=p.m_style, linestyle='None', markersize=23, color=p.m_color)
                         # include labels for the sites on the plots
                         if config.WTxM_lab == True:
                             for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['Stn_ID']):
-                                trans = t_R.R_Proj.transform_point(x, y, ccrs.Geodetic())
-                                ax_n.text(trans[0], trans[1], lab, fontsize= 1)
-                                #  print(ax_n.transData.transform_point((31,-100)))
-                                #  print(ax_n.get_xlim())
-                                #  print(ax_n.get_ylim())
-                                #  print(ax_n.transData.transform((30,100)))
-                                #  print(ax_n.transData.transform_point((30,-100,ccrs.Geodetic())))
-                                #  print(ax_n.projection.get_projection_class())
-                                #      #ax_n.text(x,y,lab,transform=ax_n.transData)
-                                #  text = [ax_n.text(*item) for item in zip(WTM['Lon'], WTM['Lat'], WTM['Stn_ID'])]
-                                #ax_n.text(WTM['Lon'].all(),WTM['Lat'].all(), WTM['Stn_ID'].all(),transform=ccrs.PlateCarree())
-                                #ax_n.plot(WTM['Lon'],WTM['Lat'], transform=ccrs.PlateCarree(), marker=r'$\AA$',markersize=10, color='k',zorder=9)
+                                trans = t_R.R_Proj.transform_point(x+.009, y-.002, ccrs.Geodetic())
+                                ax_n.text(trans[0], trans[1], lab, fontsize= 20)
             # * * *
             if config.METARm == True:
                 if p.type == 'METAR':
@@ -251,16 +239,23 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
                         ## Plot RHI spokes
                         if config.rhi_ring == True: p.rhi_spokes_rings()
                         ## Optional textlabel on plot
-                        #    d2=ax_n.text(p.lon+.006, p.lat-.011, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4,foreground='xkcd:pale blue')])
+                        if config.KA_lab == True:
+                            ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4,foreground='xkcd:pale blue')])
             # * * *
             if config.WSRm == True:
                 if p.type == 'WSR':
                     if print_long == True: print(p.name)
-                    legend_elements.append(p.leg_entry)
-                    ## Plot the marker
-                    ax_n.plot(p.df['lon'], p.df['lat'], data=p.df, transform=ccrs.PlateCarree(), marker=m_style, linestyle='None', markersize=15, color='k')
-                    #  ax_n.plot(p.lon, p.lat, marker=p.m_style, transform=ccrs.PlateCarree(), color=p.m_color, markersize=18,
-                              #  markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15,foreground='k')],zorder=10)
+                    # determine if any of the sites fall within the plotting domain
+                    sites_subdf, valid_sites = p.grab_pform_subset(print_long, e_test, Data, bounding= t_R.Domain)
+                    # if there are sites within the domain plot the markers and include in the legend
+                    if valid_sites == True:
+                        legend_elements.append(p.leg_entry)
+                        ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=ccrs.PlateCarree(), marker=p.m_style, linestyle='None', markersize=20, color=p.m_color)
+                        # include labels for the sites on the plots
+                        if config.WSR88D_lab == True:
+                            for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['Stn_ID']):
+                                trans = t_R.R_Proj.transform_point(x, y, ccrs.Geodetic())
+                                ax_n.text(trans[0]+.02, trans[1]-.01, lab, fontsize= 27)
             # * * *
             if config.NOXPm == True:
                 if p.type == 'NOXP':
@@ -310,56 +305,6 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
     return post
 
 # * * * * * * *
-def plot_winds(self, ws, wd, wsmax, plot_range=None):
-        """ Required input:
-                ws: Wind speeds (knots)
-                wd: Wind direction (degrees)
-                wsmax: Wind gust (knots)
-            Optional Input:
-                plot_range: Data range for making figure (list of (min,max,step))
-        """
-        self.start, self.end, self.axis_num, self.dates, self.time = dates[0], dates[-1], 0, mpl.dates.date2num(dates), time.strftime('%Y-%m-%d %H:%M UTC')
-
-        # set the starttime and endtime for plotting, 24 hour range
-        endtime, starttime = dt.datetime(2016, 3, 31, 22, 0, 0, 0), endtime-dt.timedelta(hours=24)
-
-        # Parse dates from .csv file, knowing their format as a string and convert to datetime
-        def parse_date(date): return dt.datetime.strptime(date.decode('ascii'), '%Y-%m-%d %H:%M:%S')
-
-        testdata = np.genfromtxt(get_test_data('timeseries.csv', False), names=True, dtype=None, usecols=list(range(1, 8)), converters={'DATE': parse_date}, delimiter=',')
-
-        # Temporary variables for ease
-        ws, wsmax, wd, date = testdata['WS'], testdata['WSMAX'], testdata['WD'], testdata['DATE']
-
-        data = {'wind_speed': (np.array(ws) * units('m/s')).to(units('knots')),'wind_speed_max': (np.array(wsmax) * units('m/s')).to(units('knots')),
-                'wind_direction': np.array(wd) * units('degrees')}
-
-        meteogram = Meteogram(fig, data['times'], probe_id)
-        meteogram.plot_winds(data['wind_speed'], data['wind_direction'], data['wind_speed_max'])
-
-        ############################################
-
-        # PLOT WIND SPEED AND WIND DIRECTION
-        ln1 = self.ax_n.plot(self.dates, ws, label='Wind Speed')
-        self.ax_n.fill_between(self.dates, ws, 0)
-        self.ax_n.set_xlim(self.start, self.end)
-        if not plot_range: plot_range = [0, 20, 1]
-        self.ax_n.set_ylabel('Wind Speed (knots)', multialignment='center')
-        self.ax_n.set_ylim(plot_range[0], plot_range[1], plot_range[2])
-        self.ax_n.grid(b=True, which='major', axis='y', color='k', linestyle='--', linewidth=0.5)
-        ln2 = self.ax_n.plot(self.dates, wsmax, '.r', label='3-sec Wind Speed Max')
-
-        ax7 = self.ax_n.twinx()
-        ln3 = ax7.plot(self.dates, wd, '.k', linewidth=0.5, label='Wind Direction')
-        ax7.set_ylabel('Wind\nDirection\n(degrees)', multialignment='center')
-        ax7.set_ylim(0, 360)
-        ax7.set_yticks(np.arange(45, 405, 90), ['NE', 'SE', 'SW', 'NW'])
-        lines = ln1 + ln2 + ln3
-        labs = [line.get_label() for line in lines]
-        ax7.xaxis.set_major_formatter(mpl.dates.DateFormatter('%d/%H UTC'))
-        ax7.legend(lines, labs, loc='upper center', bbox_to_anchor=(0.5, 1.2), ncol=3, prop={'size': 12})
-
-# * * * * * * *
 def time_series(Data, fig, gs, print_long, e_test):
     ''' Plot the time series of p_var from the various instrument platforms
     ----
@@ -374,65 +319,76 @@ def time_series(Data, fig, gs, print_long, e_test):
 
     ## MAKE THE TIMESERIES
     #### * * * * * * * * *
-    for p in Data.values():
-        if isinstance(p, Torus_Insitu):
-            if print_long == True: print('Plotting ',p.name,' on time series')
-            ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
-            if p.type in config.TS_masking[:]: plotting_data= p.ts_mask_df
-            else: plotting_data= p.df[config.p_var].values
+    if config.wind == False:
+        for p in Data.values():
+            if isinstance(p, Torus_Insitu):
+                if print_long == True: print('Plotting '+str(p.name)+' on time series')
+                ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
+                if p.type in config.TS_masking[:]: plotting_data= p.ts_mask_df
+                else: plotting_data= p.df[config.p_var].values
 
-            wind = False
-            ## Plot
-            if wind == False:
+                ## Plot
                 ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str) #assigning label= is what allows the legend to work
 
-            if wind == True:
-                p = Data['Prb1']
-                l1 = ax_n.plot(p.df['datetime'], p.df['spd'], label='Wind Speed')
-                ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
-                #  ax_n.set_xlim(config.tstart, config.tend)
-                ax_n.set_ylabel('Wind Speed (knots)', multialignment='center')
+        ## Set up XY axes tick locations
+        ax_n.yaxis.set_major_locator(MultipleLocator(5)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
+        ax_n.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
 
-                l2 = ax_n.plot(p.df['datetime'], p.df['spd'], p.df['wmax'], '.r', label='30-sec Wind Speed Max')
+        ## Set up axes formats (lables/ ticks etc)
+        ax_n.set_ylabel(Data['Var'].v_lab)
 
-                ax7 = ax_n.twinx()
-                l3 = ax7.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.5, label='Wind Direction')
-                ax7.set_ylabel('Wind Direction (degrees)', multialignment='center')
-                ax7.set_ylim(0, 360)
-                ax7.set_yticks(np.arange(45, 405, 90), ['NE', 'SE', 'SW', 'NW'])
-                lines = l1 + l2 + l3
-                labs = [line.get_label() for line in lines]
-                ax7.legend(lines, labs, prop={'size': 12})
+        ## Set up grid for plot
+        ax_n.grid(which='major', axis='y', linestyle='--', linewidth=2)
+        ax_n.grid(which='minor', axis='y', linestyle=':')
 
-    ## Set up XY axes tick locations
-    ax_n.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
+        ## Include the legend
+        leg = ax_n.legend()
+        for line in leg.get_lines(): line.set_linewidth(12)
+
+    if config.wind == True:
+        p = Data['Prb1']
+        if print_long == True: print('Plotting '+str(p.name)+' on time series')
+        l1 = ax_n.plot(p.df['datetime'], p.df['spd'], label='Wind Speed')
+        ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
+
+        ax2 = ax_n.twinx()
+        l3 = ax2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.5, label='Wind Direction')
+        
+
+        ax_n.set_ylabel('Wind Speed', multialignment='center')
+        ax2.set_ylabel('Wind Direction (degrees)', multialignment='center')
+        ax2.set_ylim(0, 360)
+        #  ax2.set_yticks(np.arange(45, 405, 90), ['NE', 'SE', 'SW', 'NW'])
+        # set up minor ticks 
+        ax2.yaxis.set_minor_locator(np.arange(45, 405, 90), ['NE', 'SE', 'SW', 'NW']) 
+        # set up major tick marks 
+        ax2.yaxis.set_major_locator(np.arange(90, 360, 90), ['E', 'S', 'W'])
+        ax_n.grid(b=True, which='minor', axis='y', color='k', linestyle='--', linewidth=0.5)
+        ax_n.grid(b=True, which='major', axis='y', color='k', linestyle='--', linewidth=1)
+
+        lines = l1 + l3  
+        labs = [line.get_label() for line in lines]
+        ax2.legend(lines, labs, prop={'size': 12})
+
+    # if desired this subsets the timerange that is displayed in the timeseries 
+    if config.ts_extent != None:
+        ax_n.set_xlim(Platform.Scan_time - timedelta(minutes=config.ts_extent), Platform.Scan_time + timedelta(minutes=config.ts_extent))
+
+    ax_n.margins(x=0)
     ax_n.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax_n.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
     ax_n.xaxis.set_minor_locator(AutoMinorLocator(6)) # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
-    ax_n.yaxis.set_major_locator(MultipleLocator(5)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
-    ax_n.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
-
-    ## Set up axes formats (lables/ ticks etc)
-    ax_n.set_ylabel(Data['Var'].v_lab)
-    ax_n.set_xlabel('Time (UTC)')
     ax_n.tick_params(which='major', width=2, length=20, color='black')
     ax_n.tick_params(which='minor', width=2, length=10, color='grey')
-
-    ## Set up grid for plot
-    ax_n.grid(True)
     ax_n.grid(which='major', axis='x', color='grey', linewidth=2.5)
     ax_n.grid(which='minor', axis='x')
-    ax_n.grid(which='major', axis='y', linestyle='--', linewidth=2)
-    ax_n.grid(which='minor', axis='y', linestyle=':')
-
+    ax_n.set_xlabel('Time (UTC)')
+    
     ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
     #  radar scan and the timerange ploted (via filled colorline) on the radar plots
     if config.r_plotting == True:
         ax_n.axvline(Platform.Scan_time, color='r', linewidth=4, alpha=.5, zorder=1)
         ax_n.axvspan(Platform.Scan_time - timedelta(minutes=config.cline_extent), Platform.Scan_time + timedelta(minutes=config.cline_extent), facecolor='0.5', alpha=0.4)
-
-    ## Include the legend
-    #  leg = ax_n.legend()
-    #  for line in leg.get_lines(): line.set_linewidth(12)
 
     if print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
@@ -440,29 +396,6 @@ def time_series(Data, fig, gs, print_long, e_test):
 #######################
 ## RADAR DEFINITIONS ##
 #######################
-def det_radar_feilds(radar):
-    #creating the mask for attenuation
-    reflectivity = radar.fields['reflectivity']['data']
-    spectrum_width = radar.fields['spectrum_width']['data']
-    velocity = radar.fields['corrected_velocity']['data']
-    total_power = radar.fields['total_power']['data']
-    normal = radar.fields['normalized_coherent_power']['data']
-    normal_mask = (normal.flatten() < 0.4)
-    range_mask = np.zeros(np.shape(reflectivity))
-
-    for i in range(0, len(range_mask[:,0])): range_mask[i,:]= radar.range['data'] > (radar.range['data'][-1]-1000.)
-
-    range_mask = range_mask.astype(bool)
-    total_mask = [any(t) for t in zip(range_mask.flatten(), normal_mask.flatten())]
-    refl_mask = np.ma.MaskedArray(reflectivity, mask=normal_mask)
-    sw_mask = np.ma.MaskedArray(spectrum_width, mask=normal_mask)
-    vel_mask = np.ma.MaskedArray(velocity, mask=normal_mask)
-
-    #create the dictionary for the masks
-    refl_dict, sw_dict, vel_dict = {'data':refl_mask}, {'data':sw_mask}, {'data':vel_mask}
-    radar.add_field('refl_fix', refl_dict)
-    radar.add_field('sw_fix', sw_dict)
-    radar.add_field('vel_fix', vel_dict)
 
 ##############################################################################################
 #####################################################
@@ -478,6 +411,8 @@ Data = {} #dictionary in which all the class objects will be stored (will contai
 Data, subset_pnames = Add_to_DATA('TInsitu', Data, subset_pnames, print_long)
 ## Establish info for the plotting variable (aka max min etc)
 Data, subset_pnames = Add_to_DATA('PVar', Data, subset_pnames, print_long)
+
+print('\n Read in Stationary Platforms Arrays\n')
 ## Read in the data for the Stationary Array platforms (if available)
 Data, subset_pnames = Add_to_DATA('STN_I', Data, subset_pnames, print_long)
 
@@ -512,11 +447,9 @@ if config.r_plotting == True:
 
                     ## Read in radar data and add to Data dict
                     ##### + + + + + + + + + + + + + + + + + + +
-                    #  Assign radar feilds and masking
-                    det_radar_feilds(radar)
                     #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
                     Data, subset_pnames = Add_to_DATA('RADAR', Data, subset_pnames, print_long, MR_file=radar, swp=swp_id)
-                    if print_long == True: print(Data)
+                    if print_long == True: print(Data, '\n')
 
                     ## Proceed to plot the radar
                     ##### + + + + + + + + + + + +
