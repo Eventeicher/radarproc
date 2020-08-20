@@ -54,7 +54,7 @@ def dealias_radar_files(prefix, files):
               " Input File: " + str(radar_file) +
               " Output File: " + out_filename)
 
-        if radar_file == '.': 
+        if radar_file == '.':
             how_many_fail = how_many_fail + 1
             continue;
 

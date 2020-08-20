@@ -13,7 +13,7 @@ def read_unlmm(file,tstart=None, tend=None):
     mmfile= glob.glob(file)
     print(np.shape(mmfile))
     ds = xr.open_dataset(mmfile[0])
-    
+
     #convert form epoch time to utc datetime object
     timearray = np.array([dt.datetime.utcfromtimestamp(t/1e9) for t in ds.time.values])
     U,V = mpcalc.wind_components(ds.wind_speed, ds.wind_dir)
@@ -40,8 +40,8 @@ def read_unlmm(file,tstart=None, tend=None):
         'Thetae': (dims, ds.theta_e.values, {'units':str(ds.theta_e.units)})
     }
     subds = xr.Dataset(data_vars, coords)
-    
-    #convert to pandas 
+
+    #convert to pandas
     pd_unl=subds.to_dataframe()
     pd_unl.reset_index(inplace=True)
 
@@ -55,11 +55,11 @@ def read_unlmm(file,tstart=None, tend=None):
         hend= pd_unl['datetime'].iloc[-1]
     else:
         hend   = tend
-    
+
     # Save only desired iop data
     data_unl = pd_unl.loc[(pd_unl['datetime']>=hstart)&(pd_unl['datetime']<=hend)]
 
-    return data_unl 
+    return data_unl
 
 # *******************
 
@@ -135,12 +135,12 @@ def read_nsslmm(file,tstart=None,tend=None):
 # *******************
 
 def maskdata(p_var, platform_file, mask=True):
-    ''' Read in a dataset and return the masked version of it 
-            Masking is based of QC flags etc and can be diff for each platform 
+    ''' Read in a dataset and return the masked version of it
+            Masking is based of QC flags etc and can be diff for each platform
             If mask= False then the defn will simply return the dataset unmodified
     '''
     platform_unmasked= platform_file[p_var].values
-    
+
     if mask== False:
         platform_data= platform_unmasked
     elif mask== True:
@@ -154,5 +154,5 @@ def maskdata(p_var, platform_file, mask=True):
             print("will be filled in")
         else:
             print("What platform are you trying to use?")
-    
+
     return platform_data
