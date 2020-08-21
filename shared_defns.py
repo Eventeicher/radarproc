@@ -2,9 +2,11 @@
 ######################
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cmx
 from matplotlib.lines import Line2D
 from matplotlib.transforms import Bbox
 import matplotlib.patheffects as PathEffects
+from netCDF4 import num2date
 import pandas as pd
 import datetime as dt
 from datetime import datetime, date, timedelta
@@ -72,8 +74,9 @@ def pform_attr(pname):
     elif pname == "LIDR": marker_style, marker_color, line_color, legend_str= '1','xkcd:pastel purple','xkcd:light plum','LIDR'
     elif pname == "WinS": marker_style, marker_color, line_color, legend_str= '1','xkcd:peach','xkcd:dark peach','WinS'
     elif pname == "CoMeT1": marker_style, marker_color, line_color, legend_str= '1','brown','brown','CoMeT1'
-    elif pname == "CoMeT2": marker_style, marker_color, line_color, legend_str= '1','yellow','yellow','CoMeT2'
+    elif pname == "CoMeT2": marker_style, marker_color, line_color, legend_str= '1','yellow','gold','CoMeT2'
     elif pname == "CoMeT3": marker_style, marker_color, line_color, legend_str= '1','black','black','CoMeT3'
+    elif pname == "ASOS": marker_style, marker_color, line_color, legend_str= r'$\mp$' ,'black','black','ASOS'   
     elif pname == "WTx_M": marker_style, marker_color, line_color, legend_str= r'$\AA$' ,'black','black','WTxM'   
         #U+1278, #u20a9
     elif pname == 'Ka2': marker_style, marker_color, line_color, legend_str= '8','xkcd:crimson','xkcd:crimson','Ka2'
@@ -85,7 +88,7 @@ def pform_attr(pname):
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor='black', markeredgewidth=3, label=legend_str, markerfacecolor=marker_color, markersize=26)
     elif pname == 'WSR88D':
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, markeredgewidth=3, label=legend_str, markersize=26, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')])
-    elif pname == 'WTx_M':
+    elif pname in ['WTx_M', 'ASOS']:
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, label=legend_str, markersize=26)
     else:
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, markeredgewidth=3, label=legend_str, markersize=26, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')])
@@ -237,14 +240,24 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
     '''
     if pname == 'WTx_M':
         wtm_df = pd.read_csv(config.filesys+'radarproc/West_TX_mesonets.csv')
-        #if no sites in domain this will cause a failure for d_testing 
-        p_test = wtm_df.iloc[1]
+        #if there is not a file in your directory this will cause a failure for d_testing 
+        p_test = wtm_df.iloc[0]
         #  if testing for data availability (and the defn has not failed yet) the func will end here
         if d_testing == True: return True
         else: return wtm_df, 'WTM' 
+    
+    # * * * 
+    if pname == 'ASOS':
+        ASOS_df = pd.read_csv(config.filesys+'radarproc/asos_stations.csv')
+        ASOS_df.rename(columns = {'CALL':'Stn_ID', 'LAT':'lat', 'LON':'lon'}, inplace = True)
+        #if there is not a file in your directory this will cause a failure for d_testing 
+        p_test = ASOS_df.iloc[0]
+        #  if testing for data availability (and the defn has not failed yet) the func will end here
+        if d_testing == True: return True
+        else: return ASOS_df, 'ASOS' 
 
 #**************
-def read_Radar(pname, print_long, e_test, rfile= None, d_testing=False): 
+def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False): 
     ''' Determine if a given radar is deployed and if so assign the correct location values to it.
     '''
     if pname in pform_names('KA'):
@@ -315,7 +328,7 @@ def read_Radar(pname, print_long, e_test, rfile= None, d_testing=False):
     elif pname == 'WSR88D':
         # if the main plotting radar is a Wsr88d radar 
         if rfile != None: 
-            index_at_start = rfile.sweep_start_ray_index['data'][self.swp] #Find the beginning loc of given sweep in data array
+            index_at_start = rfile.sweep_start_ray_index['data'][swp[0]] #Find the beginning loc of given sweep in data array
             MR_time = num2date(rfile.time['data'][index_at_start], rfile.time['units']) 
             MR_lat, MR_lon = rfile.latitude['data'][0], rfile.longitude['data'][0]
             return MR_time, MR_lat, MR_lon , 'MAINR'
@@ -329,7 +342,7 @@ def read_Radar(pname, print_long, e_test, rfile= None, d_testing=False):
             WSR_df.index.name = 'R_Name'
             WSR_df.reset_index(inplace= True, drop=False)
             #if no sites in domain this will cause a failure for d_testing 
-            p_test = WSR_df.iloc[1]
+            p_test = WSR_df.iloc[0]
             #  if testing for data availability (and the defn has not failed yet) the func will end here
             if d_testing == True: return True
             else: return WSR_df, 'WSR' 
@@ -379,22 +392,38 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
                     if print_long == True: print("No data available to be read in for platform %s" %(pname))
 
             elif pname in ['OK_M', 'IA_M']: print('code not written yet for other mesonets')
-   
-        if pname in ['ASOS', 'AWOS', 'METAR']: print('code not written yet for asos and metar')
+        
+        for pname in pform_names('NWS'):
+            if pname == 'ASOS':
+                data_avail = Platform.test_data(pname)
+                if data_avail == True:
+                    #  dont repeatedly append to the list if the platform is already included
+                    if pname in subset_pnames: pass 
+                    else: subset_pnames.append(pname) #append the pname to the subset_pnames list 
+                    #  load loc data for the sites in plotting domain
+                    Data.update({pname: Stationary_Insitu(pname)}) 
+                    if print_long == True: print("Data can be read in for platform %s" %(pname))
+                else: 
+                    if print_long == True: print("No data available to be read in for platform %s" %(pname))
+        
+            if pname in ['AWOS', 'METAR']: print('code not written yet for awos and metar')
 
     # * * * 
     elif DType == 'RADAR':
         #this can change for each image (aka from diff scans of the plotting radar) so will be updated for every plot  
         #  ie. are the radars deployed at a given time which (if any) WSR88D fall within plotting domain etc 
+        
         # * * * 
         ## Initilize the Main plotting radar object (which will establish scantime and contain the radar data file etc)
         # Det Main plotting radar (aka which radar is associated with MR_file) 
-        if MR_file.metadata['instrument_name'] == 'TTUKa-1': MR_name= 'Ka1'
-        elif MR_file.metadata['instrument_name'] == 'TTUKa-2': MR_name= 'Ka2'
-        else: print('What radar are you trying to plot? MR_name = %' %(MR_name))
+        if MR_file != None:
+            if MR_file.metadata['instrument_name'] == 'TTUKa-1': MR_name = 'Ka1'
+            elif MR_file.metadata['instrument_name'] == 'TTUKa-2': MR_name = 'Ka2'
+            elif MR_file.metadata['original_container'] == 'NEXRAD Level II': MR_name = 'WSR88D'
+            else: print('What radar are you trying to plot? MR_name = %' %(MR_file.metadata['instrument_name']))
         
-        print("Reading in radar data for plotting from %s" %(MR_name))
-        Data.update({'P_Radar': Radar(MR_name, Rfile=MR_file, Swp=swp, Plotting_Radar=True)})
+            print("Reading in radar data for plotting from %s" %(MR_name))
+            Data.update({'P_Radar': Radar(MR_name, Rfile=MR_file, Swp=swp, Plotting_Radar=True)})
 
         # * * * 
         ## Initilize the other radar objects that do not contain radar data to be plotted 
@@ -512,7 +541,13 @@ class Platform:
                 given_bearing: True/False, are you given a specified direction of "travel"
         '''
         #  determine starting point lat and lon
-        start_lat, start_lon = self.lat, self.lon  
+        if isinstance(self, Radar):
+            start_lat, start_lon = self.lat, self.lon  
+        else:
+            # locate the data entry that has the closest time as the plotting radar scantime
+            a=self.df.iloc[self.df['datetime'].sub(self.Scan_time).abs().idxmin()]
+            start_lat, start_lon = a.lat, a.lon
+        
         lat1, lon1 = start_lat * np.pi/180.0 , start_lon * np.pi/180.0
         R = 6378.1 #earth radius (R = ~ 3959 MilesR = 3959)
 
@@ -590,7 +625,7 @@ class Platform:
             #Test to ensure that there is valid data in the subrange
             #  (aka the platform was deployed during the time of radarscan or if any of the points fall within the map area)
             try:
-                p_test = df_sub.iloc[1]
+                p_test = df_sub.iloc[0]
                 p_deploy = True
             except:
                 p_deploy = False
@@ -651,7 +686,7 @@ class Torus_Insitu(Platform):
         elif p_deploy == True:
             ##Plot the line that extends +/- min from the platform location; The colorfill indicates values of the specifiec p_var (ie Thetae etc)
             #  fill in the values of the colorfill
-            C = cmocean.cm.curl((p_sub[config.p_var].values - Data['Var'].global_min) / (Data['Var'].global_max - Data['Var'].global_min))
+            C = cmocean.cm.thermal((p_sub[config.p_var].values - Data['Var'].global_min) / (Data['Var'].global_max - Data['Var'].global_min))
             ax = plt.gca()
             for i in np.arange(len(p_sub['lon']) - 1): 
                 #This is the border of the colorline
@@ -669,7 +704,8 @@ class Torus_Insitu(Platform):
             ax.plot(p_sub.iloc[mid_point, col_lon], p_sub.iloc[mid_point, col_lat], transform=ccrs.PlateCarree(), marker=self.m_style, markersize=20,
                     markeredgewidth='3', color=self.m_color, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=10)
             #plot labels for the marker on the plot itself
-            #  d2=plt.text(p_sub.iloc[mid_point,col_lon]+labelbias[0], p_sub.iloc[mid_point,col_lat]+labelbias[1], p.name, transform=ccrs.PlateCarree(), fontsize=20, zorder=9, path_effects=[patheffects.withstroke(linewidth=4,foreground=color)])
+            if config.TIn_lab == True: 
+                plt.text(p_sub.iloc[mid_point,col_lon]+labelbias[0], p_sub.iloc[mid_point,col_lat]+labelbias[1], p.name, transform=ccrs.PlateCarree(), fontsize=20, zorder=9, path_effects=[patheffects.withstroke(linewidth=4,foreground=color)])
 
             #plot a dot at the end of the colorline in the direction the platform is moving (aka the last time in the subset dataframe)
             ax.plot(p_sub.iloc[-1, col_lon], p_sub.iloc[-1, col_lat], transform=ccrs.PlateCarree(), marker='.', markersize=10, markeredgewidth='3', color='k', zorder=9)
@@ -695,9 +731,15 @@ class Radar(Platform):
         if Plotting_Radar == True:
             ## Det the key attr of the main plotting radar and define the class var Scan_time for all objects of Platform 
             self.rfile, self.name, self.swp = Rfile, Name, Swp 
-            Platform.Scan_time, self.lat, self.lon, self.type = read_Radar(self.name, self.Print_long, self.E_test, rfile=self.rfile)
+
+            Platform.Scan_time, self.lat, self.lon, self.type = read_Radar(self.name, self.Print_long, self.E_test, swp=self.swp, rfile=self.rfile)
             # Convert time into fancy date string to use in overall plot title
             self.fancy_date_str = self.Scan_time.strftime('%Y-%m-%d %H:%M UTC')
+
+            if self.name in pform_names('KA'):
+                self.site_name = self.name
+            if self.name == 'WSR88D':
+                self.site_name = self.rfile.metadata['instrument_name']
         
         ## Otherwise you are initlizing info for radars that doent have to do with plotting actual radar data (aka loc of radars etc but not the data itself)
         elif Plotting_Radar == False: 
@@ -721,7 +763,6 @@ class Radar(Platform):
         for j in range(int(self.rhib), int(self.rhie)+1, 10):
             ang = self.head + j
             if ang > 360.: ang= int(ang - 360.)
-            
             #  radius = Data['P_Radar'].rfile.range['data'][-1]-500.)/1000.
             if self.type == 'KA': radius= 20.905 
             else: print('code not written for other radars yet')
@@ -739,30 +780,12 @@ class Radar(Platform):
             R_Plt.display.plot_line_geo([self.lon, D], [self.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
 
             ## optional labels
-            #if np.logical_and(C>ymin,np.logical_and(C<ymax,np.logical_and(D>xmin,D<xmax))):
-                    #d1=plt.text(D, C, str(ang),horizontalalignment='center',transform=ccrs.PlateCarree(),fontsize=10,zorder=9,path_effects=([PathEffects.withStroke(linewidth=4,foreground='xkcd:pale blue')])
+            if config.RHI_lab == True:
+                if np.logical_and(C>ymin, np.logical_and(C<ymax, np.logical_and(D>xmin, D<xmax))):
+                    plt.text(D, C, str(ang), horizontalalignment='center', transform=ccrs.PlateCarree(), zorder=9,
+                             path_effects=([PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')]))
         if print_long == True: print('made it through rhi_spokes_rings')
 
-    def det_nearest_WSR(self, Cen_Pform_df):
-        '''
-        Function to locate the nearest WSR88D site to the insitu instruments
-        '''
-        #find the locations of all WSR88D sites (outputs dictionary in format {Site_ID:{lat:...,lon:...,elav:...], ...}
-        all_WSR_locs = pyart.io.nexrad_common.NEXRAD_LOCATIONS
-        #print(json.dumps(locs, sort_keys=True, indent=4))
-
-        #set up empty dataframe with site Ids as column names
-        d_from_all_r = pd.DataFrame(columns=all_WSR_locs.keys())
-
-        #fill in dataframe with the distance from all 88D sites from each probe measurement
-        for key in all_WSR_locs:
-            d_from_r=np.square(Cen_Pform_df['lat']-all_WSR_locs[key]['lat']) + np.square(Cen_Pform_df['lon']-all_WSR_locs[key]['lon'])
-            d_from_all_r[key]=d_from_r
-
-        #Determine which WS88D site is closest to the probe and add to the original probe dataframe
-        Cen_Pform_df['Radar_ID']=d_from_all_r.idxmin(axis=1)
-        #print(p_df)
-        return Cen_Pform_df
 #########################################
 ### set up Pvar class (this is not a subclass of Platform)
 class Pvar:
@@ -786,7 +809,8 @@ class Pvar:
     def make_dummy_plot(self):
         ''' Make a dummy plot to allow for ploting of colorbar
         '''
-        cmap = cmocean.cm.curl
+        cmap = cmocean.cm.thermal
+        #  cmap=plt.get_cmap('rainbow')
         Z = [[0,0],[0,0]]
         levels = np.arange(self.global_min, self.global_max+1, 1)
         self.CS3 = plt.contourf(Z, levels, cmap=cmap)#,transform=datacrs)

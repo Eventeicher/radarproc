@@ -8,7 +8,7 @@ import matplotlib.patheffects as PathEffects
 from matplotlib.ticker import (LinearLocator, FixedLocator, MaxNLocator, MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.lines import Line2D
-from matplotlib.gridspec import GridSpec
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import datetime as dt
 from datetime import datetime, date, timedelta
@@ -55,7 +55,7 @@ from shared_defns import Add_to_DATA, pform_names, error_printing, Platform, Rad
 ## PLOTTING DEFINTIONS  ###
 ###########################
 
-def ppiplot(Data, print_long, e_test):
+def ppiplot(Data, print_long, e_test, start_comptime):
     ''' Initial plotting defenition: sets up fig size, layout, font size etc and will call timeseries and radar subplots
     ----------
     INPUTS
@@ -77,7 +77,7 @@ def ppiplot(Data, print_long, e_test):
     #  print('******')
     #  print(matplotlib.rcParams)
     #  print('******')
-    SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 23, 28, 33, 50
+    SMALL_SIZE, MS_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 20, 25, 27, 50
     plt.rc('font', size=MEDIUM_SIZE)         # controls default text sizes
     plt.rc('axes', titlesize=MEDIUM_SIZE)    # fontsize of the axes title
     plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
@@ -94,10 +94,16 @@ def ppiplot(Data, print_long, e_test):
         ## Set up figure
         fig = plt.figure(figsize=(32, 20), facecolor='white')
         ## Establish the gridspec layout
-        gs = GridSpec(nrows=2, ncols=5, width_ratios=[.5, 8, 1, 8, .25], height_ratios=[3, 2], wspace=.25, hspace=.1)
+        if len(config.Time_Series) == 1:
+            gs = GridSpec(nrows=2, ncols=5, width_ratios=[.5, 8, 1, 8, .25], height_ratios=[3, 2], wspace=.25, hspace=.1)
+            ts_gs = GridSpecFromSubplotSpec(1, 1, subplot_spec=gs[1, :])
+        if len(config.Time_Series) == 2:
+            gs = GridSpec(nrows=2, ncols=4, width_ratios=[.15,8, 1, 8], hspace=.1)
+            ts_gs = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[1, :], height_ratios=[1, 2], hspace=0)
         ## There are extra columns which are spacers to allow the formating to work
         # Uncomment to visualize the spacers
         #  ax_c = fig.add_subplot(gs[0, 2])
+        #only uncomment thes two if you are only doing 1 time series
         #  ax_l = fig.add_subplot(gs[0, 0])
         #  ax_s = fig.add_subplot(gs[0, 4])
 
@@ -120,30 +126,35 @@ def ppiplot(Data, print_long, e_test):
 
     ## Make the Times Series Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
-    if config.t_plotting == True: time_series(Data, fig, gs, print_long, e_test)
+    if config.t_plotting == True: 
+        row = -1
+        for ts in config.Time_Series[:]:
+            row, col = row + 1, ':' 
+            print('Time Series plot: '+ ts +', Gridspec row: '+str(row)+', GridSpec col: '+str(col))
+            time_series(ts, Data, fig, ts_gs[row, :], print_long, e_test)
 
     ## Plot platform colorbar
     cbar_ax = plt.axes([.514, post.y0, .014, post.y1-post.y0])#left, bottom, width, height
     cbar = plt.colorbar(Data['Var'].CS3, cax=cbar_ax, orientation='vertical', label=Data['Var'].v_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(Data['p_var'].global_min, Data['p_var'].global_max+1,2))
 
     ## Plot title
-    plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
+    plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
 
     ## Finish plot
     if config.wind == True: 
-        output_name = config.filesys+'TORUS_Data/'+config.day+'/mesonets/plots/'+Data['P_Radar'].name+'_wind_'+config.p_var+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'.png'
+        output_name = config.filesys+'TORUS_Data/'+config.day+'/mesonets/plots/'+Data['P_Radar'].site_name+'_wind_'+config.p_var+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'.png'
     else: 
-        output_name = config.filesys+'TORUS_Data/'+config.day+'/mesonets/plots/'+Data['P_Radar'].name+'_'+config.p_var+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'.png'
+        output_name = config.filesys+'TORUS_Data/'+config.day+'/mesonets/plots/'+Data['P_Radar'].site_name+'_'+config.p_var+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'.png'
     print(output_name)
-    start_time = time.time()
+
     plt.savefig(output_name, bbox_inches='tight', pad_inches=.3)
-    print("My line took", time.time() - start_time, "to run")
+    print("Plot took "+ str(time.time() - start_comptime)+ " to complete")
     plt.close()
 
     ## Makes a ding noise
     print('\a')
     if print_long == True: print('~~~~~~~~~~~made it through ppiplot~~~~~~~~~~~~~~~~~~')
-    print('Done Plotting \n ***************************************************************************************************')
+    print('Done Plotting \n \n***************************************************************************************************')
 
 # * * * * * *  *
 def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
@@ -157,22 +168,31 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
 
     ## SET UP VARS FOR EACH RADAR MOMENTS
     if mom == 'refl':
-        p_title, field, c_label, c_scale, vminb, vmaxb = 'Reflectivity', 'refl_fix', 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow', -30., 30.
+        p_title, c_label, c_scale = 'Reflectivity', 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow'
+        if Data['P_Radar'].name in pform_names('KA'):
+            field, vminb, vmaxb, sweep = 'refl_fix', -30., 30., Data['P_Radar'].swp
+        if Data['P_Radar'].name == 'WSR88D':
+            field, vminb, vmaxb, sweep =  'reflectivity', -10., 75., Data['P_Radar'].swp[0]
     elif mom == 'vel':
-        p_title, field, c_label, c_scale, vminb, vmaxb = 'Radial Velocity', 'vel_fix', 'Velocity [m/s]', 'pyart_balance', -40., 40.
+        p_title, c_label, c_scale = 'Radial Velocity', 'Velocity [m/s]', 'pyart_balance'
+        if Data['P_Radar'].name in pform_names('KA'):
+            field, vminb, vmaxb, sweep = 'vel_fix', -40., 40., Data['P_Radar'].swp
+        if Data['P_Radar'].name == 'WSR88D':
+            field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
     else: print("Hey what just happened!\n Check the Radar moments for spelling")
 
 
     ## SET UP SUBPLOTS
     ax_n = fig.add_subplot(sub_pos, projection= t_R.R_Proj)
     ax_n.text(.5, -.065, p_title, transform= ax_n.transAxes, horizontalalignment='center', fontsize=40) #the radar subplot titles
-    t_R.display.plot_ppi_map(field, Data['P_Radar'].swp, title_flag=False, colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lat=t_R.Domain.ymin, max_lat=t_R.Domain.ymax, min_lon=t_R.Domain.xmin, max_lon=t_R.Domain.xmax, embelish=False)
+    t_R.display.plot_ppi_map(field, sweep, title_flag=False, colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lat=t_R.Domain.ymin, max_lat=t_R.Domain.ymax, min_lon=t_R.Domain.xmin, max_lon=t_R.Domain.xmax, embelish=False)
 
     ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
     #  iterate over each object contained in dict Data (returns the actual objects not their keys)
     legend_elements = [] #empty list to append the legend entries to for each platfrom that is actually plotted
     for p in Data.values():
         #  print(vars(p))
+        
         ######
         #Plot Inistu Torus Platforms (if desired and available)
         if isinstance(p, Torus_Insitu):
@@ -220,11 +240,21 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
                     legend_elements.append(p.leg_entry)
                     print("To Be filled in ")
             # * * *
-            if config.ASOS_AWOSm == True:
-                if p.type == 'ASOS/AWOS':
+            if config.ASOSm == True:
+                if p.type == 'ASOS':
                     if print_long == True: print(p.name)
-                    legend_elements.append(p.leg_entry)
-                    print("To Be filled in ")
+                    # determine if any of the sites fall within the plotting domain
+                    sites_subdf, valid_sites = p.grab_pform_subset(print_long, e_test, Data, bounding= t_R.Domain)
+                    # if there are sites within the domain plot the markers and include in the legend
+                    if valid_sites == True:
+                        legend_elements.append(p.leg_entry)
+                        ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=ccrs.PlateCarree(), marker=p.m_style, linestyle='None', markersize=25, color=p.m_color, zorder=10)
+                        # include labels for the sites on the plots
+                        if config.ASOS_lab == True:
+                            for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['Stn_ID']):
+                                trans = t_R.R_Proj.transform_point(x+.009, y-.002, ccrs.Geodetic())
+                                ax_n.text(trans[0], trans[1], lab, fontsize= 20)
+                                        
 
         #####
         #Plot Radar Platforms (if desired and available)
@@ -256,35 +286,19 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
                     # if there are sites within the domain plot the markers and include in the legend
                     if valid_sites == True:
                         legend_elements.append(p.leg_entry)
-                        ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=ccrs.PlateCarree(), marker=p.m_style, linestyle='None', markersize=20, color=p.m_color)
+                        ax_n.plot(sites_subdf['lon'], sites_subdf['lat'], transform=ccrs.PlateCarree(), marker=p.m_style, linestyle='None', color=p.m_color, markersize=23, markeredgewidth=5,
+                                  path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=8)
                         # include labels for the sites on the plots
                         if config.WSR88D_lab == True:
-                            for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['Stn_ID']):
+                            for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['R_Name']):
                                 trans = t_R.R_Proj.transform_point(x, y, ccrs.Geodetic())
-                                ax_n.text(trans[0]+.02, trans[1]-.01, lab, fontsize= 27)
+                                ax_n.text(trans[0]+.03, trans[1]-.01, lab, fontsize= 27)
             # * * *
             if config.NOXPm == True:
                 if p.type == 'NOXP':
                     if print_long == True: print(p.name)
                     legend_elements.append(p.leg_entry)
                     print('Code not written yet')
-
-    ## DEAL WITH COLORBARS
-    # Attach colorbar to each subplot
-    divider = make_axes_locatable(plt.gca())
-    c_ax = divider.append_axes("right", "5%", pad="2%", axes_class=plt.Axes)
-    sm = plt.cm.ScalarMappable(cmap=c_scale, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
-    sm._A = []
-    cb = plt.colorbar(sm, cax=c_ax, label=c_label)
-    if leg == False:  #this means you are currently making the right subplot
-        post = ax_n.get_position() ## Get position information to pass along to the remaining colorbar
-
-    ## SET UP LEGENDS
-    if leg == True: #this means you are currently making the left subplot
-        #add legend for platform markers
-        l = ax_n.legend(handles=legend_elements, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1, title="Platforms", shadow=True, fancybox=True, ncol=1, edgecolor='black')
-        l.get_title().set_fontweight('bold')
-        post = np.nan
 
     ## PLOT BACKGROUND FEATURES
     if config.country_roads == True:
@@ -307,11 +321,26 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
         states_provinces = cartopy.feature.NaturalEarthFeature(category='cultural', name='admin_1_states_provinces_lines', scale='10m', facecolor='none')
         ax_n.add_feature(states_provinces, edgecolor='black', linewidth=2)
     if print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
-
-    return post
+    
+    ## DEAL WITH COLORBARS
+    # Attach colorbar to each subplot
+    divider = make_axes_locatable(plt.gca())
+    c_ax = divider.append_axes("right", "5%", pad="2%", axes_class=plt.Axes)
+    sm = plt.cm.ScalarMappable(cmap=c_scale, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
+    sm._A = []
+    cb = plt.colorbar(sm, cax=c_ax, label=c_label)
+    
+    ## SET UP LEGENDS
+    if leg == True: #this means you are currently making the left subplot
+        #add legend for platform markers
+        l = ax_n.legend(handles=legend_elements, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1, title="Platforms", shadow=True, fancybox=True, ncol=1, edgecolor='black')
+        l.get_title().set_fontweight('bold')
+    if leg == False:  #this means you are currently making the right subplot
+        post = ax_n.get_position() ## Get position information to pass along to the remaining colorbar
+        return post
 
 # * * * * * * *
-def time_series(Data, fig, gs, print_long, e_test):
+def time_series(ts, Data, fig, sub_pos, print_long, e_test):
     ''' Plot the time series of p_var from the various instrument platforms
     ----
     INPUTS; fig & gs: relating to the plot layout
@@ -320,12 +349,11 @@ def time_series(Data, fig, gs, print_long, e_test):
     '''
     if print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
 
-    if config.r_plotting == True: ax_n= fig.add_subplot(gs[1, :])
-    else: fig, ax_n = plt.subplots() #will only plot the time series (not the radar subplots)
+    ax_n= fig.add_subplot(sub_pos)
 
     ## MAKE THE TIMESERIES
     #### * * * * * * * * *
-    if config.wind == False:
+    if ts == 'p_var':
         for p in Data.values():
             if isinstance(p, Torus_Insitu):
                 if print_long == True: print('Plotting '+str(p.name)+' on time series')
@@ -351,8 +379,8 @@ def time_series(Data, fig, gs, print_long, e_test):
         leg = ax_n.legend()
         for line in leg.get_lines(): line.set_linewidth(12)
 
-    if config.wind == True:
-        p = Data['Prb1']
+    if ts == 'wind':
+        p = Data[config.Centered_Pform]
         if print_long == True: print('Plotting '+str(p.name)+' on time series')
         l1 = ax_n.plot(p.df['datetime'], p.df['spd'], label='Wind Speed')
         ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
@@ -361,19 +389,22 @@ def time_series(Data, fig, gs, print_long, e_test):
         l3 = ax2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.5, label='Wind Direction')
         
 
-        ax_n.set_ylabel('Wind Speed', multialignment='center')
-        ax2.set_ylabel('Wind Direction (degrees)', multialignment='center')
+        ax_n.set_ylabel('Wind Spd', multialignment='center')
+        ax2.set_ylabel('Wind Dir ($^{\circ}$)', multialignment='center')
         ax2.set_ylim(0, 360)
         #  ax2.set_yticks(np.arange(45, 405, 90), ['NE', 'SE', 'SW', 'NW'])
-        ax_n.yaxis.set_major_locator(LinearLocator(numticks=9))
+        ax_n.yaxis.set_major_locator(LinearLocator(numticks=5))
         # set up minor ticks 
-        ax2.yaxis.set_minor_locator(FixedLocator(np.arange(45, 405, 90))) 
+        #  ax2.yaxis.set_minor_locator(FixedLocator(np.arange(45, 405, 90)))
         # set up major tick marks 
         ax2.yaxis.set_major_locator(FixedLocator(np.arange(90, 360, 90)))
         ax2.grid(b=True, which='minor', axis='y', color='k', linestyle='--', linewidth=0.5)
         ax2.grid(b=True, which='major', axis='y', color='k', linestyle='--', linewidth=1)
-        ax2.tick_params(which='major', width=2, length=20, color='black')
-        ax2.tick_params(which='minor', width=2, length=10, color='grey')
+        ax2.tick_params(which='major', width=2, length=14, color='black')
+        #  ax2.tick_params(which='minor', width=2, length=7, color='grey')
+        ax_n.tick_params(which='major', width=2, length=14, color='black')
+        #  ax_n.tick_params(which='minor', width=2, length=7, color='grey')
+        ax_n.axhline(0, color='k', linewidth=5, zorder=10)
 
         lines = l1 + l3  
         labs = [line.get_label() for line in lines]
@@ -388,11 +419,17 @@ def time_series(Data, fig, gs, print_long, e_test):
     ax_n.xaxis.set_major_locator(mdates.AutoDateLocator())
     ax_n.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
     ax_n.xaxis.set_minor_locator(AutoMinorLocator(6)) # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
-    ax_n.tick_params(which='major', width=2, length=20, color='black')
-    ax_n.tick_params(which='minor', width=2, length=10, color='grey')
     ax_n.grid(which='major', axis='x', color='grey', linewidth=2.5)
     ax_n.grid(which='minor', axis='x')
-    ax_n.set_xlabel('Time (UTC)')
+
+    a, b, row_num, d, e, f= sub_pos.get_rows_columns()
+    #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
+    if len(config.Time_Series) != 1 and row_num == 0: pass 
+    else: 
+        ax_n.set_xlabel('Time (UTC)')
+        ax_n.tick_params(which='major', width=2, length=14, color='black')
+        ax_n.tick_params(which='minor', width=2, length=7, color='grey')
+
     
     ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
     #  radar scan and the timerange ploted (via filled colorline) on the radar plots
@@ -406,8 +443,6 @@ def time_series(Data, fig, gs, print_long, e_test):
 #######################
 ## RADAR DEFINITIONS ##
 #######################
-
-
 def get_WSR_from_AWS(start, end, radar_id, download_directory):
     '''
     Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
@@ -419,7 +454,6 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     -------
     RETURN radar_list : Py-ART Radar Objects
     '''
-
     #Create this at the point of use otherwise it saves everything and eventually crashes 
     conn = nexradaws.NexradAwsInterface()
 
@@ -430,20 +464,18 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     #Dont download files that you alrady have ....
     path = config.filesys+ 'TORUS_Data/'+ config.day + '/radar/Nexrad/test_Nexrad_files'
 
-    if not os.path.exists(path): 
-        #  Path(path).mkdir(parents=True, exist_ok=True)
-        Path(path).mkdir(parents=True)
+    if not os.path.exists(path): Path(path).mkdir(parents=True)
 
     # missing_scans is a list of scans we don't have and need to download create_filepath returns tuple of 
     # (directory, directory+filename) [-1] returns the directory+filename
-    missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
+    missing_scans = list(filter(lambda x: not Path(x.create_filepath(path, False)[-1]).exists(), scans))
 
     # missing files is the list of filenames of files we need to download 
-    missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
-    print("missing", len(missing_files), "of ", len(scans), "files")
+    missing_files = list(map(lambda x: x.create_filepath(path, False)[-1], missing_scans))
+    print("missing "+ str(len(missing_files))+ " of "+ str(len(scans))+ " files")
     print(missing_files)
 
-    results=conn.download(missing_scans, path, keep_aws_folders=False)
+    results = conn.download(missing_scans, path, keep_aws_folders=False)
 
     print(results.success)
     print('{} downloads failed: {}\n'.format(results.failed_count, results.failed))
@@ -451,22 +483,31 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
 
     # missing_scans_after is a list of scans we don't have (download failed) create_filepath returns tuple of 
     # (directory, directory+filename) [-1] returns the directory+filename
-    missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
+    missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path, False)[-1]).exists(), scans))
 
-    if len(missing_files_after) >0:
-        print("ERROR: Some Radar Scans are Missing \n", missing_files_after)
+    if len(missing_files_after) > 0:
+        print("ERROR: Some Radar Scans are Missing \n"+ str(missing_files_after))
         exit()
 
-    radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
+    radar_files = list(map(lambda x: x.create_filepath(path, False)[-1], scans))
     # Return list of files 
     return radar_files 
+
+def radar_from_nexrad_file(radar_file):
+    radar = pyart.io.read_nexrad_archive(radar_file)
+    return radar
+
+# Note: Cached version is cached on the file name, not the file contents.
+# If file contents change you need to invalidate the cache or pass in the file contents directly to this function
+#  function_cache_memory = Memory(config.g_cache_directory,verbose=1)
+function_cache_memory = Memory(config.filesys, verbose=1)
+cached_radar_from_nexrad_file = function_cache_memory.cache( radar_from_nexrad_file )
 
 
 ##############################################################################################
 #####################################################
 # Read in Data that does not change for each image ##
 #####################################################
-
 print('\n Read in Torus Platforms \n')
 #print(pform_names('ALL')) #list of ALL possible platforms
 subset_pnames = [] #array of platforms that actually have data for the time range we are plotting
@@ -502,7 +543,7 @@ if config.r_plotting == True:
 
             ## If file contains a ppi scan proceed
             elif radar.scan_type == 'ppi':
-                n_swps = radar.nsweeps
+                n_swps = radar.nsweeps # det number of sweeps contained in the file
                 for swp_id in range(n_swps):
                     ## Det the actual tilt angle of a given sweep (returns an array)
                     tilt_ang = radar.get_elevation(swp_id)
@@ -510,24 +551,25 @@ if config.r_plotting == True:
                     ## Check to see if the radarfile matches the elevation tilt we are interested in
                     if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
                         print(str(thefile) + "\n Producing Radar Plot:")
+                        #record how long it takes to make a plot
+                        start_comptime = time.time()
 
                         ## Read in radar data and add to Data dict
                         ##### + + + + + + + + + + + + + + + + + + +
                         #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
                         Data, subset_pnames = Add_to_DATA('RADAR', Data, subset_pnames, print_long, MR_file=radar, swp=swp_id)
-                        if print_long == True: print(Data, '\n')
+                        if print_long == True: print(str(Data)+ '\n')
 
                         ## Proceed to plot the radar
                         ##### + + + + + + + + + + + +
-                        ppiplot(Data, print_long, e_test)
+                        ppiplot(Data, print_long, e_test, start_comptime)
 
                     ## If the scans elevation tilt does not match the one we are plotting
                     else: print(str(thefile) + "\n Scan does not match the tilt currently being plotted \n Currently plotting: Elevation Tilt= "
                                  + str(config.p_tilt) +"\n This scan: Elevation tilt= "+ str(tilt_ang[0])+'\n**********************************')
 
     if config.WSR_Plot == True: 
-        '''
-        locate the nearest WSR88D site to the specified insitu instruments
+        ''' locate the nearest WSR88D site to the specified insitu instruments
         '''
         #find the locations of all WSR88D sites (outputs dict in format {Site_ID:{lat:...,lon:...,elav:...], ...})
         all_WSR = pyart.io.nexrad_common.NEXRAD_LOCATIONS
@@ -538,7 +580,7 @@ if config.r_plotting == True:
 
         #fill in dataframe with the distance from all 88D sites from each probe measurement
         for key in all_WSR:
-            d_from_r = np.square(Data[config.Centered_Pform].df['lat']-all_WSR[key]['lat']) +np.square(Data[config.Centered_Pform].df['lon']-all_WSR[key]['lon'])
+            d_from_r = np.square(Data[config.Centered_Pform].df['lat']-all_WSR[key]['lat']) + np.square(Data[config.Centered_Pform].df['lon']-all_WSR[key]['lon'])
             d_from_all_r[key] = d_from_r
 
         #Determine which WS88D site is closest to the probe and add to the original probe dataframe
@@ -554,28 +596,37 @@ if config.r_plotting == True:
             t = Data[config.Centered_Pform].df.loc[Data[config.Centered_Pform].df.Radar_ID == r, ['datetime']].rename(columns={'datetime':r})
             ts, te = t.min(), t.max()
             timeranges_each_r = pd.concat([timeranges_each_r, t], axis=1)
-            print("start ", ts[r], "\n end ", te[r], "\n ***")
-
+            
+            print("start "+str(ts[r])+ "\nend "+str(te[r])+ "\n ***")
             radar_files = get_WSR_from_AWS(ts[r], te[r], r, config.filesys)
-
-            print('********')
-            print("Radar files to process:")
-            print(radar_files)
+            print('********\n Radar files to process:\n'+ str(radar_files))
+            
+            #Hard code the swp numbers that will be associated with a given tilt angle 
+            if config.p_tilt == .5: swp_id=[0 , 1]
+            elif config.p_tilt == 1: swp_id=[2 , 3]
+            elif config.p_tilt == 1.5: swp_id=[4 , 5]
+            else: print('The tilt angle {} is not hard coded yet for WSR'.format(config.p_tilt))
 
             #open the downloaded files as pyart objects
-            radar_list=[]
-            i=0
+            radar_list = []
             for radar_file in radar_files:
-                i = i+1
-                print("[{}] open_pyart, scan file_name = {}\n".format(i, radar_file))
+                print("open_pyart, scan file_name = {}\n".format(radar_file))
+                start_comptime = time.time()
                 
-                try: radar = cached_radar_from_nextrad_file (radar_file)
-                except: print("Failed to convert file: ", radar_file)
+                #open file using pyart 
+                #  rf=radar_file.encode('Ascii') #convert from unicode
+                try: radar = cached_radar_from_nexrad_file (radar_file)
+                except: print("Failed to convert file: "+str(radar_file))
 
-                print(i,radar.info())
+                ## Read in radar data and add to Data dict
+                ##### + + + + + + + + + + + + + + + + + + +
+                #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
+                Data, subset_pnames = Add_to_DATA('RADAR', Data, subset_pnames, print_long, MR_file=radar, swp=swp_id)
+                if print_long == True: print(str(Data)+'\n')
 
-                #why am i calling radar and radarlist to this function when I am in a loop that is interating through these to values?
-                ppiplot(r_only, radar, config.filesys, day, globalamin,globalamax, p_var, p_of_int,CS3, e_test)
+                ## Proceed to plot the radar
+                ##### + + + + + + + + + + + +
+                ppiplot(Data, print_long, e_test, start_comptime)
         print(timeranges_each_r)
 
 
