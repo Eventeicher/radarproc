@@ -219,7 +219,8 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         u, v = mpcalc.wind_components(Spd, dire)
         data_nssl['U'], data_nssl['V'] = u.to('knot'), v.to('knot')
 
-        q_list = ['qc1','qc2','qc3','qc4']
+        #  q_list = ['qc1','qc2','qc3','qc4']
+        q_list = config.NSSL_qcflags
         data_nssl['all_qc_flags'] = data_nssl[q_list].sum(axis=1)
 
         #  t = []
@@ -414,7 +415,6 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
             elif read_in_data == False: 
                     if print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
 
-
     # * * * 
     elif DType == 'RADAR':
         #this can change for each image (aka from diff scans of the plotting radar) so will be updated for every plot  
@@ -462,7 +462,6 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
                     if print_long == True: print("No data available to be read in for platform %s" %(pname))
             elif read_in_data == False: 
                     if print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
-
     
     # * * * 
     elif DType == 'PVar':
@@ -599,8 +598,7 @@ class Platform:
         Returns: The subset dataset (df_sub) and a True/False statement regarding any data in the original dataset
                     matched the subsetting criteria (p_deploy)
         '''
-        if self.type == 'KA': 
-            Single_Point = True 
+        if self.type == 'KA': Single_Point = True 
         else: Single_Point = False
 
         #Temporal subset
@@ -857,7 +855,6 @@ class R_Plt(Master_Plt):
         self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
         # Define pyart display object for plotting radarfile  
         R_Plt.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile) 
-        self.display.label_xaxis_x()
         # Set the limits in the display object (this will enforce the desired plotting domain)
         #  self.display.set_limits(xlim=(self.Domain.xmin, self.Domain.xmax), ylim=(self.Domain.ymin, self.Domain.ymax))
         # Set the projection of the radar plot 

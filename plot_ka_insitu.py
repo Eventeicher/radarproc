@@ -74,8 +74,8 @@ def ppiplot(Data, print_long, e_test, start_comptime):
     plt.rc('font', size=MEDIUM_SIZE)         # controls default text sizes
     plt.rc('axes', titlesize=MEDIUM_SIZE)    # fontsize of the axes title
     plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
-    plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-    plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    #  plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    #  plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
     plt.rc('legend', fontsize=MS_SIZE)       # legend fontsize
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
@@ -125,7 +125,7 @@ def ppiplot(Data, print_long, e_test, start_comptime):
             row, col = row + 1, ':' 
             print('Time Series plot: '+ ts +', Gridspec row: '+str(row)+', GridSpec col: '+str(col))
             time_series(ts, Data, fig, ts_gs[row, :], print_long, e_test)
-    ts_gs.align_ylabels()
+    #  ts_gs.align_ylabels()
 
     ## Plot title
     plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
@@ -181,6 +181,7 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
     ax_n = fig.add_subplot(sub_pos, projection= t_R.R_Proj)
     ax_n.text(.5, -.065, p_title, transform= ax_n.transAxes, horizontalalignment='center', fontsize=40) #the radar subplot titles
     t_R.display.plot_ppi_map(field, sweep, title_flag=False, colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lat=t_R.Domain.ymin, max_lat=t_R.Domain.ymax, min_lon=t_R.Domain.xmin, max_lon=t_R.Domain.xmax, embelish=False)
+    t_R.display.label_xaxis_x()
 
     ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
     #  iterate over each object contained in dict Data (returns the actual objects not their keys)
@@ -284,7 +285,7 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
         #  cbar_ax = plt.axes([.514, post.y0, .014, post.y1-post.y0])#left, bottom, width, height
         #set up colorbar axis that will be as tall and 5% as wide as the 'parent' radar subplot
         #  l = ax_n.legend( loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1, title="Platforms", shadow=True, fancybox=True, ncol=1, edgecolor='black')
-        cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center right') 
+        cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5)) 
         cbar = plt.colorbar(Data['Var'].CS3, cax=cbar_ax, orientation='vertical', label=Data['Var'].v_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(Data['p_var'].global_min, Data['p_var'].global_max+1,2))
         return post
 
@@ -316,6 +317,7 @@ def time_series(ts, Data, fig, sub_pos, print_long, e_test):
                 ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str) #assigning label= is what allows the legend to work
 
         ## Set up XY axes tick locations
+        ax_n.set_ylim(top=Data['Var'].global_max)
         ax_n.yaxis.set_major_locator(MultipleLocator(5)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
         ax_n.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
         ## Set up grid for plot
@@ -554,7 +556,8 @@ if config.r_plotting == True:
 
                         ## Proceed to plot the radar
                         ##### + + + + + + + + + + + +
-                        ppiplot(Data, print_long, e_test, start_comptime)
+                        Parallel(n_jobs=-2, verbose=10)(delayed(ppiplot)(Data, print_long, e_test, start_comptime))
+                        #  ppiplot(Data, print_long, e_test, start_comptime)
 
                     ## If the scans elevation tilt does not match the one we are plotting
                     else: print(str(thefile) + "\n Scan does not match the tilt currently being plotted \n Currently plotting: Elevation Tilt= "
@@ -603,9 +606,8 @@ if config.r_plotting == True:
 
                 ## Proceed to plot the radar
                 ##### + + + + + + + + + + + +
-                #  Parallel(n_jobs=5, verbose=10)(delayed(plot_radar_file)(radar_file, r_only, config, day, globalamin, globalamax, 
-                #  p_var, p_of_int,CS3, e_test) for radar_file in radar_files)
-                ppiplot(Data, print_long, e_test, start_comptime)
+                Parallel(n_jobs=2, verbose=10)(delayed(ppiplot)(Data, print_long, e_test, start_comptime))
+                #  ppiplot(Data, print_long, e_test, start_comptime)
         print(tranges_each_r)
 
 

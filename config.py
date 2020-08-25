@@ -45,14 +45,15 @@ r_mom = ['refl', 'vel'] #list; the radar moments to plot on the left and right s
 KAm, WSRm, NOXPm, NSSLm, NEBm, UASm, ASOSm, MESONETSm = True, True, False, True, True, False, True, True 
 MESO_lab, WSR88D_lab, KA_lab, RHI_lab, TIn_lab, ASOS_lab = False, False, False, False, False, False
 cline_extent = 5 #how long would you like the colorlines for each platforms to cover +-x min (also control width of greybox on tseries) 
-ts_extent = 60 #so actually 60 min
-#  ts_extent = None #so actually 60 min
+#  ts_extent = 60 #so actually 60 min
+ts_extent = None #so actually 60 min
 country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
 
 #list; include in the list the type names for the pforms you would like masked (this only controls whats plotted on the Tseries) 
 #  if none leave as blank list, will not work if a mask had not been previously applied to the dataset (which can be done in the classes)
 Time_Series = ['Wind', p_var]
 TS_masking = ['NSSL']
+NSSL_qcflags = ['qc1', 'qc2', 'qc3', 'qc4']
 # would you like to restrict the time series to display only a timespan +/- x time from the scantime (functionalitly not coded yet)
 #  pri_tseries='p_var' #what would you like to plot in the first time series (if num_of_tseries=1 this is the only tseries to be plotted)
 #  sec_tseries='wind' #what would you like in the second time series (only used if num_of_tseries =2)
