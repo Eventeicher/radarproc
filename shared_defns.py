@@ -12,6 +12,7 @@ import pandas as pd
 import datetime as dt
 from datetime import datetime, date, timedelta
 import metpy
+import metpy.plots
 import metpy.calc as mpcalc
 from metpy.units import units
 import cartopy.crs as ccrs
@@ -751,10 +752,8 @@ class Radar(Platform):
             # Convert time into fancy date string to use in overall plot title
             self.fancy_date_str = self.Scan_time.strftime('%Y-%m-%d %H:%M UTC')
 
-            if self.name in pform_names('KA'):
-                self.site_name = self.name
-            if self.name == 'WSR88D':
-                self.site_name = self.rfile.metadata['instrument_name']
+            if self.name in pform_names('KA'): self.site_name = self.name
+            if self.name == 'WSR88D': self.site_name = self.rfile.metadata['instrument_name']
         
         ## Otherwise you are initlizing info for radars that doent have to do with plotting actual radar data (aka loc of radars etc but not the data itself)
         elif Plotting_Radar == False: 

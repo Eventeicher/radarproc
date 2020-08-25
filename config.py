@@ -16,13 +16,13 @@ Radar_Plot_Type = 'KA_Plotting'
 
 ## Timeframe
 # ***********
-day = '20190526' #'YYYYMMDD'
+day = '20190523' #'YYYYMMDD'
 #crop the start or end time to a time you specify (set to None to do the whole day)
-tstart = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]), 18, 30, 0)
-tend = None
+#  tstart = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]), 18, 30, 0)
+#  tend = None
 #  tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),22,45,0)
 #  ts_tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),20,45,0)
-#  tstart, tend = None, None
+tstart, tend = None, None
 
 ## Plot layout controls 
 # ***********************
@@ -36,7 +36,7 @@ r_plotting, t_plotting = True, True
 p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
 offsetkm = 21 #21 is the best for KA
 Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar') 
-Wind_Pform = 'LIDR'
+Wind_Pform = 'Prb1'
 p_tilt = 1 #what radar elevation tilt (deg) do you want to plot
 rhi_ring = True #do you want the rhi spokes for the KA radars
 r_mom = ['refl', 'vel'] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
@@ -45,8 +45,8 @@ r_mom = ['refl', 'vel'] #list; the radar moments to plot on the left and right s
 KAm, WSRm, NOXPm, NSSLm, NEBm, UASm, ASOSm, MESONETSm = True, True, False, True, True, False, True, True 
 MESO_lab, WSR88D_lab, KA_lab, RHI_lab, TIn_lab, ASOS_lab = False, False, False, False, False, False
 cline_extent = 5 #how long would you like the colorlines for each platforms to cover +-x min (also control width of greybox on tseries) 
-#  ts_extent = 60 #so actually 60 min
-ts_extent = None #so actually 60 min
+ts_extent = 30 #so actually 60 min
+#  ts_extent = None #so actually 60 min
 country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
 
 #list; include in the list the type names for the pforms you would like masked (this only controls whats plotted on the Tseries) 
