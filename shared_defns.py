@@ -6,6 +6,7 @@ import matplotlib.cm as cmx
 from matplotlib.lines import Line2D
 from matplotlib.transforms import Bbox
 import matplotlib.patheffects as PathEffects
+import matplotlib.patches as mpatches
 from netCDF4 import num2date
 import pandas as pd
 import datetime as dt
@@ -49,7 +50,7 @@ def pform_names(Type):
         Output: P_list: list of pnames containing the names of the requested type
     '''
     if Type == 'ALL': P_list = ['WTx_M','OK_M','IA_M','ASOS','AWOS','METAR','FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS', 'Ka1','Ka2','NOXP','WSR88D']
-    elif Type == "STN_I": P_list= ['WTx_M','OK_M','IA_M','ASOS','AWOS', 'METAR']
+    elif Type == "STN_I": P_list= ['WTx_M','OK_M','IA_M','ASOS']
     elif Type == 'TInsitu': P_list = ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']
     elif Type == 'RADAR': P_list = ['Ka1','Ka2','NOXP','WSR88D']
     elif Type == 'MESO': P_list = ['WTx_M','OK_M','IA_M']
@@ -68,32 +69,34 @@ def pform_attr(pname):
                  m_color,m_style etc : the specifications regarding platform presentation on the plots (markershape, color, etc)
     '''
     ##assign the atributes for each platform
-    if pname == "Prb1": marker_style, marker_color, line_color, legend_str= '1','xkcd:lightblue','steelblue','Prb1'
-    elif pname == "Prb2": marker_style, marker_color, line_color, legend_str= '1','xkcd:watermelon','xkcd:dusty red','Prb2'
-    elif pname == "FFld": marker_style, marker_color, line_color, legend_str= '1','xkcd:bubblegum pink','xkcd:pig pink','FFld'
-    elif pname == "LIDR": marker_style, marker_color, line_color, legend_str= '1','xkcd:pastel purple','xkcd:light plum','LIDR'
-    elif pname == "WinS": marker_style, marker_color, line_color, legend_str= '1','xkcd:peach','xkcd:dark peach','WinS'
-    elif pname == "CoMeT1": marker_style, marker_color, line_color, legend_str= '1','brown','brown','CoMeT1'
-    elif pname == "CoMeT2": marker_style, marker_color, line_color, legend_str= '1','yellow','gold','CoMeT2'
-    elif pname == "CoMeT3": marker_style, marker_color, line_color, legend_str= '1','black','black','CoMeT3'
-    elif pname == "ASOS": marker_style, marker_color, line_color, legend_str= r'$\mp$' ,'black','black','ASOS'   
-    elif pname == "WTx_M": marker_style, marker_color, line_color, legend_str= r'$\AA$' ,'black','black','WTxM'   
+    if pname == "Prb1": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:lightblue', 20, 'steelblue', 'Prb1'
+    elif pname == "Prb2": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:watermelon', 20, 'xkcd:dusty red', 'Prb2'
+    elif pname == "FFld": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:bubblegum pink', 20, 'xkcd:pig pink', 'FFld'
+    elif pname == "LIDR": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:pastel purple', 20, 'xkcd:light plum', 'LIDR'
+    elif pname == "WinS": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:peach', 20, 'xkcd:dark peach', 'WinS'
+    elif pname == "CoMeT1": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'springgreen', 20, 'mediumseagreen','CoMeT1'
+    elif pname == "CoMeT2": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'yellow', 20, 'gold', 'CoMeT2'
+    elif pname == "CoMeT3": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'peachpuff', 20, 'sandybrown', 'CoMeT3'
+    elif pname == "ASOS": marker_style, marker_color, marker_size, line_color, legend_str= r'$\mp$', 'black', 25, 'black', 'ASOS'   
+    elif pname == "WTx_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\AA$', 'black', 23, 'black', 'WTxM'   
+    elif pname == "OK_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\gamma$', 'black', 23, 'black', 'OKM'   
+    elif pname == "IA_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\Upsilon$', 'black', 23, 'black', 'IAM'   
         #U+1278, #u20a9
-    elif pname == 'Ka2': marker_style, marker_color, line_color, legend_str= '8','xkcd:crimson','xkcd:crimson','Ka2'
-    elif pname == 'Ka1': marker_style, marker_color, line_color, legend_str= '8','mediumseagreen','mediumseagreen','Ka1'
-    elif pname == 'WSR88D': marker_style, marker_color, line_color, legend_str= r'$\Omega$', 'white','black', "WSR88D"
+    elif pname == 'Ka2': marker_style, marker_color, marker_size, line_color, legend_str= '8', 'xkcd:crimson', 18, 'xkcd:crimson', 'Ka2'
+    elif pname == 'Ka1': marker_style, marker_color, marker_size, line_color, legend_str= '8', 'mediumseagreen', 18, 'mediumseagreen', 'Ka1'
+    elif pname == 'WSR88D': marker_style, marker_color, marker_size, line_color, legend_str= r'$\Omega$', 'white', 23, 'black', "WSR88D"
 
        ##create the legend elements that will be appended to the legend array    
     if pname in pform_names('KA'): #the legend entries for the KA radars
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor='black', markeredgewidth=3, label=legend_str, markerfacecolor=marker_color, markersize=26)
     elif pname == 'WSR88D':
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, markeredgewidth=3, label=legend_str, markersize=26, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')])
-    elif pname in ['WTx_M', 'ASOS']:
+    elif pname in ['WTx_M','OK_M','IA_M', 'ASOS']:
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, label=legend_str, markersize=26)
     else:
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, markeredgewidth=3, label=legend_str, markersize=26, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')])
         
-    return marker_style, marker_color, line_color, legend_str, legend_entry
+    return marker_style, marker_color, marker_size, line_color, legend_str, legend_entry
 
 #**************
 def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=False):
@@ -217,7 +220,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         data_nssl['U'], data_nssl['V'] = u.to('knot'), v.to('knot')
 
         q_list = ['qc1','qc2','qc3','qc4']
-        data_nssl['qc_flag'] = data_nssl[q_list].sum(axis=1)
+        data_nssl['all_qc_flags'] = data_nssl[q_list].sum(axis=1)
 
         #  t = []
         #  for i in range(0, len(data_nssl)):
@@ -247,6 +250,25 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
         else: return wtm_df, 'WTM' 
     
     # * * * 
+    if pname == 'OK_M':
+        wtm_df = pd.read_csv(config.filesys+'radarproc/okmeso.csv')
+        wtm_df.rename(columns = {'nlat':'lat', 'elon':'lon'}, inplace = True)
+        #if there is not a file in your directory this will cause a failure for d_testing 
+        p_test = wtm_df.iloc[0]
+        #  if testing for data availability (and the defn has not failed yet) the func will end here
+        if d_testing == True: return True
+        else: return wtm_df, 'WTM' 
+
+    # * * * 
+    if pname == 'IA_M':
+        wtm_df = pd.read_csv(config.filesys+'radarproc/Iowa_meso.csv')
+        #if there is not a file in your directory this will cause a failure for d_testing 
+        p_test = wtm_df.iloc[0]
+        #  if testing for data availability (and the defn has not failed yet) the func will end here
+        if d_testing == True: return True
+        else: return wtm_df, 'WTM' 
+    
+    # * * * 
     if pname == 'ASOS':
         ASOS_df = pd.read_csv(config.filesys+'radarproc/asos_stations.csv')
         ASOS_df.rename(columns = {'CALL':'Stn_ID', 'LAT':'lat', 'LON':'lon'}, inplace = True)
@@ -263,30 +285,6 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
     if pname in pform_names('KA'):
         #  rfile will only be provided if the object being initilized is the main plotting radar
         if rfile != None: 
-            ##  Assign radar feilds and masking
-            #creating the mask for attenuation
-            reflectivity = rfile.fields['reflectivity']['data']
-            spectrum_width = rfile.fields['spectrum_width']['data']
-            velocity = rfile.fields['corrected_velocity']['data']
-            total_power = rfile.fields['total_power']['data']
-            normal = rfile.fields['normalized_coherent_power']['data']
-            normal_mask = (normal.flatten() < 0.4)
-            range_mask = np.zeros(np.shape(reflectivity))
-
-            for i in range(0, len(range_mask[:,0])): range_mask[i,:]= rfile.range['data'] > (rfile.range['data'][-1]-1000.)
-
-            range_mask = range_mask.astype(bool)
-            total_mask = [any(t) for t in zip(range_mask.flatten(), normal_mask.flatten())]
-            refl_mask = np.ma.MaskedArray(reflectivity, mask=normal_mask)
-            sw_mask = np.ma.MaskedArray(spectrum_width, mask=normal_mask)
-            vel_mask = np.ma.MaskedArray(velocity, mask=normal_mask)
-
-            #create the dictionary for the masks
-            refl_dict, sw_dict, vel_dict = {'data':refl_mask}, {'data':sw_mask}, {'data':vel_mask}
-            rfile.add_field('refl_fix', refl_dict)
-            rfile.add_field('sw_fix', sw_dict)
-            rfile.add_field('vel_fix', vel_dict)
-            
             ## Det the attribute of the Main Radar (MR)
             #det the scantime 
             MR_time = datetime.strptime(rfile.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S") 
@@ -357,56 +355,65 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
     if DType == 'TInsitu':
         #for these pforms mainly interested if we have any valid data for the day not worried about spatial/temporal subset yet  
         #  To save computing time this data will only be read in once and anyfurther subsetting will be done later
-        for pname in pform_names(DType):
-            data_avail = Platform.test_data(pname) #for each platform test to see if we have data for that day 
+        for pname in pform_names('TInsitu'):
+            #
+            if pname in pform_names('NSSL'):
+                if config.NSSLm == True: read_in_data= True
+                else: read_in_data= False
+            if pname in pform_names('UNL'):
+                if config.NEBm == True: read_in_data= True
+                else: read_in_data= False
+            if pname == 'UAS':
+                if config.UASm == True: read_in_data= True
+                else: read_in_data= False
 
-            if data_avail == True:
-                subset_pnames.append(pname) #append the pname to the subset_pnames list 
-                #  load data for the pform (aka initialize an object of the appropriate class); place in dict with key of pname
-                Data.update({pname: Torus_Insitu(pname)}) 
-                if print_long == True: print("Data can be read in for platform %s" %(pname))
-            else: 
-                if print_long == True: print("No data available to be read in for platform %s" %(pname))
-
-        #go through the values stored in Data. If any are an object of the Torus_Insitu Class then it will add a max/min value, 
-        #  if the object has type NSSL it will apply a mask (this can be easily changed/ mask applied to other platforms)
-        for p in Data.values():
-            if isinstance(p, Torus_Insitu):
-                if p.type == 'NSSL': p.min_max(config.p_var, mask=True)
-                else: p.min_max(config.p_var)
+            # if you do want to read in data
+            if read_in_data == True: 
+                #for each platform test to see if we have data for that day 
+                data_avail = Platform.test_data(pname) 
+                if data_avail == True:
+                    subset_pnames.append(pname) #append the pname to the subset_pnames list 
+                    #  load data for the pform (aka initialize an object of the appropriate class); place in dict with key of pname
+                    Data.update({pname: Torus_Insitu(pname)}) 
+                    #add a max/min value, if the object has type NSSL it will apply a mask (this can be easily changed/ mask applied to other platforms)
+                    if Data[pname].type == 'NSSL': Data[pname].min_max(config.p_var, mask=True)
+                    else: Data[pname].min_max(config.p_var)
+                    if print_long == True: print("Data can be read in for platform %s" %(pname))
+                else: 
+                    if print_long == True: print("No data available to be read in for platform %s" %(pname))
+            elif read_in_data == False: 
+                    if print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
 
     # * * * 
     elif DType == 'STN_I':
-        #What sites are contained within our plotting domain can change for each image so will be updated for every plot  
-        for pname in pform_names('MESO'):
-            if pname == 'WTx_M':
-                data_avail = Platform.test_data(pname)
-                if data_avail == True:
-                    #  dont repeatedly append to the list if the platform is already included
-                    if pname in subset_pnames: pass 
-                    else: subset_pnames.append(pname) #append the pname to the subset_pnames list 
-                    #  load loc data for the sites in plotting domain
-                    Data.update({pname: Stationary_Insitu(pname)}) 
-                    if print_long == True: print("Data can be read in for platform %s" %(pname))
-                else: 
-                    if print_long == True: print("No data available to be read in for platform %s" %(pname))
-
-            elif pname in ['OK_M', 'IA_M']: print('code not written yet for other mesonets')
-        
-        for pname in pform_names('NWS'):
+        #read in the site location for mesonet datasets (W Tx, OK, IA) .
+        #  Will only be called once since the position of the sites wont change for each image
+        for pname in pform_names('STN_I'):
+            #
+            if pname in pform_names('MESO'):
+                if config.MESONETSm == True: 
+                    read_in_data, marker_label = True, config.MESO_lab
+                else: read_in_data= False
             if pname == 'ASOS':
+                if config.ASOSm == True: 
+                    read_in_data, marker_label = True, config.ASOS_lab
+                else: read_in_data= False
+            
+            # if you do want to read in data
+            if read_in_data == True: 
                 data_avail = Platform.test_data(pname)
                 if data_avail == True:
                     #  dont repeatedly append to the list if the platform is already included
                     if pname in subset_pnames: pass 
                     else: subset_pnames.append(pname) #append the pname to the subset_pnames list 
                     #  load loc data for the sites in plotting domain
-                    Data.update({pname: Stationary_Insitu(pname)}) 
+                    Data.update({pname: Stationary_Insitu(pname, marker_label)}) 
                     if print_long == True: print("Data can be read in for platform %s" %(pname))
                 else: 
                     if print_long == True: print("No data available to be read in for platform %s" %(pname))
-        
-            if pname in ['AWOS', 'METAR']: print('code not written yet for awos and metar')
+            elif read_in_data == False: 
+                    if print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
+
 
     # * * * 
     elif DType == 'RADAR':
@@ -430,21 +437,20 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
         #  (aka could include marker locations for the other platforms etc)
         for pname in pform_names('RADAR'):
             if pname in pform_names('KA'):
-                data_avail = Platform.test_data(pname, Data)
-        
-                if data_avail == True:
-                    #  dont repeatedly append to the list if the platform is already included
-                    if pname in subset_pnames: pass 
-                    else: subset_pnames.append(pname) #append the pname to the subset_pnames list 
-                    #  load loc data (and in this case rhi angles if applicable)
-                    Data.update({pname: Radar(pname,Data)}) 
-                    if print_long == True: print("Data can be read in for platform %s" %(pname))
-                else: 
-                    if print_long == True: print("No data available to be read in for platform %s" %(pname))
-
+                if config.KAm == True: read_in_data= True
+                else: read_in_data= False
             if pname == 'WSR88D':
-                data_avail = Platform.test_data(pname, Data)
+                if config.WSRm == True: read_in_data= True
+                else: read_in_data= False
+            if pname == 'NOXP':
+                print('Code to read in NOXP not written yet')
+                read_in_data = False
+                #  if config.NOXPm == True: read_in_data= True
+                #  else: read_in_data= False
 
+            # if you do want to read in data
+            if read_in_data == True: 
+                data_avail = Platform.test_data(pname, Data)
                 if data_avail == True:
                     #  dont repeatedly append to the list if the platform is already included
                     if pname in subset_pnames: pass 
@@ -454,8 +460,9 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
                     if print_long == True: print("Data can be read in for platform %s" %(pname))
                 else: 
                     if print_long == True: print("No data available to be read in for platform %s" %(pname))
-        
-            if pname == 'NOXP': print('Code to read in NOXP not written yet')
+            elif read_in_data == False: 
+                    if print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
+
     
     # * * * 
     elif DType == 'PVar':
@@ -506,7 +513,7 @@ class Platform:
         '''
         self.name = Name #Instance variables
         #get style info for the platforms marker
-        self.m_style, self.m_color, self.l_color, self.leg_str, self.leg_entry = pform_attr(self.name)
+        self.m_style, self.m_color, self.m_size, self.l_color, self.leg_str, self.leg_entry = pform_attr(self.name)
     
     # * * * 
     @classmethod
@@ -578,7 +585,7 @@ class Platform:
             return end_lat, end_lon
 
     # * * * 
-    def grab_pform_subset(self, print_long, e_test, Data, bounding=None, time_offset=None, Single_Point=False):
+    def grab_pform_subset(self, print_long, e_test, Data, bounding=None, time_offset=None):
         ''' This def will take a given point or pandas dataframe (df) and subset it either spatially or temporially
                 1) If time_offset is given the data will be subset temporally
                         Grabs the observed thermo data +/- x mins around radar scan_time.
@@ -592,6 +599,10 @@ class Platform:
         Returns: The subset dataset (df_sub) and a True/False statement regarding any data in the original dataset
                     matched the subsetting criteria (p_deploy)
         '''
+        if self.type == 'KA': 
+            Single_Point = True 
+        else: Single_Point = False
+
         #Temporal subset
         ##### + + + + + +
         if time_offset != None:
@@ -620,17 +631,17 @@ class Platform:
             if print_long == True: print('Dataset has been spatially subset')
 
         #Determine what to return 
-        if Single_Point == True: return p_deploy
+        if Single_Point == True: df_sub= 'filler'
+        #Test to ensure that there is valid data in the subrange 
+        #  (aka the pform was dep at the time of Rscan and was within the domaain of the plot)
         else:
-            #Test to ensure that there is valid data in the subrange
-            #  (aka the platform was deployed during the time of radarscan or if any of the points fall within the map area)
             try:
                 p_test = df_sub.iloc[0]
                 p_deploy = True
             except:
                 p_deploy = False
                 error_printing(e_test)
-            return df_sub, p_deploy
+        return df_sub, p_deploy
 
 ####
 class Torus_Insitu(Platform):
@@ -638,6 +649,7 @@ class Torus_Insitu(Platform):
         #read in and intilize the dataset; type is the platform type (aka NSSL, UNL, UAS) 
         self.df, self.type = read_TInsitu(Name, self.Print_long, self.E_test, self.Tstart, self.Tend)
         self.df.name ='{}_df'.format(Name) #assign a name to the pandas dataframe itself
+        self.marker_label= config.TIn_lab
         Platform.__init__(self, Name)
 
     # * * * 
@@ -646,7 +658,8 @@ class Torus_Insitu(Platform):
         #  Masking is based of QC flags etc and can be diff for each platform
         if self.type == "NSSL":
             if mask == True: #mask is a bool, sent to False to by default
-                self.mask_allqc_df = np.ma.masked_where(self.df['qc_flag'].values > 0, self.df[p_var].values) #add masked dataset to the object
+                self.mask_allqc_df = np.ma.masked_where(self.df['all_qc_flags'].values > 0, self.df[p_var].values) #add masked dataset to the object
+                #  self.ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df[config.p_var].values) #add masked dataset to the object
                 self.ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df[config.p_var].values) #add masked dataset to the object
                 self.Min, self.Max = self.mask_allqc_df.min(), self.mask_allqc_df.max()#use the masked dataset to find max and min of p_var
             elif mask == False:
@@ -662,7 +675,11 @@ class Torus_Insitu(Platform):
             elif mask == False: print('UAS unmasked code not written yet')
 
         else: print("What platform is this? ", self.type)
-
+        #  print(self.name)
+        #  print(self.Max)
+        if self.Min== None: self.Min = np.nan 
+        if self.Max== None: self.Max = np.nan 
+        
     # * * * 
     def plot_Tpform(self, Data, ax, print_long, e_test, border_c='xkcd:light grey', labelbias=(0,0)):
         ''' Plot the in situ platform markers, barbs and pathline
@@ -701,7 +718,7 @@ class Torus_Insitu(Platform):
             col_U, col_V = p_sub.columns.get_loc('U'), p_sub.columns.get_loc('V')
 
             #plot the platform marker at the time closest to the scantime (aka the time at the halfway point of the subset platform dataframe)
-            ax.plot(p_sub.iloc[mid_point, col_lon], p_sub.iloc[mid_point, col_lat], transform=ccrs.PlateCarree(), marker=self.m_style, markersize=20,
+            ax.plot(p_sub.iloc[mid_point, col_lon], p_sub.iloc[mid_point, col_lat], transform=ccrs.PlateCarree(), marker=self.m_style, markersize=self.m_size,
                     markeredgewidth='3', color=self.m_color, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=10)
             #plot labels for the marker on the plot itself
             if config.TIn_lab == True: 
@@ -718,10 +735,11 @@ class Torus_Insitu(Platform):
 
 ####
 class Stationary_Insitu(Platform):
-    def __init__(self, Name):
+    def __init__(self, Name, marker_label):
         #read in and intilize the dataset; 
         self.df, self.type = read_Stationary(Name, self.Print_long, self.E_test)
         self.df.name = '{}_df'.format(Name) #assign a name to the pandas dataframe itself
+        self.marker_label = marker_label 
         Platform.__init__(self, Name)
                     
 ####
@@ -731,7 +749,6 @@ class Radar(Platform):
         if Plotting_Radar == True:
             ## Det the key attr of the main plotting radar and define the class var Scan_time for all objects of Platform 
             self.rfile, self.name, self.swp = Rfile, Name, Swp 
-
             Platform.Scan_time, self.lat, self.lon, self.type = read_Radar(self.name, self.Print_long, self.E_test, swp=self.swp, rfile=self.rfile)
             # Convert time into fancy date string to use in overall plot title
             self.fancy_date_str = self.Scan_time.strftime('%Y-%m-%d %H:%M UTC')
@@ -744,14 +761,16 @@ class Radar(Platform):
         ## Otherwise you are initlizing info for radars that doent have to do with plotting actual radar data (aka loc of radars etc but not the data itself)
         elif Plotting_Radar == False: 
             Rloc, self.type = read_Radar(Name, self.Print_long, self.E_test)
+            
             if self.type == 'KA': 
                 #store the loc info for a ka radar object
                 self.lat, self.lon, self.head, self.rhib, self.rhie = Rloc.lat, Rloc.lon, Rloc.head, Rloc.rhib, Rloc.rhie
+                self.marker_label = config.KA_lab
             elif self.type == 'WSR': 
                 #Rloc is a dataframe containing the lats and lons of each WSR88D that is within the plotting domain
                 self.df = Rloc
                 self.df.name = '{}_df'.format(Name) #assign a name to the pandas dataframe itself
-
+                self.marker_label = config.WSR88D_lab
         Platform.__init__(self, Name)
 
     # * * * 
@@ -759,32 +778,38 @@ class Radar(Platform):
         ''' Plot the RHI spoke and ring for a radar
         '''
         if print_long == True: print('made it into rhi_spokes_rings')
+      
+        # if there is not actually rhi info then it will not plot a ring and not stop the code 
+        if np.isnan(self.rhib) == True or np.isnan(self.rhie)== True:
+            print('Could not plot RHI spokes')
+        
         #produce spoke and ring
-        for j in range(int(self.rhib), int(self.rhie)+1, 10):
-            ang = self.head + j
-            if ang > 360.: ang= int(ang - 360.)
-            #  radius = Data['P_Radar'].rfile.range['data'][-1]-500.)/1000.
-            if self.type == 'KA': radius= 20.905 
-            else: print('code not written for other radars yet')
-            
-            #this plots a circle that connects the spokes
-            latArray, lonArray = [], []
-            for bearing in range(int(self.head + self.rhib), int(self.head + self.rhie+1)): #degrees of sector
-                lat2, lon2 = self.getLocation(radius, given_bearing=bearing)
-                latArray.append(lat2)
-                lonArray.append(lon2)
-            R_Plt.display.plot_line_geo(lonArray, latArray, marker=None, color='grey', linewidth=.25) #this plots a circle that connects the spokes
-           
-            #plt the spokes 
-            C, D = self.getLocation(radius, given_bearing = ang)
-            R_Plt.display.plot_line_geo([self.lon, D], [self.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
+        else: 
+            for j in range(int(self.rhib), int(self.rhie)+1, 10):
+                ang = self.head + j
+                if ang > 360.: ang= int(ang - 360.)
+                #  radius = Data['P_Radar'].rfile.range['data'][-1]-500.)/1000.
+                if self.type == 'KA': radius= 20.905 
+                else: print('code not written for other radars yet')
+                
+                #this plots a circle that connects the spokes
+                latArray, lonArray = [], []
+                for bearing in range(int(self.head + self.rhib), int(self.head + self.rhie+1)): #degrees of sector
+                    lat2, lon2 = self.getLocation(radius, given_bearing=bearing)
+                    latArray.append(lat2)
+                    lonArray.append(lon2)
+                R_Plt.display.plot_line_geo(lonArray, latArray, marker=None, color='grey', linewidth=.25) #this plots a circle that connects the spokes
+               
+                #plt the spokes 
+                C, D = self.getLocation(radius, given_bearing = ang)
+                R_Plt.display.plot_line_geo([self.lon, D], [self.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
 
-            ## optional labels
-            if config.RHI_lab == True:
-                if np.logical_and(C>ymin, np.logical_and(C<ymax, np.logical_and(D>xmin, D<xmax))):
-                    plt.text(D, C, str(ang), horizontalalignment='center', transform=ccrs.PlateCarree(), zorder=9,
-                             path_effects=([PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')]))
-        if print_long == True: print('made it through rhi_spokes_rings')
+                ## optional labels
+                if config.RHI_lab == True:
+                    if np.logical_and(C>ymin, np.logical_and(C<ymax, np.logical_and(D>xmin, D<xmax))):
+                        plt.text(D, C, str(ang), horizontalalignment='center', transform=ccrs.PlateCarree(), zorder=9,
+                                 path_effects=([PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')]))
+            if print_long == True: print('made it through rhi_spokes_rings')
 
 #########################################
 ### set up Pvar class (this is not a subclass of Platform)
@@ -832,6 +857,7 @@ class R_Plt(Master_Plt):
         self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
         # Define pyart display object for plotting radarfile  
         R_Plt.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile) 
+        self.display.label_xaxis_x()
         # Set the limits in the display object (this will enforce the desired plotting domain)
         #  self.display.set_limits(xlim=(self.Domain.xmin, self.Domain.xmax), ylim=(self.Domain.ymin, self.Domain.ymax))
         # Set the projection of the radar plot 
