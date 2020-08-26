@@ -27,6 +27,10 @@ import xarray as xr
 from collections import namedtuple
 import pyart, sys, traceback, glob, cmocean
 
+import os
+from pathlib import Path
+from os.path import expanduser
+
 ## Imports form other files
 ############################
 import config #this is the file with the plotting controls to access any of the vars in that file use config.var
@@ -962,3 +966,81 @@ class Master_Plt:
 
     #  @staticmethod
     #  def plot_bground_features():
+
+
+##########
+
+import nexradaws
+
+def get_WSR_from_AWS(start, end, radar_id, download_directory):
+    '''
+    Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
+    ----------
+    INPUTS
+    radar_id : string
+        four letter radar designation
+    start: datetime
+        start of the desired timerange
+    end: datetime
+        end of the desired timerange
+    download_directory: string
+        location for the downloaded radarfiles
+    -------
+    RETURN
+    radar_list : Py-ART Radar Objects
+    '''
+
+    # Create this at the point of use
+    # Otherwise it saves everything and eventually crashes
+    conn = nexradaws.NexradAwsInterface()
+
+    #Determine the radar scans that fall within the time range for a given radar site
+    scans = conn.get_avail_scans_in_range(start, end, radar_id)
+    print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
+
+    #download the files that were identified
+    #results = conn.download(scans[0:4], filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+    #results = conn.download(scans, filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+    #results = conn.download(scans[0:4], temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+
+    #
+    # Don't download files that you already have...
+    #
+    path =  download_directory + config.day +'/radar/Nexrad/Nexrad_files/'
+
+    if not os.path.exists(path):
+        Path(path).mkdir(parents=True, exist_ok=True)
+
+    # missing_scans is a list of scans we don't have and need to download
+    # create_filepath returns tuple of (directory, directory+filename)
+    # [-1] returns the directory+filename
+    missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
+
+
+    # missing files is the list of filenames of files we need to down load
+    missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
+    print("missing ", len(missing_files), "of ", len(scans), " files")
+    print(missing_files)
+
+    results = conn.download(missing_scans, path, keep_aws_folders=False)
+
+    print(results.success)
+    print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
+    #print("Results.iter_success : {}\n".format(results.iter_success()))
+
+    # missing_scans_after is a list of scans we don't have (download failed)
+    # create_filepath returns tuple of (directory, directory+filename)
+    # [-1] returns the directory+filename
+    missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
+
+    if len(missing_files_after) > 0:
+        print("ERROR: Some Radar Scans Missing")
+        print(missing_files_after)
+        exit()
+
+    radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
+
+    # Return list of files
+    return radar_files
+
+
