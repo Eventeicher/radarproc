@@ -766,22 +766,25 @@ def radar_subplots(radar, mom,swp,fig,display,currentscantime,globalamin,globala
     ## PLOT INSITU TORUS PLATFORMS
     if NSSLmm == True:
         for NSSLMM in NSSLMM_df:
-            if print_long== True: print(NSSLMM.name)
-            P_Attr,legend_elements=platform_attr(NSSLMM.name,legend_elements,print_long,r_s=True)
+            name = NSSLMM.get('name', 'fixmenow1')
+            if print_long== True: print(name)
+            P_Attr,legend_elements=platform_attr(name,legend_elements,print_long,r_s=True)
 
             var = {'name': 'fixthisname', 'max': 1000.0, 'min': 0.0}
             print("fix me I am broken A")
             #platform_plot(NSSLMM, radartime, var, ax_n, P_Attr, print_long, e_test )
     if NEBmm == True:
         for UNLMM in UNLMM_df:
-            if print_long== True: print(UNLMM.name)
-            P_Attr,legend_elements=platform_attr(UNLMM.name,legend_elements,print_long,r_s=True)
+            name = UNLMM.get('name', 'fixmenow1')
+            if print_long== True: print(name)
+            P_Attr,legend_elements=platform_attr(name,legend_elements,print_long,r_s=True)
             var = {'name': 'fixthisname', 'max': 1000.0, 'min': 0.0}
             print("fix me I am broken B")
             #platform_plot(UNLMM,radartime, var, ax_n, P_Attr, print_long,e_test)
     if UASd == True:
         for UAS in UAS_files:
-            P_Attr,legend_elements=platform_attr(UAS.name,legend_elements,print_long,r_s=True)
+            name = UAS.get('name', 'fixmenow1')
+            P_Attr,legend_elements=platform_attr(name,legend_elements,print_long,r_s=True)
             var = {'name': 'fixthisname', 'max': 1000.0, 'min': 0.0}
             print("fix me I am broken C")
             #platform_plot(UAS,radartime, var, ax_n, P_Attr, print_long, e_test)
@@ -834,11 +837,12 @@ def time_series(day,fig,currentscantime,globalamin,globalamax,p_var,gs,radar_sub
             pass
         else:
             for platform_file in platform_df:
-                if print_long== True: print(str(platform_file.name))
+                name = platform_file.get('name', 'fixmenow2')
+                if print_long== True: print(str(name))
 
                 ## Set up line colors and legend labels
                 b_array=[] #blank array
-                p_attr, legend_elements = platform_attr(platform_file.name,b_array) #get the attributes (color, label, etc)
+                p_attr, legend_elements = platform_attr(name,b_array) #get the attributes (color, label, etc)
 
                 ## Should ploting data be masked?
                 # if you only want to mask certain platforms set up an if-statement to assign the "masking" variable
