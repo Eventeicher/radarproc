@@ -56,6 +56,8 @@ from os.path import expanduser
 
 from joblib import Memory
 
+from joblib import Parallel, delayed
+
 # To run with a) warnings and b) stack trace on abort
 # python3 -Walways  -q -X faulthandler plot_nexrad_insitu.py
 
@@ -1120,6 +1122,23 @@ def radar_from_nextrad_file(radar_file):
 cached_radar_from_nextrad_file = function_cache_memory.cache( radar_from_nextrad_file )
 
 
+def plot_radar_file(radar_file, r_only, config, day, globalamin, globalamax, p_var, p_of_int,CS3, e_test):
+    i = 0
+    radar = None
+
+    print("[{}] open_pyart, scan file_name = {}\n".format(i, radar_file))
+    try:
+        radar = cached_radar_from_nextrad_file (radar_file)
+    except:
+        print("****************    Failed to convert file: ", radar_file)
+        print("****************    Failed to convert file: ", radar_file)
+        print("****************    Failed to convert file: ", radar_file)
+
+    #testing_plots(radar,i,j,r_only,globalamin,globalamax,p_var,e_test)
+    #plot_with_WSR(radar,i,j)
+
+    if radar is not None:
+        ppiplot(r_only, radar, config.g_download_directory, day, globalamin,globalamax, p_var, p_of_int,CS3, e_test)
 
 
 ###############################################################################################
@@ -1242,24 +1261,18 @@ for r in r_ofintrest:
     print("Radar files to process:")
     print(radar_files)
 
+
+    Parallel(n_jobs=5, verbose=10)(delayed(plot_radar_file)(radar_file, r_only, config, day, globalamin, globalamax, p_var, p_of_int,CS3, e_test) for radar_file in radar_files)
+
     #open the downloaded files as pyart objects
-    radar_list=[]
-    i=0
-    for radar_file in radar_files:
-        i = i+1
-        print("[{}] open_pyart, scan file_name = {}\n".format(i, radar_file))
-        try:
-            radar = cached_radar_from_nextrad_file (radar_file)
-        except:
-            print("Failed to convert file: ", radar_file)
+    #radar_list=[]
+    #for radar_file in radar_files:
+    #    i = i+1
+    # plot_radar_file(i, radar_file, r_only, config, day, globalmin, globalmax, p_var, p_of_int,CS3, e_test)
 
-        print(i,radar.info())
-        #testing_plots(radar,i,j,r_only,globalamin,globalamax,p_var,e_test)
-        #plot_with_WSR(radar,i,j)
 
-        #why am i calling radar and radarlist to this function when I am in a loop that is interating through these to values?
-        ppiplot(r_only, radar, config.g_download_directory, day, globalamin,globalamax, p_var, p_of_int,CS3, e_test)
-    #plot_with_WSR(test2)
+
+   #plot_with_WSR(test2)
     #print(timeranges_each_r)
 
     #tt=t.rename(columns={'datetime':r})
