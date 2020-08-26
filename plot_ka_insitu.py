@@ -386,56 +386,6 @@ def det_nearest_WSR(p_df):
     return r_ofintrest
 
 # * * *
-def get_WSR_from_AWS(start, end, radar_id, download_directory):
-    ''' Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
-    ----------
-    INPUTS start: datetime;  start of the desired timerange
-           end: datetime; end of the desired timerange
-           radar_id : string;  four letter radar designation
-           download_directory: string; location for directory containing the downloaded radarfiles
-    -------
-    RETURN radar_list : Py-ART Radar Objects
-    '''
-    #Create this at the point of use otherwise it saves everything and eventually crashes
-    conn = nexradaws.NexradAwsInterface()
-
-    #Det the radar scans that fall within the time randge for a given radar site
-    scans = conn.get_avail_scans_in_range(start, end, radar_id)
-    print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
-
-    #Dont download files that you alrady have ....
-    path = config.filesys+ 'TORUS_Data/'+ config.day + '/radar/Nexrad/test_Nexrad_files'
-
-    if not os.path.exists(path):
-        #  Path(path).mkdir(parents=True, exist_ok=True)
-        Path(path).mkdir(parents=True)
-
-    # missing_scans is a list of scans we don't have and need to download create_filepath returns tuple of
-    # (directory, directory+filename) [-1] returns the directory+filename
-    missing_scans = list(filter(lambda x: not Path(x.create_filepath(path, False)[-1]).exists(), scans))
-
-    # missing files is the list of filenames of files we need to download
-    missing_files = list(map(lambda x: x.create_filepath(path, False)[-1], missing_scans))
-    print("missing "+ str(len(missing_files))+ " of "+ str(len(scans))+ " files\n"+ missing_files)
-
-    results = conn.download(missing_scans, path, keep_aws_folders=False)
-
-    print('{}\n{} downloads failed: {}\n'.format(results.success, results.failed_count, results.failed))
-    #print("Results.iter_success : {}\n".format(reults.iter_success()))
-
-    # missing_scans_after is a list of scans we don't have (download failed) create_filepath returns tuple of
-    # (directory, directory+filename) [-1] returns the directory+filename
-    missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path, False)[-1]).exists(), scans))
-
-    if len(missing_files_after) > 0:
-        print("ERROR: Some Radar Scans are Missing \n"+ str(missing_files_after))
-        exit()
-
-    radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
-    # Return list of files
-    return radar_files
-
-# * * *
 def read_from_nexrad_file(radar_file):
     radar = pyart.io.read_nexrad_archive(radar_file)
     return radar
