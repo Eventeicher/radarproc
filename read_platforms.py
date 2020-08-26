@@ -146,10 +146,13 @@ def maskdata(p_var, platform_file, mask=True):
     '''
     platform_unmasked= platform_file[p_var].values
 
+    platform_data = platform_unmasked
+
     if mask== False:
         platform_data= platform_unmasked
     elif mask== True:
-        platform_name= str(platform_file.name)
+        name = platform_file.get('name', 'fixmenow3')
+        platform_name= str(name)
         print("platform_name = ", platform_name)
 
         if (platform_name in ['FFld_df','WinS_df','LIDR_df','Prb1_df','Prb2_df']):
