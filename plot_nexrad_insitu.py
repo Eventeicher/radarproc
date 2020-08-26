@@ -570,8 +570,8 @@ def ppiplot(r_only,radar,download_dir,day,globalamin, globalamax,p_var,p_of_int,
     display = pyart.graph.RadarMapDisplay(radar)
 
     ## Plot instuments on subplots
-    post=radar_subplots('refl',swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,r_site,e_test)
-    post=radar_subplots('vel',swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,r_site,e_test)
+    post=radar_subplots(radar,'refl',swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,r_site,e_test)
+    post=radar_subplots(radar,'vel',swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,r_site,e_test)
     if r_only == False:
         time_series(day,fig,currentscantime,globalamin, globalamax, p_var,gs,radar_sub=True)
 
@@ -606,7 +606,7 @@ def ppiplot(r_only,radar,download_dir,day,globalamin, globalamax,p_var,p_of_int,
     print('\a')
     return
 
-def radar_subplots(mom,swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,r_site,e_test):
+def radar_subplots(radar, mom,swp,fig,display,currentscantime,globalamin,globalamax,p_var,p_of_int,gs,r_site,e_test):
     if print_long== True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
 
     ## SET UP PLOTTING CONTROLS
