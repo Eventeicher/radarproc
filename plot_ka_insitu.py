@@ -180,7 +180,12 @@ def radar_subplots(mom, Data, t_R, fig, sub_pos, leg, print_long, e_test):
     ## SET UP SUBPLOTS
     ax_n = fig.add_subplot(sub_pos, projection= t_R.R_Proj)
     ax_n.text(.5, -.065, p_title, transform= ax_n.transAxes, horizontalalignment='center', fontsize=40) #the radar subplot titles
-    t_R.display.plot_ppi_map(field, sweep, title_flag=False, colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lat=t_R.Domain.ymin, max_lat=t_R.Domain.ymax, min_lon=t_R.Domain.xmin, max_lon=t_R.Domain.xmax, embelish=False)
+    try:
+        t_R.display.plot_ppi_map(field, sweep, title_flag=False, colorbar_flag=False, cmap=c_scale, ax=ax_n, vmin=vminb, vmax=vmaxb, min_lat=t_R.Domain.ymin, max_lat=t_R.Domain.ymax, min_lon=t_R.Domain.xmin, max_lon=t_R.Domain.xmax, embelish=False)
+    except: 
+        print(Data['P_Radar'].rfile.info())
+        print(Data['P_Radar'].Scan_time)
+        #  exit()
     t_R.display.label_xaxis_x()
 
     ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
@@ -338,13 +343,12 @@ def time_series(ts, Data, fig, sub_pos, print_long, e_test):
         TSleg_elements.append(TSleg_entry)
 
         ax2 = ax_n.twinx()
-        ax2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.5)
+        ax2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05)
         TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
         TSleg_elements.append(TSleg_entry)
 
         ax_n.yaxis.set_major_locator(LinearLocator(numticks=5))
         ax_n.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
-        ax_n.tick_params(which='major', width=2, length=14, color='black')
         ax_n.axhline(0, color='k', linewidth=5, zorder=10)
         ax_n.set_ylabel('Wind Spd', multialignment='center')
         #set up minor ticks 
@@ -358,14 +362,17 @@ def time_series(ts, Data, fig, sub_pos, print_long, e_test):
         ax2.grid(b=True, which='major', axis='y', color='k', linestyle='--', linewidth=1)
         ax2.tick_params(which='major', width=2, length=14, color='black')
 
-    ## Include the legend
-    leg = ax_n.legend(handles= TSleg_elements, loc='center left', shadow= True, fancybox= True, edgecolor='black')
-    if ts == 'Wind':
-        leg.set_title(config.Wind_Pform)
-        leg.get_title().set_fontweight('bold')
-        leg.get_title().set_fontsize(25)
-        leg.set_zorder(10)
-    
+    '''
+
+        ax2.yaxis.set_major_locator(FixedLocator(np.arange(90, 360, 90)))
+        ax2.tick_params(which='major', width=2, length=14, color='black')
+        ax2.grid(b=True, which='major', axis='y', color='k', linestyle='--', linewidth=1)
+        ax2.set_ylabel('Wind Dir ($^{\circ}$)', multialignment='center')
+        ax2.set_ylim(0, 360)
+    '''
+    # * * * 
+    ax_n.yaxis.set_label_coords(0, 0.1)
+ 
     # if desired this subsets the timerange that is displayed in the timeseries 
     if config.ts_extent != None:
         ax_n.set_xlim(Platform.Scan_time - timedelta(minutes=config.ts_extent), Platform.Scan_time + timedelta(minutes=config.ts_extent))
@@ -377,20 +384,31 @@ def time_series(ts, Data, fig, sub_pos, print_long, e_test):
     ax_n.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
     ax_n.grid(which='minor', axis='x')
     ax_n.grid(which='major', axis='x', color='grey', linewidth=2.5)
+    ax_n.set_xlabel('Time (UTC)')
+    ax_n.tick_params(which='minor', width=2, length=7, color='grey')
+    ax_n.tick_params(which='major', width=2, length=14, color='black')
 
-    a, b, row_num, d, e, f = sub_pos.get_rows_columns()
     #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
-    if len(config.Time_Series) != 1 and row_num == 0: pass 
-    else: 
-        ax_n.set_xlabel('Time (UTC)')
-        ax_n.tick_params(which='minor', width=2, length=7, color='grey')
-        ax_n.tick_params(which='major', width=2, length=14, color='black')
+    num_of_TS= len(config.Time_Series)
+    if num_of_TS != 1 and ax_n.rowNum != (num_of_TS-1):  
+        plt.setp(ax_n.get_xticklabels(), visible=False) 
 
     ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
     #  radar scan and the timerange ploted (via filled colorline) on the radar plots
     if config.r_plotting == True:
         ax_n.axvline(Platform.Scan_time, color='r', linewidth=4, alpha=.5, zorder=10)
         ax_n.axvspan(Platform.Scan_time - timedelta(minutes=config.cline_extent), Platform.Scan_time + timedelta(minutes=config.cline_extent), facecolor='0.5', alpha=0.4, zorder=10)
+    
+    ## Include the legend
+    leg = ax_n.legend(handles= TSleg_elements, loc='center left', shadow= True, fancybox= True, edgecolor='black')
+    if ts == 'Wind':
+        leg.set_title(config.Wind_Pform)
+        leg.get_title().set_fontweight('bold')
+        leg.get_title().set_fontsize(25)
+    print(ax_n.lines)
+    print('***')
+    print(vars(ax_n))
+    
     if print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
 ##############################################################################################
@@ -420,7 +438,6 @@ def det_radar_fields(radar):
     radar.add_field('refl_fix', refl_dict)
     radar.add_field('sw_fix', sw_dict)
     radar.add_field('vel_fix', vel_dict)
-            
 # * * * 
 def det_nearest_WSR(p_df):
     ''' locate the nearest WSR88D site to the specified insitu instruments
@@ -570,7 +587,7 @@ if config.r_plotting == True:
         radar_files = sorted(glob.glob(config.filesys+'TORUS_Data/'+config.day+'/radar/TTUKa/netcdf/*/dealiased_*'))
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
-        Parallel(n_jobs=-2, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)
+        Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)
 
     # * * * 
     if config.Radar_Plot_Type == 'WSR_Plotting': 
@@ -601,7 +618,7 @@ if config.r_plotting == True:
 
             ## Proceed to plot the radar
             ##### + + + + + + + + + + + +
-            Parallel(n_jobs=-2, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test, swp_id= swp_id) for r_file in radar_files)
+            Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test, swp_id= swp_id) for r_file in radar_files)
 
         print(tranges_each_r)
 

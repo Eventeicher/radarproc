@@ -16,9 +16,9 @@ Radar_Plot_Type = 'KA_Plotting'
 
 ## Timeframe
 # ***********
-day = '20190523' #'YYYYMMDD'
+day = '20190526' #'YYYYMMDD'
 #crop the start or end time to a time you specify (set to None to do the whole day)
-#  tstart = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]), 18, 30, 0)
+#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 20, 30, 0)
 #  tend = None
 #  tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),22,45,0)
 #  ts_tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),20,45,0)
@@ -67,4 +67,5 @@ print_long = False
 #  Set to False to not print out the errors that tripped 'try' statements: set to True only while troubleshooting
     ## there will be 'valid' errors caused by looping through platforms etc.... hence needlessly confusing unless troubleshooting
 e_test = False 
+nCPU=1
 
