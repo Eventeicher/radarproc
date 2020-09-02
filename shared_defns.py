@@ -19,6 +19,7 @@ import datetime as dt
 from datetime import datetime, date, timedelta
 from matplotlib.ticker import (LinearLocator, FixedLocator, MaxNLocator, MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 import metpy
+from metpy.plots import StationPlot
 import metpy.calc as mpcalc
 from metpy.units import units
 import cartopy.crs as ccrs
@@ -433,6 +434,7 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
         if MR_file != None:
             if MR_file.metadata['instrument_name'] == 'TTUKa-1': MR_name = 'Ka1'
             elif MR_file.metadata['instrument_name'] == 'TTUKa-2': MR_name = 'Ka2'
+            elif MR_file.metadata['instrument_name'] == 'NOXPRVP': MR_name = 'NOXP'
             elif MR_file.metadata['original_container'] == 'NEXRAD Level II': MR_name = 'WSR88D'
             else: print('What radar are you trying to plot? MR_name = %' %(MR_file.metadata['instrument_name']))
         
@@ -450,10 +452,8 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
                 if config.WSRm == True: read_in_data= True
                 else: read_in_data= False
             if pname == 'NOXP':
-                print('Code to read in NOXP not written yet')
-                read_in_data = False
-                #  if config.NOXPm == True: read_in_data= True
-                #  else: read_in_data= False
+                if config.WSRm == True: read_in_data= True
+                else: read_in_data= False
 
             # if you do want to read in data
             if read_in_data == True: 
@@ -735,7 +735,7 @@ class Torus_Insitu(Platform):
 
             #plot windbarbs
             #  p_sub.iloc[::x,col_index] returns every x'th value
-            stationplot = metpy.plots.StationPlot(ax, p_sub.iloc[::30, col_lon], p_sub.iloc[::30, col_lat], transform=ccrs.PlateCarree())
+            stationplot = StationPlot(ax, p_sub.iloc[::30, col_lon], p_sub.iloc[::30, col_lat], transform=ccrs.PlateCarree())
             stationplot.plot_barb(p_sub.iloc[::30, col_U], p_sub.iloc[::30, col_V], sizes=dict(emptybarb=0), length=7)
         if print_long == True: print('made it through platform_plot')
 
@@ -821,8 +821,8 @@ class Pvar:
     def __init__(self, p_var):
         self.name = p_var
         #establish label for the colorbar and tseries ylabel 
-        if self.name == "Thetae": self.v_lab = "Equivalent Potential Temp [K]"
-        elif self.name == "Thetav": self.v_lab = "Virtual Potential Temp [K]"
+        if self.name == "Thetae": self.v_lab = "Equi. Potential Temp [K]"
+        elif self.name == "Thetav": self.v_lab = "Vir. Potential Temp [K]"
 
     # * * * 
     def find_global_max_min(self, Dict):
@@ -858,7 +858,7 @@ class Master_Plt:
 
         #  print(plt.rcParams)
         plt.rc('font', size= 15)         # controls default text sizes
-        plt.rc('axes', labelsize= 23) # fontsize of the axes title, and x and y labels
+        plt.rc('axes', labelsize= 21) # fontsize of the axes title, and x and y labels
         plt.rc('legend', fontsize= 23, borderpad=.5, facecolor='white', edgecolor= 'black', shadow=True, fancybox=True, framealpha=1)       # legend fontsize
         plt.rc('figure', titlesize= 50, facecolor='white')  # fontsize of the figure title
         #  self.leg_title_font=FontProperties(size=25, weight='bold')
@@ -939,7 +939,7 @@ class Master_Plt:
         ax.grid(which='both')
         ax.set_xlabel('Time (UTC)')
         ax.set_ylabel(YLab)
-        ax.yaxis.set_label_coords(.1, 0)
+        ax.yaxis.set_label_coords(-.03, .5)
 
 
 

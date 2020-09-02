@@ -53,7 +53,7 @@ import config #this is the file with the plotting controls to access any of the 
 print_long, e_test = config.print_long, config.e_test
 
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
-from shared_defns import Add_to_DATA, pform_names, error_printing, Platform, Radar, Master_Plt, T_Plt, Torus_Insitu, Stationary_Insitu
+from shared_defns import Add_to_DATA, pform_names, error_printing, Platform, Radar, Master_Plt, Torus_Insitu, Stationary_Insitu
 
 ##########################################################################
 ###########################
@@ -306,15 +306,18 @@ def time_series(ts, ax_n, Data, PLT, print_long, e_test):
 
         ax_n.axhline(0, color='k', linewidth=5, zorder=10)
         
+
         ax_2 = ax_n.twinx()
         ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05)
         TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
         TSleg_elements.append(TSleg_entry)
 
-        PLT.T_Plt_settings(ts, ax=ax_n, YLab='Wind Spd', ax_t=ax_2, YLab_t='Wind Dir ($^{\circ}$)')
+        PLT.T_Plt_settings(ts, ax=ax_n, YLab='Wind Speed', ax_t=ax_2, YLab_t='Wind Dir ($^{\circ}$)')
         
         leg = ax_n.legend(handles= TSleg_elements, loc='center left')
         leg.set_title(config.Wind_Pform, prop=PLT.leg_title_font)
+        leg.remove()
+        ax_2.add_artist(leg)
         
     #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
     #  num_of_TS= len(config.Time_Series)
@@ -331,9 +334,9 @@ def time_series(ts, ax_n, Data, PLT, print_long, e_test):
     #  if ts == 'Wind':
         #  leg.set_title(config.Wind_Pform, prop=PLT.leg_title_font)
 
-    print(ax_n.lines)
-    print('***')
-    print(vars(ax_n))
+    #  print(ax_n.lines)
+    #  print('***')
+    #  print(vars(ax_n))
     
     if print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
@@ -413,7 +416,7 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
 
     # missing files is the list of filenames of files we need to download 
     missing_files = list(map(lambda x: x.create_filepath(path, False)[-1], missing_scans))
-    print("missing "+ str(len(missing_files))+ " of "+ str(len(scans))+ " files\n"+ missing_files)
+    print("missing "+ str(len(missing_files))+ " of "+ str(len(scans))+ " files\n"+ str(missing_files))
 
     results = conn.download(missing_scans, path, keep_aws_folders=False)
 
@@ -439,12 +442,17 @@ def read_from_nexrad_file(radar_file):
 def read_from_KA_file(radar_file):
     radar = pyart.io.read(radar_file)
     return radar
+def read_from_NOXP_file(radar_file):
+    #  radar = pyart.io.read(radar_file)
+    radar = pyart.io.read_cfradial(radar_file)
+    return radar
 # Note: Cached version is cached on the file name, not the file contents.
 # If file contents change you need to invalidate the cache or pass in the file contents directly to this function
 #  function_cache_memory = Memory(config.g_cache_directory,verbose=1)
 function_cache_memory = Memory(config.temploc, verbose=1)
 cached_read_from_nexrad_file = function_cache_memory.cache( read_from_nexrad_file )
 cached_read_from_KA_file = function_cache_memory.cache( read_from_KA_file )
+cached_read_from_NOXP_file = function_cache_memory.cache( read_from_NOXP_file )
 
 
 # * * * 
@@ -460,7 +468,7 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
     if config.Radar_Plot_Type == 'KA_Plotting':
         ## Read the radar file
         radar = cached_read_from_KA_file(r_file)
-        ## If file contains a ppi scan proceed we are currently not interested in plotting the RHI scans
+        ## If file contains a ppi scan proceed; we are currently not interested in plotting the RHI scans
         if radar.scan_type == 'ppi':
             for swp_id in range(radar.nsweeps):
                 tilt_ang = radar.get_elevation(swp_id) ## Det the actual tilt angle of a given sweep (returns an array)
@@ -469,7 +477,18 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
                     print("\nProducing Radar Plot:")
                     #  Assign radar fields and masking
                     det_radar_fields(radar)
-    #  print(radar.info(level='compact'))
+    
+    if config.Radar_Plot_Type == 'NOXP_Plotting':
+        ## Read the radar file
+        radar = cached_read_from_NOXP_file(r_file)
+        for swp_id in range(radar.nsweeps):
+            tilt_ang = radar.get_elevation(swp_id) ## Det the actual tilt angle of a given sweep (returns an array)
+            ## Check to see if the radarfile matches the elevation tilt we are interested in
+            if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
+                print("\nProducing Radar Plot:")
+                #  Assign radar fields and masking
+
+    if config.print_radar_info== True: print(radar.info(level='compact'))
 
     ## Read in radar data and add to Data dict
     ##### + + + + + + + + + + + + + + + + + + +
@@ -511,6 +530,16 @@ if config.r_plotting == True:
     if config.Radar_Plot_Type == 'KA_Plotting':
         ## Get radar files
         radar_files = sorted(glob.glob(config.filesys+'TORUS_Data/'+config.day+'/radar/TTUKa/netcdf/*/dealiased_*'))
+        ## Proceed to plot the radar
+        ##### + + + + + + + + + + + +
+        Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)
+    
+    # * * * 
+    if config.Radar_Plot_Type == 'NOXP_Plotting':
+        ## Get radar files
+        radar_files = sorted(glob.glob(config.temploc+config.day+'/radar/NOXP/'+config.day+'/*/sec/*'))
+        print(config.temploc+config.day+'/radar/NOXP/'+config.day+'/sec/*')
+        print(radar_files)
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)
