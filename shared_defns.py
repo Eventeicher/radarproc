@@ -529,7 +529,7 @@ class Platform:
         self.m_style, self.m_color, self.m_size, self.l_color, self.leg_str, self.leg_entry = pform_attr(self.name)
 
     # * * *
-        self.m_style, self.m_color, self.l_color, self.leg_str, self.leg_entry = pform_attr(self.name)
+    # Old??     self.m_style, self.m_color, self.l_color, self.leg_str, self.leg_entry = pform_attr(self.name)
 
     # * * *
     @classmethod
