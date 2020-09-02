@@ -44,10 +44,10 @@ r_mom = ['refl', 'vel'] #list; the radar moments to plot on the left and right s
 #which other platforms do you wish to plot as overlays to the radar image (aka as markers, colorlines etc) if data is available 
 KAm, WSRm, NOXPm, NSSLm, NEBm, UASm, ASOSm, MESONETSm = True, True, False, True, True, False, True, True 
 MESO_lab, WSR88D_lab, KA_lab, RHI_lab, TIn_lab, ASOS_lab = False, False, False, False, False, False
+country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
 cline_extent = 5 #how long would you like the colorlines for each platforms to cover +-x min (also control width of greybox on tseries) 
 ts_extent = 30 #so actually 60 min
 #  ts_extent = None #so actually 60 min
-country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
 
 #list; include in the list the type names for the pforms you would like masked (this only controls whats plotted on the Tseries) 
 #  if none leave as blank list, will not work if a mask had not been previously applied to the dataset (which can be done in the classes)

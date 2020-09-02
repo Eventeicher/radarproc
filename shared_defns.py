@@ -4,15 +4,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cmx
 from matplotlib.lines import Line2D
+import matplotlib
+from matplotlib.font_manager import FontProperties
 from matplotlib.transforms import Bbox
 import matplotlib.patheffects as PathEffects
+import matplotlib.dates as mdates
 import matplotlib.patches as mpatches
+import matplotlib.dates as mdates
+from matplotlib import ticker
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from netCDF4 import num2date
 import pandas as pd
 import datetime as dt
 from datetime import datetime, date, timedelta
+from matplotlib.ticker import (LinearLocator, FixedLocator, MaxNLocator, MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 import metpy
-import metpy.plots
 import metpy.calc as mpcalc
 from metpy.units import units
 import cartopy.crs as ccrs
@@ -709,26 +715,27 @@ class Torus_Insitu(Platform):
                 x, y = p_sub['lon'].values, p_sub['lat'].values
                 ax.plot([x[i], x[i+1]], [y[i], y[i+1]], c=border_c, linewidth=10.5, transform=ccrs.PlateCarree(), zorder=3)
                 #This is the colorramp colorline
-                ax.plot([x[i], x[i+1]], [y[i], y[i+1]], c=C[i], linewidth=7.5, transform=ccrs.PlateCarree(), zorder=4)
+                ax.plot([x[i], x[i+1]], [y[i], y[i+1]], c=C[i], linewidth=7.5, transform=ccrs.PlateCarree(), zorder=4) 
 
             #find the value of the index that is halfway through the dataset (this will be the index associated with radar_scantime)
             mid_point = (p_sub.index[-1] - p_sub.index[0]) / 2
             col_lon, col_lat = p_sub.columns.get_loc('lon'), p_sub.columns.get_loc('lat')
             col_U, col_V = p_sub.columns.get_loc('U'), p_sub.columns.get_loc('V')
+            mid_lon, mid_lat = p_sub.iloc[mid_point, col_lon], p_sub.iloc[mid_point, col_lat] 
 
             #plot the platform marker at the time closest to the scantime (aka the time at the halfway point of the subset platform dataframe)
-            ax.plot(p_sub.iloc[mid_point, col_lon], p_sub.iloc[mid_point, col_lat], transform=ccrs.PlateCarree(), marker=self.m_style, markersize=self.m_size,
+            ax.plot(mid_lon, mid_lat, transform=ccrs.PlateCarree(), marker=self.m_style, markersize=self.m_size,
                     markeredgewidth='3', color=self.m_color, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=10)
             #plot labels for the marker on the plot itself
             if config.TIn_lab == True: 
-                plt.text(p_sub.iloc[mid_point,col_lon]+labelbias[0], p_sub.iloc[mid_point,col_lat]+labelbias[1], p.name, transform=ccrs.PlateCarree(), fontsize=20, zorder=9, path_effects=[patheffects.withstroke(linewidth=4,foreground=color)])
+                plt.text(mid_lon+labelbias[0], mid_lat+labelbias[1], p.name, transform=ccrs.PlateCarree(), fontsize=20, path_effects=[patheffects.withstroke(linewidth=4)])
 
             #plot a dot at the end of the colorline in the direction the platform is moving (aka the last time in the subset dataframe)
-            ax.plot(p_sub.iloc[-1, col_lon], p_sub.iloc[-1, col_lat], transform=ccrs.PlateCarree(), marker='.', markersize=10, markeredgewidth='3', color='k', zorder=9)
+            ax.plot(p_sub.iloc[-1, col_lon], p_sub.iloc[-1, col_lat], transform=ccrs.PlateCarree(), marker='.', markersize=10, markeredgewidth='3', color='k') 
 
             #plot windbarbs
             #  p_sub.iloc[::x,col_index] returns every x'th value
-            stationplot = metpy.plots.StationPlot(ax, p_sub.iloc[::30, col_lon], p_sub.iloc[::30, col_lat], clip_on=True, transform=ccrs.PlateCarree())
+            stationplot = metpy.plots.StationPlot(ax, p_sub.iloc[::30, col_lon], p_sub.iloc[::30, col_lat], transform=ccrs.PlateCarree())
             stationplot.plot_barb(p_sub.iloc[::30, col_U], p_sub.iloc[::30, col_V], sizes=dict(emptybarb=0), length=7)
         if print_long == True: print('made it through platform_plot')
 
@@ -795,11 +802,11 @@ class Radar(Platform):
                     lat2, lon2 = self.getLocation(radius, given_bearing=bearing)
                     latArray.append(lat2)
                     lonArray.append(lon2)
-                R_Plt.display.plot_line_geo(lonArray, latArray, marker=None, color='grey', linewidth=.25) #this plots a circle that connects the spokes
+                Master_Plt.display.plot_line_geo(lonArray, latArray, marker=None, color='grey', linewidth=.25) #this plots a circle that connects the spokes
                
                 #plt the spokes 
                 C, D = self.getLocation(radius, given_bearing = ang)
-                R_Plt.display.plot_line_geo([self.lon, D], [self.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
+                Master_Plt.display.plot_line_geo([self.lon, D], [self.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
 
                 ## optional labels
                 if config.RHI_lab == True:
@@ -842,25 +849,115 @@ class Pvar:
         
 ### set up Master_Plt class (along with subclasses R_Plt (radar plots), and TS_Plt (timeseries plot))
 class Master_Plt:
-    def __init__(self, Data):
-        self.Data = Data #(the data dict)
-class R_Plt(Master_Plt):
     ##Class Variables
     Domain = 'place holder' # The extent of the area to be plotted 
     display = 'place holder' # Define pyart display object for plotting radarfile  
-    
-    def __init__(self, Data):
-        R_Plt.Domain = Platform.getLocation(Data[config.Centered_Pform], offsetkm= config.offsetkm) 
-        self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
-        # Define pyart display object for plotting radarfile  
-        R_Plt.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile) 
-        # Set the limits in the display object (this will enforce the desired plotting domain)
-        #  self.display.set_limits(xlim=(self.Domain.xmin, self.Domain.xmax), ylim=(self.Domain.ymin, self.Domain.ymax))
-        # Set the projection of the radar plot 
-        self.R_Proj = self.display.grid_projection 
-        Master_Plt.__init__(self, Data)
 
-class TS_Plt(Master_Plt):
-    print("place holder")
+    def __init__(self, Data):
+        self.Data = Data #(the data dict)
+
+        #  print(plt.rcParams)
+        plt.rc('font', size= 15)         # controls default text sizes
+        plt.rc('axes', labelsize= 23) # fontsize of the axes title, and x and y labels
+        plt.rc('legend', fontsize= 23, borderpad=.5, facecolor='white', edgecolor= 'black', shadow=True, fancybox=True, framealpha=1)       # legend fontsize
+        plt.rc('figure', titlesize= 50, facecolor='white')  # fontsize of the figure title
+        #  self.leg_title_font=FontProperties(size=25, weight='bold')
+        self.leg_title_font={'size':25, 'weight':'bold'}
+        self.Radar_title_font= {'fontsize':40}
+        #  plt.rc('savefig', bbox= 'tight', pad_inches=.3)
+        #  plt.rc('lines', markeredgewidth= 'grey')
+        #  plt.rc('path.effects', )
+
+        ## Establish the Plot size and layout
+        if len(config.Time_Series) != 0 and len(config.r_mom) != 0:
+            self.fig= plt.figure(figsize=(32,20))
+            if len(config.Time_Series) == 1:
+                self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=[3,2], hspace=.1)
+                self.ts_gs = GridSpecFromSubplotSpec(len(config.Time_Series), 1, subplot_spec=self.outer_gs[1, :])
+            if len(config.Time_Series) == 2:
+                self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=[4,3], hspace=.1)
+                self.ts_gs = GridSpecFromSubplotSpec(len(config.Time_Series), 1, subplot_spec=self.outer_gs[1, :], height_ratios=[2, 3], hspace=0)
+            self.r_gs = GridSpecFromSubplotSpec(1, len(config.r_mom), subplot_spec=self.outer_gs[0, :])
+
+        if len(config.Time_Series) != 0 and len(config.r_mom) == 0:
+            print('this is the layout for time series only')
+        
+        if len(config.Time_Series) == 0 and len(config.r_mom) != 0:
+            print('this is the layout for radar plots only')
+
+
+        #if we are plotting radar 
+        if len(config.r_mom) != 0:
+            #redefine the classvariable for Domain and display
+            Master_Plt.Domain = Platform.getLocation(Data[config.Centered_Pform], offsetkm= config.offsetkm) 
+            #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
+            # Define pyart display object for plotting radarfile  
+            Master_Plt.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile) 
+            # Set the projection of the radar plot 
+            self.R_Proj = self.display.grid_projection
+
+
+    #  class Sub_Plt(Master_Plt):
+        #  if mom != None: #  R_Plt_settings()
+        #  if ts_type != None: #  T_Plt_settings()
+
+    def R_Plt_settings(self,ax_n):
+        plt.rc('font',weight='bold')
+
+    def T_Plt_settings(self, ts, ax, YLab, ax_t=None, YLab_t=None):
+        if ax_t != None:
+            if ts == 'Wind':
+                ax_t.set_ylim(0, 360)
+                ax_t.yaxis.set_major_locator(FixedLocator(np.arange(0, 450, 90)))
+                ax_t.tick_params(which='major', width=2, length=14, color='black')
+                ax_t.set_ylabel(YLab_t)
+        
+        ax.xaxis.set_minor_locator(AutoMinorLocator(6)) # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
+        
+        ax.tick_params(which='minor', axis='both', width=2, length=7, color='grey')
+        ax.tick_params(which='minor', axis='y', grid_linestyle=':')
+        ax.tick_params(which='major', axis='both', width=2, length=14, color='black', grid_linewidth=2.5)
+        ax.tick_params(which='major', axis='y', grid_color='grey', grid_linewidth=2, grid_linestyle='--', grid_alpha=.8)
+    
+        if ts == 'Wind':
+            ax.set_ylim(0)
+            ax.yaxis.set_major_locator(LinearLocator(numticks=5))
+            ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
+
+        if ts in ['Thetav','Thetae']:
+            ax.set_ylim(self.Data['Var'].global_min, self.Data['Var'].global_max)
+            ax.yaxis.set_major_locator(MultipleLocator(5)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
+            ax.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
+
+        # if desired this subsets the timerange that is displayed in the timeseries 
+        if config.ts_extent != None:
+            ax.set_xlim(Platform.Scan_time - timedelta(minutes=config.ts_extent), Platform.Scan_time + timedelta(minutes=config.ts_extent))
+        
+        ax.set_axisbelow('line') 
+        ax.grid(which='both')
+        ax.set_xlabel('Time (UTC)')
+        ax.set_ylabel(YLab)
+        ax.yaxis.set_label_coords(.1, 0)
+
+
+
+#######################################################
+        #  plt.rc('axes', xmargin = 0,  ymargin=0)
+        #  if ts == 'Wind':
+            #  with mpl.rc_context(rc={})
+
+    #  def things_for_rc():
+        #  plt.rc('font',weight='bold')
+        #  plt.rc('xtick.major', size=5, pad=7)
+        #  plt.rc('xtick', labelsize=15)
+        #  plt.rc('grid',c='.5', ls='-',lw=5)
+#
+    #  @ticker.FuncFormatter
+    #  def ticklab_format(x, pos):
+        #  return f'[{x:.2f}]'
+    #  ax_n.xaxis.set_major_formatter(ticklab_format)
+
     #  @staticmethod
     #  def plot_bground_features():
