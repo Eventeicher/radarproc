@@ -257,7 +257,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
         if so record locations and names of the sites
     '''
     if pname == 'WTx_M':
-        wtm_df = pd.read_csv(config.g_root+'West_TX_mesonets.csv')
+        wtm_df = pd.read_csv(config.g_root+'/West_TX_mesonets.csv')
         #if there is not a file in your directory this will cause a failure for d_testing
         p_test = wtm_df.iloc[0]
         #  if testing for data availability (and the defn has not failed yet) the func will end here
@@ -266,7 +266,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
 
     # * * *
     if pname == 'OK_M':
-        wtm_df = pd.read_csv(config.g_root+'OKmeso.csv')
+        wtm_df = pd.read_csv(config.g_root+'/OKmeso.csv')
         wtm_df.rename(columns = {'nlat':'lat', 'elon':'lon'}, inplace = True)
         #if there is not a file in your directory this will cause a failure for d_testing
         p_test = wtm_df.iloc[0]
@@ -276,7 +276,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
 
     # * * *
     if pname == 'IA_M':
-        wtm_df = pd.read_csv(config.g_root+'Iowa_meso.csv')
+        wtm_df = pd.read_csv(config.g_root+'/Iowa_meso.csv')
         #if there is not a file in your directory this will cause a failure for d_testing
         p_test = wtm_df.iloc[0]
         #  if testing for data availability (and the defn has not failed yet) the func will end here
@@ -285,7 +285,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
 
     # * * *
     if pname == 'ASOS':
-        ASOS_df = pd.read_csv(config.g_root+'ASOS_stations.csv')
+        ASOS_df = pd.read_csv(config.g_root+'/ASOS_stations.csv')
         ASOS_df.rename(columns = {'CALL':'Stn_ID', 'LAT':'lat', 'LON':'lon'}, inplace = True)
         #if there is not a file in your directory this will cause a failure for d_testing
         p_test = ASOS_df.iloc[0]
