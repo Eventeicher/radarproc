@@ -439,6 +439,7 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
         if MR_file != None:
             if MR_file.metadata['instrument_name'] == 'TTUKa-1': MR_name = 'Ka1'
             elif MR_file.metadata['instrument_name'] == 'TTUKa-2': MR_name = 'Ka2'
+            elif MR_file.metadata['instrument_name'] == 'NOXPRVP': MR_name = 'NOXP'
             elif MR_file.metadata['original_container'] == 'NEXRAD Level II': MR_name = 'WSR88D'
             else: print('What radar are you trying to plot? MR_name = %' %(MR_file.metadata['instrument_name']))
 
@@ -458,8 +459,8 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
             if pname == 'NOXP':
                 print('Code to read in NOXP not written yet')
                 read_in_data = False
-                #  if config.NOXPm == True: read_in_data= True
-                #  else: read_in_data= False
+                if config.NOXPm == True: read_in_data= True
+                else: read_in_data= False
 
             # if you do want to read in data
             if read_in_data == True:
