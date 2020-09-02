@@ -1,0 +1,133 @@
+Loc_short,Loc_long,lat,lon,Elev,Stn_ID
+5ENE Abernathy,Abernathy/Hale County,33.87538,-101.75718,3333 ft.,ABER
+6WSW Adrian,Adrian/Oldham County,35.25347,-102.76158,4260 ft.,ADRI
+3WSW Aiken,Aiken/Hale County,34.13305,-101.56952,3321 ft.,AIKE
+7SSE Amarillo,Amarillo/Randall County,35.1127,-101.79964,3611 ft.,AMAS
+9NNE Amarillo,Amarillo/Potter County,35.33597,-101.80627,3346 ft.,AMAN
+15NNW Amarillo,Amarillo/Potter County,35.41648,-101.93224,3323 ft.,AMNW
+1NE Amherst,Amherst/Lamb County,34.02178,-102.40453,3647 ft.,AMHE
+2E Andrews,Andrews/Andrews County,32.32008,-102.51669,3169 ft.,ANDR
+6SSW Anton,Anton/Hockley County,33.72525,-102.19082,3405 ft.,ANTO
+3NE Aspermont,Aspermont (Stonewall Co. Airp.),33.16789,-100.19602,1740 ft,ASPE
+1WNW Big Lake,Big Lake (Reagan Co. Airport),31.19311,-101.46936,2701 ft.,BIGL
+11 WNW Bootleg,Western Deaf Smith County,34.88613,-102.99034,4423 ft.,BOOT
+7E Borger,Borger/Spring Creek,35.67137,-101.27561,3120 ft.,BORG
+1WSW Boys Ranch,Boys Ranch/Oldham County,35.52604,-102.26796,3205 ft.,BOYS
+2S Brownfield,Brownfield/Terry County,33.15188,-102.27102,3314 ft.,BROW
+6E Canadian,Gene Howe WMA/Hemphill,35.91842,-100.28453,2425 ft.,CANA
+13E Canyon,Palo Duro Canyon SP RIM,34.98564,-101.69248,3461 ft.,PALO
+16ESE Canyon,Palo Duro Canyon SP FLOOR,34.93622,-101.63712,2838 ft.,PDCF
+"1NW Castolon, BBNP",Big Bend NP/Brewster County,29.14592,-103.52717,2184 ft.,CAST
+2NNE Childress,Childress/Childress County,34.4565,-100.19891,1943 ft.,CHIL
+2WSW Clarendon,Clarendon/Donley County,34.92492,-100.93,2836 ft.,CLAR
+12SW Claude,North Rim PDC/Armstrong Co.,34.98332,-101.50057,3451 ft.,CLAU
+2WNW Clyde,Clyde/Callahan County,32.41353,-99.53405,2017 ft.,CLYD
+5NW Colorado City,Colorado City/Mitchell County,32.45375,-100.92357,2203 ft.,COLO
+Comanche Springs,Comanche Springs/Foard Co.,33.99226,-99.95794,1605 ft.,COMA
+2N Coyanosa,Coyanosa/Pecos County,31.27669,-103.06708,2569 ft.,COYA
+1NNW Crane,Crane (Crane County Airport),31.41521,-102.36191,2549 ft,CRAN
+1E Crowell,Crowell/Foard County,33.98317,-99.71207,1483 ft.,CROW
+1N Dell City,Dell City/Hudspeth County,31.94701,-105.19974,3708 ft.,DELL
+7WNW Denver City,Denver City/Yoakum County,32.99082,-102.93871,3652 ft.,DENV
+2NE Dimmitt,Dimmitt/Castro County,34.56751,-102.29317,3876 ft.,DIMM
+3WNW Doole,Eastern Concho County,31.41407,-99.64053,1565 ft.,DOOL
+2SW Dora NM,Dora NM/Roosevelt County,33.92005,-103.35778,4340 ft.,DORA
+3W Dozier,Dozier/Collingsworth County,35.08036,-100.39058,2267 ft.,DOZI
+9WSW Earth,Earth/Lamb County,34.19133,-102.55808,3752 ft.,EART
+2SW Endee NM,Endee/Quay County,35.1073,-103.1244,3947 ft.,ENDE
+3SSE Estelline,Estelline/Hall County,34.49807,-100.42209,1894 ft.,ESTE
+Fort Chadbourne,Fort Chadbourne/Coke County,32.04165,-100.25023,2011 ft.,CHAD
+Fort Lancaster,Fort Lancaster/Crockett,30.66312,-101.69082,2125 ft.,LANC
+Fort McKavett,Fort McKavett/Menard County,30.8237,-100.1087,2177 ft.,MCKA
+2NNE Floydada,Floydada/Floyd County,34.00158,-101.32588,3179 ft.,FLOY
+3WNW Fluvanna,Northeast Borden County,32.89903,-101.20189,2705 ft.,FLUV
+2NE Friona,Friona/Parmer County,34.6545,-102.69097,4005 ft.,FRIO
+1WNW Fritch,Lake Meredith/Moore County,35.64817,-101.6242,3164 ft,FRIT
+2 ESE Gail,Gail/Borden County,32.75508,-101.41439,2547 ft.,GAIL
+3W Goodlett,Western Hardeman County,34.34389,-99.93972,1644 ft.,GOOD
+Goodnight,Goodnight/Armstrong County,35.03022,-101.18506,3155 ft.,GDNT
+5SSW Graham,Graham/Garza County,33.08152,-101.51615,2870 ft,MACY
+10WSW Guthrie,Guthrie/King County,33.56703,-100.48061,1998 ft.,PITC
+2SSE Hackberry,Hackberry/Cottle County,33.90454,-100.13218,1773 ft,HACK
+1E Happy,Happy/Swisher County,34.74251,-101.84251,3612 ft.,HAPP
+3N Hart,Hart/Castro County,34.42319,-102.10735,3694 ft.,HART
+1NW Haskell,Haskell/Haskell County,33.17473,-99.7442,1605 ft.,HASK
+1SW Hefner,Hefner/Knox County,33.52085,-99.54248,1475 ft.,HEFN
+2NW Hereford,Hereford/Deaf Smith,34.83075,-102.42483,3863 ft,HERE
+4SSW Hesperus CO,Old Fort Lewis/La Plata County,37.23833,-108.05175,7745 ft,FTLW
+5NW Hobbs NM,"Hobbs, NM/ Lea County",32.76117,-103.19157,3691 ft,NMJC
+1SSE Jayton,Jayton (Kent Co. Airport),33.23241,-100.56778,2010 ft.,JAYT
+1SSW Junction,Junction (Kimble County),30.47017,-99.78036,1720 ft.,JUNC
+9E Kent,I10-I20 Split (Reeves County),31.08859,-104.0549,3997 ft.,KENT
+3NW Knox City,Knox City/Knox County,33.44557,-99.86497,1470 ft.,KNOX
+1NW Lake Alan Henry,Eastern Garza County,33.07717,-101.05789,2321 ft.,ALAN
+2NW Lake McClellan,Southern Gray County,35.23029,-100.89965,3185 ft,MCCL
+2SE Lamesa,Lamesa/Dawson County,32.70592,-101.93617,2956 ft.,LAMS
+2S Lesley,Lesley/Hall County,34.65228,-100.81403,2156 ft.,LESL
+4S Levelland,Levelland/Hockley County,33.5265,-102.36,3496 ft.,LEVE
+1SSE Lomax,Lomax/Howard County,32.10385,-101.63286,2509 ft.,LOMA
+3WNW Lubbock-TTU,Lubbock/Lubbock County,33.60408,-101.89919,3232 ft.,LBBW2
+3NNW McAdoo,McAdoo/Dickens County,33.77455,-101.03853,3021 ft.,MCAD
+1SSW McCamey,McCamey/Upton County,31.12493,-102.22621,2433 ft.,MCCA
+1E McLean,McLean/Gray County,35.23719,-100.57492,2863 ft.,MCLE
+1NE Memphis,Memphis/Hall County,34.73136,-100.52543,2057 ft.,MEMP
+2NW Menard,Menard/Menard County,30.92892,-99.80947,1924 ft,MENA
+3NNE Mertzon,Mertzon/Irion County,31.29917,-100.80539,2174 ft.,MERT
+1ENE Morton,Morton/Cochran County,33.73476,-102.73978,3754 ft.,MORT
+2SSW Muleshoe,Muleshoe/Bailey County,34.20635,-102.7424,3806 ft.,MULE
+New Home,New Home/Lynn County,33.32529,-101.91314,3245 ft.,NEWH
+1S Northfield,Northfield/Motley County,34.27303,-100.60444,2088 ft.,NORT
+4ENE Odell,Odell/Wilbarger County,34.36533,-99.35414,1371 ft,ODEL
+1N O'Donnell,O'Donnell/Lynn County,32.97988,-101.8322,3054 ft.,ODON2
+6S of Olton,Olton/Lamb County,34.09378,-102.11808,3566 ft.,OLTO
+10SW Paducah,Paducah/Cottle County,33.89053,-100.39886,2021 ft.,PADU
+4E Palo Duro (JA),Palo Duro/Armstrong,34.82221,-101.1191,2591 ft.,PDJA
+1NW Palo Duro Reservoir,Lake Palo Duro/Hansford,36.36382,-101.18185,3034 ft.,PDRE
+2E Pampa,Pampa/Gray County,35.5395,-100.92772,3216 ft.,PAMP
+1SSW Panhandle,Panhandle/Carson County,35.32955,-101.38583,3457 ft.,PANH
+"Persimmon Gap, BBNP",Big Bend NP/Brewster County,29.66039,-103.17512,2869 ft.,PGAP
+"Pine Springs, GMNP",Guadalupe Mtns NP/Culberson,31.89132,-104.80997,5571 ft.,GUMO
+3N Plains,Plains/Yoakum County,33.22814,-102.83936,3711 ft.,PLAI
+1S Plainview,Plainview/Hale County,34.17872,-101.70788,3358 ft.,PLVW
+1NE Post,Post/Garza County,33.20033,-101.36804,2598 ft.,POST2
+3NNW Quitaque,Caprock Canyons SP/Briscoe,34.41253,-101.06838,2650 ft.,CAPR
+1SE Ralls,Ralls/Crosby County,33.6684,-101.37576,3097 ft.,RALL
+12W Lubbock (Reese),Reese Center/Lubbock County,33.60759,-102.04597,3343 ft.,REES2
+3N Roaring Springs,Roaring S./Motley County,33.93635,-100.8454,2615 ft.,ROAR
+11SSW Romero,Romero (Bravo Ranch) Oldham,35.57394,-102.96014,3956 ft.,BRAV
+5W Rotan,Rotan/Fisher County,32.84684,-100.54268,2083 ft.,ROTA
+7NW San Angelo,San Angelo/Tom Green,31.54263,-100.51328,1957 ft.,SASU
+1SW Seagraves,Seagraves/Gaines County,32.93644,-102.57442,3360 ft.,SEAG
+7SSW Segovia,Segovia/Kimble County,30.31556,-99.70619,2236 ft.,SEGO
+2NNE Seminole,Seminole/Gaines County,32.74075,-102.63581,3313 ft.,SEMI
+3NW Seymour,Seymour/Baylor County,33.63233,-99.29098,1302 ft.,SEYM
+1SSE Sierra Blanca,Sierra Blanca/Hudspeth,31.16056,-105.35286,4560 ft.,SIER
+7ESE Silverton,Silverton/Briscoe County,34.4454,-101.1905,3202 ft.,SILV
+2NE Slaton,Slaton/Lubbock County,33.4569,-101.61723,3065 ft.,SLAT
+Smyer,Smyer/Hockley County,33.59298,-102.1654,3397 ft.,SMYE
+3E Snyder,Snyder/Scurry County,32.71614,-100.86167,2431 ft.,SNYD
+3SSW Snyder,Snyder/Scurry County,32.67587,-100.92512,2380 ft.,WTCO
+3ENE South Plains,CC SP Trailways/Floyd County,34.24023,-101.25705,3172 ft.,SOUT
+1W Spur,Spur/Dickens County,33.48085,-100.87636,2287 ft.,SPUR
+5SW St. Lawrence,St. Lawrence/Glasscock County,31.65645,-101.60019,2693 ft.,STLW
+5ESE Stamford,Stamford/Jones County,32.90921,-99.72178,1551 ft.,STAM
+4WSW Sterling City,Sterling City/Sterling County,31.8261,-101.05538,2354 ft.,STER
+1NNW Stinnett,Stinnett/Hutchinson County,35.84392,-101.44713,3322 ft.,STIN
+4WNW Stratford,Stratford/Sherman County,36.35652,-102.13498,3767 ft.,STRA
+8WSW Sundown,Southeast Cochran County,33.38912,-102.60994,3625 ft.,MALL
+11SW Sweetwater,Roscoe/Western Nolan County,32.34587,-100.52778,2485 ft.,SWEE
+3NNE Tahoka,Tahoka/Lynn County,33.20747,-101.78025,3104 ft.,TAHO
+2WNW Tarzan,Tarzan/Martin County,32.31356,-102.00523,2840 ft.,TARZ
+2SW Tatum NM,"Tatum, NM/Lea County",33.23877,-103.35211,4018 ft.,TATU
+1SW Throckmorton,Throckmorton County,33.16806,-99.18623,1378 ft.,THRO
+2SE Truscott,Truscott/Knox County,33.74172,-99.79072,1528 ft.,TRUS
+2ENE Tulia,Tulia/Swisher County,34.54294,-101.7405,3478 ft.,TULI
+2WSW Turkey,Turkey/Hall County,34.37896,-100.93175,2450 ft.,VALL
+3NNE Umbarger,Umbarger/Randall County,34.98683,-102.08411,3758 ft.,UMBA
+3ENE Van Horn,Van Horn/Culberson County,31.05897,-104.79136,3963 ft.,VANH
+Vigo Park,Vigo Park/Swisher County,34.65076,-101.49798,3394 ft.,VIGO
+2E Wall,Wall/Tom Green County,31.37882,-100.26628,1870 ft.,WALL2
+2NNE Weinert,Weinert/Haskell County,33.34468,-99.6659,1504 ft.,WEIN
+Welch,Welch/Dawson County,32.9257,-102.13232,3121 ft.,WELC
+6NW White River Lake,White River Lake/Crosby County,33.52533,-101.16506,2704 ft.,WHIT
+6SSW Wolfforth,Wolfforth/Lubbock County,33.42068,-102.04983,3307 ft.,WOLF

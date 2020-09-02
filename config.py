@@ -22,7 +22,7 @@ print_radar_info= True
 ## Timeframe
 # ***********
 #  day = '20190518' #'YYYYMMDD'
-#  day = '20190517' #'YYYYMMDD'
+day = '20190517' #'YYYYMMDD'
 #crop the start or end time to a time you specify (set to None to do the whole day)
 #  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 20, 30, 0)
 #  tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),22,45,0)
@@ -42,7 +42,8 @@ g_root = '/Volumes/Samsung_T5/Research' # Ellie External SSD
 
 g_mesonet_directory = g_root + '/TORUS_Data/'   # Our Data
 g_download_directory = g_root + '/downloads/'    # Download Storage
-g_plots_directory = g_root + '/plots/' # Plot Output
+#  g_plots_directory = g_root + '/plots/' # Plot Output
+g_plots_directory = g_mesonet_directory # Plot Output
 g_cache_directory = g_root + '/cache/' # Cache
 g_roads_directory = g_root + '/roads/' # Roads data
 
@@ -105,10 +106,10 @@ NSSL_qcflags = ['qc1', 'qc2', 'qc3', 'qc4']
 # *****************
 #  Set to True to print statements when entering/leaving definitions
 #  (helpful to understanding whats going on in the code but prints alot of lines to your terminal)
-print_long = False
+print_long = True
 #  Set to False to not print out the errors that tripped 'try' statements: set to True only while troubleshooting
     ## there will be 'valid' errors caused by looping through platforms etc.... hence needlessly confusing unless troubleshooting
 e_test = False
-nCPU=-2
-#  nCPU=1
+#  nCPU=-2
+nCPU=1
 

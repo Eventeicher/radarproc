@@ -257,7 +257,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
         if so record locations and names of the sites
     '''
     if pname == 'WTx_M':
-        wtm_df = pd.read_csv(config.filesys+'radarproc/West_TX_mesonets.csv')
+        wtm_df = pd.read_csv(config.g_root+'West_TX_mesonets.csv')
         #if there is not a file in your directory this will cause a failure for d_testing
         p_test = wtm_df.iloc[0]
         #  if testing for data availability (and the defn has not failed yet) the func will end here
@@ -266,7 +266,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
 
     # * * *
     if pname == 'OK_M':
-        wtm_df = pd.read_csv(config.filesys+'radarproc/okmeso.csv')
+        wtm_df = pd.read_csv(config.g_root+'OKmeso.csv')
         wtm_df.rename(columns = {'nlat':'lat', 'elon':'lon'}, inplace = True)
         #if there is not a file in your directory this will cause a failure for d_testing
         p_test = wtm_df.iloc[0]
@@ -276,7 +276,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
 
     # * * *
     if pname == 'IA_M':
-        wtm_df = pd.read_csv(config.filesys+'radarproc/Iowa_meso.csv')
+        wtm_df = pd.read_csv(config.g_root+'Iowa_meso.csv')
         #if there is not a file in your directory this will cause a failure for d_testing
         p_test = wtm_df.iloc[0]
         #  if testing for data availability (and the defn has not failed yet) the func will end here
@@ -285,7 +285,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
 
     # * * *
     if pname == 'ASOS':
-        ASOS_df = pd.read_csv(config.filesys+'radarproc/asos_stations.csv')
+        ASOS_df = pd.read_csv(config.g_root+'ASOS_stations.csv')
         ASOS_df.rename(columns = {'CALL':'Stn_ID', 'LAT':'lat', 'LON':'lon'}, inplace = True)
         #if there is not a file in your directory this will cause a failure for d_testing
         p_test = ASOS_df.iloc[0]
@@ -361,8 +361,30 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             else: return WSR_df, 'WSR'
 
     # * * *
-    elif pname == 'NOXP ': print('code for reading NOXP not written yet')
-
+    elif pname == 'NOXP ': 
+        # if the main plotting radar is the NOXP radar
+        if rfile != None:
+            #det the scantime
+            MR_time = datetime.strptime(rfile.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S")
+            #det the location info
+            MR_lat, MR_lon = rfile.latitude['data'][0], rfile.longitude['data'][0]
+            return MR_time, MR_lat, MR_lon , 'MAINR'
+        
+        # Determine whether the NOXP radar was in the plotting domain (if its not the radar being plotted)
+        if rfile == None:
+            if d_testing == True: return True
+            NOXPfiles = sorted(glob.glob(config.temploc+config.day+'/radar/NOXP/'+config.day+'/*/se/*'))
+            for file in NOXPfiles:
+                print(file)
+                #  file.rsplit('/',3)[0]
+                head_tail= os.path.split(file)
+                print(head_tail[1])
+                print(head_tail[1][6:21])
+                str_time = datetime.strptime(head_tail[1][6:21], "%Y%m%d_%H%M%S")
+                print(str_time)
+                print(head_tail[1][25:40])
+                end_time = datetime.strptime(head_tail[1][25:40], "%Y%m%d_%H%M%S")
+                print(end_time)
 # * * * * *
 def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
     if print_long == True: print('Made it into Add_to_DATA')
@@ -458,7 +480,6 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
                 if config.WSRm == True: read_in_data= True
                 else: read_in_data= False
             if pname == 'NOXP':
-                read_in_data = False
                 if config.NOXPm == True: read_in_data= True
                 else: read_in_data= False
 
