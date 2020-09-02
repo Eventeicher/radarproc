@@ -837,6 +837,12 @@ class Pvar:
         for p in Dict.values():
             if hasattr(p,'Min') == True: val_hold.append(p.Min)
             if hasattr(p,'Max') == True: val_hold.append(p.Max)
+        if len(val_hold) == 0:
+            log.debug("Pvar min max = 0.0, 1.0")
+            val_hold.append(0.0)
+            val_hold.append(1.0)
+            log.debug("Pvar min max Could not be determined.  Used sketchy default values.")
+
         self.global_min, self.global_max = min(val_hold), max(val_hold)
 
     # * * *
@@ -846,6 +852,7 @@ class Pvar:
         cmap = cmocean.cm.thermal
         #  cmap=plt.get_cmap('rainbow')
         Z = [[0,0],[0,0]]
+
         levels = np.arange(self.global_min, self.global_max+1, 1)
         self.CS3 = plt.contourf(Z, levels, cmap=cmap)#,transform=datacrs)
         plt.clf()
