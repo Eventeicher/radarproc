@@ -339,7 +339,7 @@ def time_series(ts, ax_n, Data, PLT, print_long, e_test):
     #  print(ax_n.lines)
     #  print('***')
     #  print(vars(ax_n))
-    
+
     if print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
 ##############################################################################################
@@ -541,7 +541,7 @@ if config.r_plotting == True:
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)
-    
+
     # * * * 
     if config.Radar_Plot_Type == 'NOXP_Plotting':
         ## Get radar files

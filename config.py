@@ -74,9 +74,13 @@ r_plotting, t_plotting = True, True
 #  p_var = "Thetae" #which var to plot (current options; Thetae, Thetav)
 p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
 offsetkm = 21 #21 is the best for KA
+<<<<<<< HEAD
 #  offsetkm = 40 #21 is the best for KA
 Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
 #  Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
+=======
+Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
+>>>>>>> 15ee6c4b5110bdb21c4f33cd12da01516cdf7ab5
 Wind_Pform = 'Prb1'
 p_tilt = 1 #what radar elevation tilt (deg) do you want to plot
 #  p_tilt = .5 #what radar elevation tilt (deg) do you want to plot
