@@ -728,6 +728,8 @@ class Torus_Insitu(Platform):
 
             #find the value of the index that is halfway through the dataset (this will be the index associated with radar_scantime)
             mid_point = (p_sub.index[-1] - p_sub.index[0]) / 2
+            mid_point = int(mid_point)  # Must be an int
+
             col_lon, col_lat = p_sub.columns.get_loc('lon'), p_sub.columns.get_loc('lat')
             col_U, col_V = p_sub.columns.get_loc('U'), p_sub.columns.get_loc('V')
             mid_lon, mid_lat = p_sub.iloc[mid_point, col_lon], p_sub.iloc[mid_point, col_lat] 
