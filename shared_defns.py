@@ -724,7 +724,7 @@ class Torus_Insitu(Platform):
                 x, y = p_sub['lon'].values, p_sub['lat'].values
                 ax.plot([x[i], x[i+1]], [y[i], y[i+1]], c=border_c, linewidth=10.5, transform=ccrs.PlateCarree(), zorder=3)
                 #This is the colorramp colorline
-                ax.plot([x[i], x[i+1]], [y[i], y[i+1]], c=C[i], linewidth=7.5, transform=ccrs.PlateCarree(), zorder=4) 
+                ax.plot([x[i], x[i+1]], [y[i], y[i+1]], c=C[i], linewidth=7.5, transform=ccrs.PlateCarree(), zorder=4)
 
             #find the value of the index that is halfway through the dataset (this will be the index associated with radar_scantime)
             mid_point = (p_sub.index[-1] - p_sub.index[0]) / 2
@@ -732,7 +732,7 @@ class Torus_Insitu(Platform):
 
             col_lon, col_lat = p_sub.columns.get_loc('lon'), p_sub.columns.get_loc('lat')
             col_U, col_V = p_sub.columns.get_loc('U'), p_sub.columns.get_loc('V')
-            mid_lon, mid_lat = p_sub.iloc[mid_point, col_lon], p_sub.iloc[mid_point, col_lat] 
+            mid_lon, mid_lat = p_sub.iloc[mid_point, col_lon], p_sub.iloc[mid_point, col_lat]
 
             #plot the platform marker at the time closest to the scantime (aka the time at the halfway point of the subset platform dataframe)
             ax.plot(mid_lon, mid_lat, transform=ccrs.PlateCarree(), marker=self.m_style, markersize=self.m_size,
@@ -742,7 +742,7 @@ class Torus_Insitu(Platform):
                 plt.text(mid_lon+labelbias[0], mid_lat+labelbias[1], p.name, transform=ccrs.PlateCarree(), fontsize=20, path_effects=[patheffects.withstroke(linewidth=4)])
 
             #plot a dot at the end of the colorline in the direction the platform is moving (aka the last time in the subset dataframe)
-            ax.plot(p_sub.iloc[-1, col_lon], p_sub.iloc[-1, col_lat], transform=ccrs.PlateCarree(), marker='.', markersize=10, markeredgewidth='3', color='k') 
+            ax.plot(p_sub.iloc[-1, col_lon], p_sub.iloc[-1, col_lat], transform=ccrs.PlateCarree(), marker='.', markersize=10, markeredgewidth='3', color='k')
 
             #plot windbarbs
             #  p_sub.iloc[::x,col_index] returns every x'th value
