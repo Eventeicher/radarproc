@@ -14,6 +14,7 @@ from os.path import expanduser
 ## File paths
 # ************
 #KA_Plotting or WSR_Plotting
+#Radar_Plot_Type = 'NOXP_Plotting'
 Radar_Plot_Type = 'KA_Plotting'
 #  Radar_Plot_Type = 'WSR_Plotting'
 print_radar_info= True
@@ -83,7 +84,7 @@ rhi_ring = True #do you want the rhi spokes for the KA radars
 r_mom = ['refl', 'vel'] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
 
 #which other platforms do you wish to plot as overlays to the radar image (aka as markers, colorlines etc) if data is available
-KAm, WSRm, NOXPm, NSSLm, NEBm, UASm, ASOSm, MESONETSm = True, True, True, True, True, False, True, True 
+KAm, WSRm, NOXPm, NSSLm, NEBm, UASm, ASOSm, MESONETSm = True, True, True, True, True, False, True, True
 MESO_lab, WSR88D_lab, KA_lab, RHI_lab, TIn_lab, ASOS_lab = False, False, False, False, False, False
 country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
 cline_extent = 5 #how long would you like the colorlines for each platforms to cover +-x min (also control width of greybox on tseries)

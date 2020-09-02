@@ -458,7 +458,8 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
                 if config.WSRm == True: read_in_data= True
                 else: read_in_data= False
             if pname == 'NOXP':
-                if config.WSRm == True: read_in_data= True
+                read_in_data = False
+                if config.NOXPm == True: read_in_data= True
                 else: read_in_data= False
 
             # if you do want to read in data
