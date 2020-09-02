@@ -59,6 +59,14 @@ def error_printing(e_test):
 ###########
 # Data Prep
 ###########
+def time_in_range(start, end, x):
+    """Return true if x is in the range [start, end]"""
+    #  if end == None: end=datetime.utcnow()
+    if end == None: end=datetime.max
+    if start == None: start=datetime.min
+    if start <= end: return start <= x <= end
+    else: return start <= x or x <= end
+
 def pform_names(Type):
     ''' Returns lists of platform names for various platform types; Saves typing in the end
         ---
@@ -100,6 +108,7 @@ def pform_attr(pname):
         #U+1278, #u20a9
     elif pname == 'Ka2': marker_style, marker_color, marker_size, line_color, legend_str= '8', 'xkcd:crimson', 18, 'xkcd:crimson', 'Ka2'
     elif pname == 'Ka1': marker_style, marker_color, marker_size, line_color, legend_str= '8', 'mediumseagreen', 18, 'mediumseagreen', 'Ka1'
+    elif pname == 'NOXP': marker_style, marker_color, marker_size, line_color, legend_str= r'$\P$', 'green', 23, 'black', "NOXP"
     elif pname == 'WSR88D': marker_style, marker_color, marker_size, line_color, legend_str= r'$\Omega$', 'white', 23, 'black', "WSR88D"
 
        ##create the legend elements that will be appended to the legend array
@@ -338,29 +347,6 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
                     return loc, 'KA'
 
     # * * *
-    elif pname == 'WSR88D':
-        # if the main plotting radar is a Wsr88d radar
-        if rfile != None:
-            index_at_start = rfile.sweep_start_ray_index['data'][swp[0]] #Find the beginning loc of given sweep in data array
-            MR_time = num2date(rfile.time['data'][index_at_start], rfile.time['units'])
-            MR_lat, MR_lon = rfile.latitude['data'][0], rfile.longitude['data'][0]
-            return MR_time, MR_lat, MR_lon , 'MAINR'
-
-        # Determine what other WSR sites could fall withing the plotting domain
-        if rfile == None:
-            #save the nexrad locations to an array from the PyART library
-            wsr_locs = pyart.io.nexrad_common.NEXRAD_LOCATIONS
-            WSR_df= pd.DataFrame.from_dict(wsr_locs, orient= 'index')
-            #  WSR_df.reset_index(self, level=None, drop=False, inplace=False, col_level=0, col_fill='')
-            WSR_df.index.name = 'R_Name'
-            WSR_df.reset_index(inplace= True, drop=False)
-            #if no sites in domain this will cause a failure for d_testing
-            p_test = WSR_df.iloc[0]
-            #  if testing for data availability (and the defn has not failed yet) the func will end here
-            if d_testing == True: return True
-            else: return WSR_df, 'WSR'
-
-    # * * *
     elif pname == 'NOXP': 
         # if the main plotting radar is the NOXP radar
         if rfile != None:
@@ -372,22 +358,65 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
         
         # Determine whether the NOXP radar was in the plotting domain (if its not the radar being plotted)
         if rfile == None:
-            #  if d_testing == True: return True
-            if d_testing == True: return False
             path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
             NOXPfiles = sorted(glob.glob(path))
+            file = NOXPfiles[0]
+            #if the code has not failed by this point there is data present; if calling defn in a testing capacity
+            #  the defn will exit at this point (saving computing time) otherwise the defn will cont
+            #  if d_testing == True: return True
+           
+            checking=0
             for file in NOXPfiles:
-                print(file)
-                #  file.rsplit('/',3)[0]
                 head_tail= os.path.split(file)
-                print(head_tail[1])
-                print(head_tail[1][6:21])
                 str_time = datetime.strptime(head_tail[1][6:21], "%Y%m%d_%H%M%S")
-                print(str_time)
-                print(head_tail[1][25:40])
                 end_time = datetime.strptime(head_tail[1][25:40], "%Y%m%d_%H%M%S")
-                print(end_time)
-# * * * * *
+                valid_time = time_in_range(str_time, end_time, Platform.Scan_time)
+
+                if valid_time == True:
+                    if d_testing == True: return True
+                    #cache at some point
+                    r = pyart.io.read_cfradial(file)
+                    Nlat, Nlon = r.latitude['data'][0], r.longitude['data'][0]
+                    
+                    #set up a namedtuple object to hold the new info
+                    r_loc = namedtuple('r_loc', ['lat', 'lon'])
+                    loc = r_loc(lat=Nlat, lon=Nlon)
+                    checking= checking+1
+                    print(checking)
+                    if checking > 1: print('HEYYYYYYYYY !!!!')
+            if checking == 0:
+                if d_testing == True: return False
+            
+            #  if checking <1:
+                #  r_loc = namedtuple('r_loc', ['lat', 'lon'])
+                #  loc = r_loc(lat=np.nan, lon=np.nan)
+            return loc, 'NOXP'
+#
+    #  * * *
+    elif pname == 'WSR88D':
+        #  if the main plotting radar is a Wsr88d radar
+        if rfile != None:
+            index_at_start = rfile.sweep_start_ray_index['data'][swp[0]] #Find the beginning loc of given sweep in data array
+            MR_time = num2date(rfile.time['data'][index_at_start], rfile.time['units'])
+            MR_lat, MR_lon = rfile.latitude['data'][0], rfile.longitude['data'][0]
+            return MR_time, MR_lat, MR_lon , 'MAINR'
+
+        #  Determine what other WSR sites could fall withing the plotting domain
+        #  if rfile == None:
+            #  save the nexrad locations to an array from the PyART library
+            wsr_locs = pyart.io.nexrad_common.NEXRAD_LOCATIONS
+            WSR_df= pd.DataFrame.from_dict(wsr_locs, orient= 'index')
+            WSR_df.reset_index(self, level=None, drop=False, inplace=False, col_level=0, col_fill='')
+            WSR_df.index.name = 'R_Name'
+            WSR_df.reset_index(inplace= True, drop=False)
+            #  if no sites in domain this will cause a failure for d_testing
+            p_test = WSR_df.iloc[0]
+            #  if testing for data availability (and the defn has not failed yet) the func will end here
+            if d_testing == True: return True
+            else: return WSR_df, 'WSR'
+
+
+#  * * * * *
 def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
     if print_long == True: print('Made it into Add_to_DATA')
 
@@ -552,9 +581,6 @@ class Platform:
         self.m_style, self.m_color, self.m_size, self.l_color, self.leg_str, self.leg_entry = pform_attr(self.name)
 
     # * * *
-    # Old??     self.m_style, self.m_color, self.l_color, self.leg_str, self.leg_entry = pform_attr(self.name)
-
-    # * * *
     @classmethod
     def test_data(self, pname, Data=None):
         '''test if there is a datafile for the platform
@@ -638,7 +664,7 @@ class Platform:
         Returns: The subset dataset (df_sub) and a True/False statement regarding any data in the original dataset
                     matched the subsetting criteria (p_deploy)
         '''
-        if self.type == 'KA': Single_Point = True
+        if self.type == 'KA' or self.type == 'NOXP': Single_Point = True
         else: Single_Point = False
 
         #Temporal subset
@@ -804,6 +830,9 @@ class Radar(Platform):
             if self.type == 'KA':
                 #store the loc info for a ka radar object
                 self.lat, self.lon, self.head, self.rhib, self.rhie = Rloc.lat, Rloc.lon, Rloc.head, Rloc.rhib, Rloc.rhie
+                self.marker_label = config.KA_lab
+            elif self.type == 'NOXP':
+                self.lat, self.lon = Rloc.lat, Rloc.lon
                 self.marker_label = config.KA_lab
             elif self.type == 'WSR':
                 #Rloc is a dataframe containing the lats and lons of each WSR88D that is within the plotting domain

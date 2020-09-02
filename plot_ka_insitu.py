@@ -33,6 +33,7 @@ from scipy import ndimage, interpolate
 from operator import attrgetter
 from collections import namedtuple
 import pyart, sys, traceback, shutil, glob, gc
+import argparse
 import time
 import nexradaws
 from pathlib import Path
@@ -56,7 +57,7 @@ if config.country_roads == True:
 print_long, e_test = config.print_long, config.e_test
 
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
-from shared_defns import Add_to_DATA, pform_names, error_printing, Platform, Radar, Master_Plt, Torus_Insitu, Stationary_Insitu
+from shared_defns import Add_to_DATA, pform_names, time_in_range, error_printing, Platform, Radar, Master_Plt, Torus_Insitu, Stationary_Insitu
 
 ##########################################################################
 ###########################
@@ -98,22 +99,20 @@ def ppiplot(Data, print_long, e_test, start_comptime):
             time_series(ts, ax_n, Data, PLT, print_long, e_test)
 
     ## Plot title
-    plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
+    if Data['P_Radar'].name in pform_names('KA') or Data['P_Radar'].name =='WSR88D':
+        plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
+    else: 
+        plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
     file_string = '_'.join(config.Time_Series)
 
     ## Finish plot
     if Data['P_Radar'].name in pform_names('KA'):
         output_name = config.g_plots_directory+config.day+'/mesonets/plots/KA/'+Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
+    if Data['P_Radar'].name == 'NOXP':
+        output_name = config.g_plots_directory+config.day+'/mesonets/plots/NOXP/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
     if Data['P_Radar'].name == 'WSR88D':
         output_name = config.g_plots_directory+config.day+'/mesonets/plots/WSR/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
     print(output_name)
-
-    '''
-    save_dir = os.path.dirname(output_name)
-    print('save_dir:', save_dir)
-    if not os.path.exists(save_dir): Path(save_dir).mkdir(parents=True)
-    if os.path.exists(output_name): print("Plot already exists. ")
-    '''
 
     plt.savefig(output_name, bbox_inches='tight', pad_inches=.3)
     print("Plot took "+ str(time.time() - start_comptime)+ " to complete")
@@ -142,12 +141,16 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
         p_title, c_label, c_scale = 'Reflectivity', 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow'
         if Data['P_Radar'].name in pform_names('KA'):
             field, vminb, vmaxb, sweep = 'refl_fix', -30., 30., Data['P_Radar'].swp
+        if Data['P_Radar'].name == 'NOXP':
+            field, vminb, vmaxb, sweep = 'DBZ', -30., 30., Data['P_Radar'].swp
         if Data['P_Radar'].name == 'WSR88D':
             field, vminb, vmaxb, sweep =  'reflectivity', -10., 75., Data['P_Radar'].swp[0]
     elif mom == 'vel':
         p_title, c_label, c_scale = 'Radial Velocity', 'Velocity [m/s]', 'pyart_balance'
         if Data['P_Radar'].name in pform_names('KA'):
             field, vminb, vmaxb, sweep = 'vel_fix', -40., 40., Data['P_Radar'].swp
+        if Data['P_Radar'].name == 'NOXP':
+            field, vminb, vmaxb, sweep = 'VEL', -40., 40., Data['P_Radar'].swp
         if Data['P_Radar'].name == 'WSR88D':
             field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
     else: print("Hey what just happened!\n Check the Radar moments for spelling")
@@ -204,6 +207,13 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
                         ## Optional textlabel on plot
                         if p.marker_label == True:
                             ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')])
+                    if p.type == 'NOXP': 
+                        ## Plot the marker
+                        ax_n.plot(p.lon, p.lat, transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
+                                  markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
+                        ## Optional textlabel on plot
+                        if p.marker_label == True:
+                            ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')])
                     if p.type == 'WSR':
                         ## Plot the marker
                         ax_n.plot(sites_subdf['lon'], sites_subdf['lat'], transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
@@ -213,7 +223,6 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
                             for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['R_Name']):
                                 trans = PLT.R_Proj.transform_point(x, y, ccrs.Geodetic())
                                 ax_n.text(trans[0]+.03, trans[1]-.01, lab, fontsize= 27)
-                    if p.type == 'NOXP': print('Code not written yet')
 
 
     ## PLOT BACKGROUND FEATURES
@@ -339,7 +348,6 @@ def time_series(ts, ax_n, Data, PLT, print_long, e_test):
     #  print(ax_n.lines)
     #  print('***')
     #  print(vars(ax_n))
-    
     if print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
 ##############################################################################################
@@ -369,6 +377,7 @@ def det_radar_fields(radar):
     radar.add_field('refl_fix', refl_dict)
     radar.add_field('sw_fix', sw_dict)
     radar.add_field('vel_fix', vel_dict)
+
 # * * *
 def det_nearest_WSR(p_df):
     ''' locate the nearest WSR88D site to the specified insitu instruments
@@ -421,19 +430,15 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     #results = conn.download(scans, filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
     #results = conn.download(scans[0:4], temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
 
-    #
     # Don't download files that you already have...
-    #
     path =  download_directory + config.day +'/radar/Nexrad/Nexrad_files/'
 
-    if not os.path.exists(path):
-        Path(path).mkdir(parents=True, exist_ok=True)
+    if not os.path.exists(path): Path(path).mkdir(parents=True, exist_ok=True)
 
     # missing_scans is a list of scans we don't have and need to download
     # create_filepath returns tuple of (directory, directory+filename)
     # [-1] returns the directory+filename
     missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
-
 
     # missing files is the list of filenames of files we need to down load
     missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
@@ -441,7 +446,6 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     print(missing_files)
 
     results = conn.download(missing_scans, path, keep_aws_folders=False)
-
     print(results.success)
     print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
     #print("Results.iter_success : {}\n".format(results.iter_success()))
@@ -490,18 +494,36 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
         #open file using pyart
         try: radar = cached_read_from_nexrad_file(r_file)
         except: print("Failed to convert file: "+str(r_file))
-
+        valid_time = True
+    
     if config.Radar_Plot_Type == 'KA_Plotting':
-        ## Read the radar file
-        radar = cached_read_from_KA_file(r_file)
-        ## If file contains a ppi scan proceed; we are currently not interested in plotting the RHI scans
-        if radar.scan_type == 'ppi':
-            for swp_id in range(radar.nsweeps):
-                tilt_ang = radar.get_elevation(swp_id) ## Det the actual tilt angle of a given sweep (returns an array)
-                ## Check to see if the radarfile matches the elevation tilt we are interested in
-                if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
-                    print("\nProducing Radar Plot:")
-                    #  Assign radar fields and masking
+        head_tail= os.path.split(r_file)
+        time_string= str(20)+str(head_tail[1][13:24])
+        rtime = datetime.strptime(time_string, "%Y%m%d%H%M%S")
+        print(rtime)
+        valid_time = time_in_range(config.tstart, config.tend, rtime)
+        print(valid_time)
+        #  in_time_range= True
+        #  if config.tstart != None:
+            #  if rtime >= config.tstart: pass
+            #  else: in_time_range = False
+        #  if config.tend != None:
+            #  if rtime <= config.tend: pass
+            #  else: in_time_range = False
+        
+        #  if in_time_range == False: print(rfile+' was not in the timerange being plotted')
+        if valid_time == False: print(r_file+' was not in the timerange being plotted')
+        else:
+            ## Read the radar file
+            radar = cached_read_from_KA_file(r_file)
+            ## If file contains a ppi scan proceed; we are currently not interested in plotting the RHI scans
+            if radar.scan_type == 'ppi':
+                for swp_id in range(radar.nsweeps):
+                    tilt_ang = radar.get_elevation(swp_id) ## Det the actual tilt angle of a given sweep (returns an array)
+                    ## Check to see if the radarfile matches the elevation tilt we are interested in
+                    if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
+                        print("\nProducing Radar Plot:")
+                        #  Assign radar fields and masking
                     det_radar_fields(radar)
     
     if config.Radar_Plot_Type == 'NOXP_Plotting':
@@ -513,19 +535,34 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
             if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
                 print("\nProducing Radar Plot:")
                 #  Assign radar fields and masking
+        valid_time = True
 
-    if config.print_radar_info== True: print(radar.info(level='compact'))
+    if config.Radar_Plot_Type == 'KA_Plotting' and valid_time == False: pass
+    else:
+        if config.print_radar_info== True: print(radar.info(level='compact'))
 
-    ## Read in radar data and add to Data dict
-    ##### + + + + + + + + + + + + + + + + + + +
-    #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
-    Data, subset_pnames = Add_to_DATA('RADAR', Data, subset_pnames, print_long, MR_file=radar, swp=swp_id)
-    if print_long == True: print(str(Data)+'\n')
+        ## Read in radar data and add to Data dict
+        ##### + + + + + + + + + + + + + + + + + + +
+        #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
+        Data, subset_pnames = Add_to_DATA('RADAR', Data, subset_pnames, print_long, MR_file=radar, swp=swp_id)
+        if print_long == True: print(str(Data)+'\n')
 
-    ## Proceed to plot the radar
-    ##### + + + + + + + + + + + +
-    ppiplot(Data, print_long, e_test, start_comptime)
+        ## Proceed to plot the radar
+        ##### + + + + + + + + + + + +
+        ppiplot(Data, print_long, e_test, start_comptime)
 
+##############################################################################################
+
+
+#  parser = argparse.ArgumentParser(description='Process Radar')
+# parser.add_argument('integers', metavar='N', type=int, nargs='+', help='an integer for the accumulator')
+#  parser.add_argument("--day", help='override day in config file')
+
+#  args = parser.parse_args()
+
+#  print("args: ", args)
+#  if args.day: config.day = args.day
+#  print ("using day: ", config.day)
 
 ##############################################################################################
 #####################################################
@@ -552,11 +589,11 @@ Data, subset_pnames = Add_to_DATA('STN_I', Data, subset_pnames, print_long)
 ## If Radar will be plotted
 if config.r_plotting == True:
     print('\n Yes Plot Radar \n')
+
     # * * *
     if config.Radar_Plot_Type == 'KA_Plotting':
         ## Get radar files
         path = config.g_mesonet_directory + config.day+'/radar/TTUKa/netcdf/*/dealiased_*'
-
         radar_files = sorted(glob.glob(path))
 
         ## Proceed to plot the radar
@@ -568,7 +605,7 @@ if config.r_plotting == True:
         ## Get radar files
         path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
         radar_files = sorted(glob.glob(path))
-        print(radar_files)
+        
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)
