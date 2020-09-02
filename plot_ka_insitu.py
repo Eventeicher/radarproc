@@ -56,7 +56,7 @@ if config.country_roads == True:
 print_long, e_test = config.print_long, config.e_test
 
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
-from shared_defns import Add_to_DATA, pform_names, error_printing, Platform, Radar, Master_Plt, T_Plt, Torus_Insitu, Stationary_Insitu
+from shared_defns import Add_to_DATA, pform_names, error_printing, Platform, Radar, Master_Plt, Torus_Insitu, Stationary_Insitu
 
 ##########################################################################
 ###########################
