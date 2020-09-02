@@ -84,7 +84,7 @@ def ppiplot(Data, print_long, e_test, start_comptime):
             if subcol==0: leg = True
             else: leg = False
             radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test)
-    
+
     ## Make the Times Series Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
     if len(config.Time_Series) != 0:
@@ -104,14 +104,14 @@ def ppiplot(Data, print_long, e_test, start_comptime):
     if Data['P_Radar'].name == 'WSR88D':
         output_name = config.g_plots_directory+config.day+'/mesonets/plots/WSR/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
     print(output_name)
-    
-    ''' 
+
+    '''
     save_dir = os.path.dirname(output_name)
     print('save_dir:', save_dir)
     if not os.path.exists(save_dir): Path(save_dir).mkdir(parents=True)
     if os.path.exists(output_name): print("Plot already exists. ")
     '''
-    
+
     plt.savefig(output_name, bbox_inches='tight', pad_inches=.3)
     print("Plot took "+ str(time.time() - start_comptime)+ " to complete")
     plt.close()
@@ -212,7 +212,7 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
                                 ax_n.text(trans[0]+.03, trans[1]-.01, lab, fontsize= 27)
                     if p.type == 'NOXP': print('Code not written yet')
 
-    
+
     ## PLOT BACKGROUND FEATURES
     if config.country_roads == True:
         ox.config(log_file=True, log_console=True, use_cache=True) #the config in this line has nothing to do with config.py
@@ -253,7 +253,7 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
         #set up colorbar axis that will be as tall and 5% as wide as the 'parent' radar subplot
         cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.19, 0,1,1))
         cbar = plt.colorbar(Data['Var'].CS3, cax=cbar_ax, orientation='vertical', label=Data['Var'].v_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(Data['p_var'].global_min, Data['p_var'].global_max+1,2))
-    
+
     #  print('RRRRRRR')
     #  print(vars(ax_n))
     #  print(ax_n.lines)
@@ -291,7 +291,7 @@ def time_series(ts, ax_n, Data, PLT, print_long, e_test):
         ## Set up XY axes tick locations
         #  ax_n.set_ylim(bottom=Data['Var'].global_min, top=Data['Var'].global_max)
         PLT.T_Plt_settings(ts, ax=ax_n, YLab=Data['Var'].v_lab)
-        
+
         leg = ax_n.legend(handles= TSleg_elements, loc='center left')
 
     # * * *
@@ -305,7 +305,7 @@ def time_series(ts, ax_n, Data, PLT, print_long, e_test):
         TSleg_elements.append(TSleg_entry)
 
         ax_n.axhline(0, color='k', linewidth=5, zorder=10)
-        
+
         ax_2 = ax_n.twinx()
         ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05)
         TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
@@ -464,9 +464,9 @@ if config.r_plotting == True:
     if config.Radar_Plot_Type == 'KA_Plotting':
         ## Get radar files
         path = config.g_mesonet_directory + config.day+'/radar/TTUKa/netcdf/*/dealiased_*'
-        
+
         radar_files = sorted(glob.glob(path))
-        
+
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)
