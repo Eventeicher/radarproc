@@ -12,8 +12,10 @@ warnings.filterwarnings(action='ignore')
 def read_unlmm(file,tstart=None, tend=None):
     mmfile= glob.glob(file)
     print(np.shape(mmfile))
+    print("mmfile = ", mmfile)
+
     ds = xr.open_dataset(mmfile[0])
-    
+
     #convert form epoch time to utc datetime object
     timearray = np.array([dt.datetime.utcfromtimestamp(t/1e9) for t in ds.time.values])
     U,V = mpcalc.wind_components(ds.wind_speed, ds.wind_dir)
@@ -40,8 +42,8 @@ def read_unlmm(file,tstart=None, tend=None):
         'Thetae': (dims, ds.theta_e.values, {'units':str(ds.theta_e.units)})
     }
     subds = xr.Dataset(data_vars, coords)
-    
-    #convert to pandas 
+
+    #convert to pandas
     pd_unl=subds.to_dataframe()
     pd_unl.reset_index(inplace=True)
 
@@ -55,11 +57,11 @@ def read_unlmm(file,tstart=None, tend=None):
         hend= pd_unl['datetime'].iloc[-1]
     else:
         hend   = tend
-    
+
     # Save only desired iop data
     data_unl = pd_unl.loc[(pd_unl['datetime']>=hstart)&(pd_unl['datetime']<=hend)]
 
-    return data_unl 
+    return data_unl
 
 # *******************
 
@@ -105,54 +107,73 @@ def read_nsslmm(file,tstart=None,tend=None):
     for i in np.arange(len(data_nssl)):
         j = data_nssl['time'].iloc[i]
         time_deltas = np.append(time_deltas,date+dt.timedelta(hours=int(j),minutes=int((j*60) % 60),seconds=int((j*3600) % 60)))
-    data_nssl['datetime']=time_deltas
+    data_nssl.loc[:,'datetime']=time_deltas  # This form is faster and prevents warnings
 
     # Caclulate desired variables
     p,t   = data_nssl['p'].values*units.hectopascal, data_nssl['tfast'].values*units.degC
     theta = mpcalc.potential_temperature(p,t)
-    data_nssl['Theta'] = theta.magnitude
+    data_nssl.loc[:,'Theta'] = theta.magnitude
 
     r_h     = data_nssl['rh'].values/100
     mixing = mpcalc.mixing_ratio_from_relative_humidity(r_h,t,p)
     thetav = mpcalc.virtual_potential_temperature(p,t,mixing)
-    data_nssl['Thetav'] = thetav.magnitude
+    data_nssl.loc[:,'Thetav'] = thetav.magnitude
 
     td     = mpcalc.dewpoint_rh(temperature=t, rh=r_h)
     thetae = mpcalc.equivalent_potential_temperature(p,t,td)
-    data_nssl['Thetae'] = thetae.magnitude
+    data_nssl.loc[:,'Thetae'] = thetae.magnitude
 
     Spd =data_nssl['spd'].values*units('m/s')
     dire =data_nssl['dir'].values*units('degrees')
     u,v =mpcalc.wind_components(Spd,dire)
-    data_nssl['U']=u.to('knot')
-    data_nssl['V']=v.to('knot')
+    #data_nssl['U']=u.to('knot')
+    data_nssl.loc[:,'U'] = u.to('knot')
+
+    #data_nssl['V']=v.to('knot')
+    data_nssl.loc[:,'V'] = v.to('knot')
 
     q_list=['qc1','qc2','qc3','qc4']
-    data_nssl['qc_flag']=data_nssl[q_list].sum(axis=1)
+    data_nssl.loc[:,'qc_flag']=data_nssl[q_list].sum(axis=1)
 
     return data_nssl
 
 # *******************
 
 def maskdata(p_var, platform_file, mask=True):
-    ''' Read in a dataset and return the masked version of it 
-            Masking is based of QC flags etc and can be diff for each platform 
+    ''' Read in a dataset and return the masked version of it
+            Masking is based of QC flags etc and can be diff for each platform
             If mask= False then the defn will simply return the dataset unmodified
     '''
     platform_unmasked= platform_file[p_var].values
-    
+
+    platform_data = platform_unmasked
+
     if mask== False:
         platform_data= platform_unmasked
     elif mask== True:
-        platform_name= str(platform_file.name)
+        name = platform_file.get('name', 'fixmenow3')
+        platform_name= str(name)
+        print("platform_name = ", platform_name)
+
         if (platform_name in ['FFld_df','WinS_df','LIDR_df','Prb1_df','Prb2_df']):
             platform_data= np.ma.masked_where(platform_file['qc_flag'].values>0, platform_unmasked)
+
+        # This was needed to work with the nextrad code in it's present form
+        elif (platform_name in ['FFld','WinS','LIDR','Prb1','Prb2']):
+            platform_data= np.ma.masked_where(platform_file['qc_flag'].values>0, platform_unmasked)
+
         elif (platform_name in ['CoMeT1_df','CoMeT2_df','CoMeT3_df']):
             #for now
             platform_data= platform_unmasked
+
+        # This was needed to work with the nextrad code in it's present form
+        elif (platform_name in ['CoMeT1','CoMeT2','CoMeT3']):
+            #for now
+            platform_data= platform_unmasked
+
         elif (platform_name in ['Insert UAS filenames here']):
             print("will be filled in")
         else:
             print("What platform are you trying to use?")
-    
+
     return platform_data
