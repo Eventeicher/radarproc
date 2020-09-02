@@ -17,7 +17,7 @@ from os.path import expanduser
 #Radar_Plot_Type = 'NOXP_Plotting'
 Radar_Plot_Type = 'KA_Plotting'
 #  Radar_Plot_Type = 'WSR_Plotting'
-print_radar_info= True
+print_radar_info= False
 
 ## Timeframe
 # ***********

@@ -394,49 +394,70 @@ def det_nearest_WSR(p_df):
 def get_WSR_from_AWS(start, end, radar_id, download_directory):
     ''' Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
     ----------
-    INPUTS start: datetime;  start of the desired timerange
-           end: datetime; end of the desired timerange
-           radar_id : string;  four letter radar designation
-           download_directory: string; location for directory containing the downloaded radarfiles
+    INPUTS
+    radar_id : string
+        four letter radar designation
+    start: datetime
+        start of the desired timerange
+    end: datetime
+        end of the desired timerange
+    download_directory: string
+        location for the downloaded radarfiles
     -------
-    RETURN radar_list : Py-ART Radar Objects
+    RETURN
+    radar_list : Py-ART Radar Objects
     '''
-    #Create this at the point of use otherwise it saves everything and eventually crashes
+
+    # Create this at the point of use
+    # Otherwise it saves everything and eventually crashes
     conn = nexradaws.NexradAwsInterface()
 
-    #Det the radar scans that fall within the time randge for a given radar site
+    #Determine the radar scans that fall within the time range for a given radar site
     scans = conn.get_avail_scans_in_range(start, end, radar_id)
     print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
 
-    #Dont download files that you alrady have ....
-    path = config.filesys+ 'TORUS_Data/'+ config.day + '/radar/Nexrad/test_Nexrad_files'
+    #download the files that were identified
+    #results = conn.download(scans[0:4], filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+    #results = conn.download(scans, filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+    #results = conn.download(scans[0:4], temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
+
+    #
+    # Don't download files that you already have...
+    #
+    path =  download_directory + config.day +'/radar/Nexrad/Nexrad_files/'
 
     if not os.path.exists(path):
-        #  Path(path).mkdir(parents=True, exist_ok=True)
-        Path(path).mkdir(parents=True)
+        Path(path).mkdir(parents=True, exist_ok=True)
 
-    # missing_scans is a list of scans we don't have and need to download create_filepath returns tuple of
-    # (directory, directory+filename) [-1] returns the directory+filename
-    missing_scans = list(filter(lambda x: not Path(x.create_filepath(path, False)[-1]).exists(), scans))
+    # missing_scans is a list of scans we don't have and need to download
+    # create_filepath returns tuple of (directory, directory+filename)
+    # [-1] returns the directory+filename
+    missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
 
-    # missing files is the list of filenames of files we need to download
-    missing_files = list(map(lambda x: x.create_filepath(path, False)[-1], missing_scans))
-    print("missing "+ str(len(missing_files))+ " of "+ str(len(scans))+ " files\n"+ str(missing_files))
+
+    # missing files is the list of filenames of files we need to down load
+    missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
+    print("missing ", len(missing_files), "of ", len(scans), " files")
+    print(missing_files)
 
     results = conn.download(missing_scans, path, keep_aws_folders=False)
 
-    print('{}\n{} downloads failed: {}\n'.format(results.success, results.failed_count, results.failed))
-    #print("Results.iter_success : {}\n".format(reults.iter_success()))
+    print(results.success)
+    print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
+    #print("Results.iter_success : {}\n".format(results.iter_success()))
 
-    # missing_scans_after is a list of scans we don't have (download failed) create_filepath returns tuple of
-    # (directory, directory+filename) [-1] returns the directory+filename
-    missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path, False)[-1]).exists(), scans))
+    # missing_scans_after is a list of scans we don't have (download failed)
+    # create_filepath returns tuple of (directory, directory+filename)
+    # [-1] returns the directory+filename
+    missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
 
     if len(missing_files_after) > 0:
-        print("ERROR: Some Radar Scans are Missing \n"+ str(missing_files_after))
+        print("ERROR: Some Radar Scans Missing")
+        print(missing_files_after)
         exit()
 
     radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
+
     # Return list of files
     return radar_files
 
@@ -520,7 +541,7 @@ Data, subset_pnames = Add_to_DATA('TInsitu', Data, subset_pnames, print_long)
 ## Establish info for the plotting variable (aka max min etc)
 Data, subset_pnames = Add_to_DATA('PVar', Data, subset_pnames, print_long)
 
-print('Read in Stationary Platforms Arrays\n')
+print('\nRead in Stationary Platforms Arrays')
 ## Read in the data for the Stationary Array platforms (if available)
 Data, subset_pnames = Add_to_DATA('STN_I', Data, subset_pnames, print_long)
 
@@ -545,8 +566,8 @@ if config.r_plotting == True:
     # * * * 
     if config.Radar_Plot_Type == 'NOXP_Plotting':
         ## Get radar files
-        radar_files = sorted(glob.glob(config.temploc+config.day+'/radar/NOXP/'+config.day+'/*/sec/*'))
-        print(config.temploc+config.day+'/radar/NOXP/'+config.day+'/sec/*')
+        path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
+        radar_files = sorted(glob.glob(path))
         print(radar_files)
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
@@ -567,7 +588,7 @@ if config.r_plotting == True:
             tranges_each_r = pd.concat([tranges_each_r, trange_r], axis=1)
 
             print("start "+str(trange_r_start[Rad_site])+ "\nend "+str(trange_r_end[Rad_site])+ "\n ***")
-            radar_files = get_WSR_from_AWS(trange_r_start[Rad_site], trange_r_end[Rad_site], Rad_site, config.temploc)
+            radar_files = get_WSR_from_AWS(trange_r_start[Rad_site], trange_r_end[Rad_site], Rad_site, config.g_download_directory)
             print('********\n Radar files to process:\n'+ str(radar_files))
 
             #Hard code the swp numbers that will be associated with a given tilt angle
@@ -599,44 +620,3 @@ if config.r_plotting == False and config.t_plotting == True:
 plt.rcdefaults()
 print('\nIt took '+ str(time.time() - totalcompT_start)+ " to complete all of the plots\n")
 print("ALL FINISHED")
-'''
-#try:
-#    pr = cProfile.Profile()
-#    pr.enable()
-
-#    program_core()
-
-#except:
-#    print ("An exception ")
-
-#pr.disable()
-#pr.print_stats(20, sort='time')
-#pr.print_stats(20)
-
-# install pycallgraph via pip
-from pycallgraph import PyCallGraph
-from pycallgraph.output import GraphvizOutput
-from pycallgraph import Config as CGConfig
-from pycallgraph import GlobbingFilter
-
-graphviz = GraphvizOutput(output_file='call_graph.png')
-
-cgconfig = CGConfig()
-cgconfig.trace_filter = GlobbingFilter(exclude=[
-    'pycallgraph.*',
-    '_*',
-    'urlib.*',
-    'warnings.*',
-    'glob.*',
-    'tokenize.*',
-    'collections.*',
-    'sre_compile.*',
-    'sre_parse.*',
-    're.*',
-    'fnmatch.*',
-    'posixpath.*',
-])
-
-with PyCallGraph(output=graphviz, config=cgconfig):
-    program_core()
-'''

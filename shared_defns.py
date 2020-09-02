@@ -361,7 +361,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             else: return WSR_df, 'WSR'
 
     # * * *
-    elif pname == 'NOXP ': 
+    elif pname == 'NOXP': 
         # if the main plotting radar is the NOXP radar
         if rfile != None:
             #det the scantime
@@ -372,8 +372,10 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
         
         # Determine whether the NOXP radar was in the plotting domain (if its not the radar being plotted)
         if rfile == None:
-            if d_testing == True: return True
-            NOXPfiles = sorted(glob.glob(config.temploc+config.day+'/radar/NOXP/'+config.day+'/*/se/*'))
+            #  if d_testing == True: return True
+            if d_testing == True: return False
+            path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
+            NOXPfiles = sorted(glob.glob(path))
             for file in NOXPfiles:
                 print(file)
                 #  file.rsplit('/',3)[0]
@@ -1007,77 +1009,5 @@ class Master_Plt:
 
 ##########
 
-import nexradaws
-
-def get_WSR_from_AWS(start, end, radar_id, download_directory):
-    '''
-    Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
-    ----------
-    INPUTS
-    radar_id : string
-        four letter radar designation
-    start: datetime
-        start of the desired timerange
-    end: datetime
-        end of the desired timerange
-    download_directory: string
-        location for the downloaded radarfiles
-    -------
-    RETURN
-    radar_list : Py-ART Radar Objects
-    '''
-
-    # Create this at the point of use
-    # Otherwise it saves everything and eventually crashes
-    conn = nexradaws.NexradAwsInterface()
-
-    #Determine the radar scans that fall within the time range for a given radar site
-    scans = conn.get_avail_scans_in_range(start, end, radar_id)
-    print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
-
-    #download the files that were identified
-    #results = conn.download(scans[0:4], filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
-    #results = conn.download(scans, filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
-    #results = conn.download(scans[0:4], temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
-
-    #
-    # Don't download files that you already have...
-    #
-    path =  download_directory + config.day +'/radar/Nexrad/Nexrad_files/'
-
-    if not os.path.exists(path):
-        Path(path).mkdir(parents=True, exist_ok=True)
-
-    # missing_scans is a list of scans we don't have and need to download
-    # create_filepath returns tuple of (directory, directory+filename)
-    # [-1] returns the directory+filename
-    missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
-
-
-    # missing files is the list of filenames of files we need to down load
-    missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
-    print("missing ", len(missing_files), "of ", len(scans), " files")
-    print(missing_files)
-
-    results = conn.download(missing_scans, path, keep_aws_folders=False)
-
-    print(results.success)
-    print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
-    #print("Results.iter_success : {}\n".format(results.iter_success()))
-
-    # missing_scans_after is a list of scans we don't have (download failed)
-    # create_filepath returns tuple of (directory, directory+filename)
-    # [-1] returns the directory+filename
-    missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
-
-    if len(missing_files_after) > 0:
-        print("ERROR: Some Radar Scans Missing")
-        print(missing_files_after)
-        exit()
-
-    radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
-
-    # Return list of files
-    return radar_files
 
 
