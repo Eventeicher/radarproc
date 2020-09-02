@@ -28,7 +28,6 @@ import pandas as pd
 import numpy as np
 import numpy.ma as ma
 import xarray as xr
-import osmnx as ox
 import os, os.path
 from scipy import ndimage, interpolate
 from operator import attrgetter
@@ -48,6 +47,10 @@ totalcompT_start = time.time()
 ## Imports form other files
 ############################
 import config #this is the file with the plotting controls to access any of the vars in that file use config.var
+
+if config.country_roads == True:
+    import osmnx as ox
+
 
 #rename a few commonly used vars so that the config.var does not have to be used repeatedly
 print_long, e_test = config.print_long, config.e_test
