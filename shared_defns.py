@@ -26,6 +26,10 @@ import cartopy.crs as ccrs
 import xarray as xr
 from collections import namedtuple
 import pyart, sys, traceback, glob, cmocean
+import logging
+
+logging.basicConfig(filename='this_is.log')
+log = logging.getLogger(__name__)
 
 import os
 from pathlib import Path
@@ -844,6 +848,8 @@ class Pvar:
             log.debug("Pvar min max Could not be determined.  Used sketchy default values.")
 
         self.global_min, self.global_max = min(val_hold), max(val_hold)
+        if self.global_min == None or self.global_max == None:
+            log.debug("Pvar min max = None")
 
     # * * *
     def make_dummy_plot(self):
