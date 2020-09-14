@@ -168,20 +168,19 @@ class Master_Plt:
         ax.yaxis.set_label_coords(-.03, .5)
     
     # * * *
-    def plot_Tpform(pform, Data, ax, print_long, e_test, border_c='xkcd:light grey', labelbias=(0,0)):
+    def plot_TORUSpform(self, pform, Data, ax, print_long, e_test, border_c='xkcd:light grey', labelbias=(0,0)):
         ''' Plot the in situ platform markers, barbs and pathline
         ----
         INPUTS: file: the in situ pandas dataframe
                 var: dictionary containing info relating to p_var (ie name, max, min)
                 p_attr: dictionary containing platform styling info (color, shape etc)
                 ax: axes of the subplot to plot on
-
         Optional Inputs: border_c, labelbias: color of background for the pathline, if you want to add labels directly to the plot this can offset it from the point
         '''
         if print_long == True: print('made it into platform_plot')
 
         #grab the subset of data of +- interval around radar scan
-        p_sub, p_deploy = Platform.grab_pform_subset( pform, print_long, e_test, Data, time_offset=config.cline_extent)
+        p_sub, p_deploy = pform.grab_pform_subset(pform, print_long, e_test, Data, time_offset=config.cline_extent)
 
         if p_deploy == False:
             if print_long == True: print('The platform was not deployed at this time')
@@ -286,7 +285,7 @@ class Master_Plt:
 ###########################
 ## PLOTTING DEFINTIONS  ###
 ###########################
-def ppiplot(Data, print_long, e_test, start_comptime):
+def plotting(Data, print_long, e_test, start_comptime):
     ''' Initial plotting defenition: sets up fig size, layout, font size etc and will call timeseries and radar subplots
     ----------
     INPUTS:
@@ -298,7 +297,7 @@ def ppiplot(Data, print_long, e_test, start_comptime):
     start_comptime:
         Time at which you first begain plotting this particular image (will help to report out how long it took to create image)
     '''
-    if print_long == True: print('~~~~~~~~~~~Made it into ppiplot~~~~~~~~~~~~~~~~~~~~~')
+    if print_long == True: print('~~~~~~~~~~~Made it into plotting~~~~~~~~~~~~~~~~~~~~~')
     #initilize the plot object(will have info about plotlayout and such now)
     PLT = Master_Plt(Data)
 
@@ -328,14 +327,25 @@ def ppiplot(Data, print_long, e_test, start_comptime):
         plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
     file_string = '_'.join(config.Time_Series)
 
+    # Setup Function Cache for speedup
+    if not os.path.exists(g_cache_directory): Path(g_cache_directory).mkdir(parents=True)
     ## Finish plot
+    # dir     
+    outdir_name = config.g_plots_directory+config.day+'/plots/'+Data['P_Radar'].type+'/'+config.p_var+'/'+np.around(Data['P_Radar'].swp, decimals=1)+'/'
     if Data['P_Radar'].name in pform_names('KA'):
-        output_name = config.g_plots_directory+config.day+'/plots/'+config.p_var+'/KA/'+Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
+        output_name= outdir_name+Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
     if Data['P_Radar'].name == 'NOXP':
-        output_name = config.g_plots_directory+config.day+'/plots/'+config.p_var+'/NOXP/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
+        output_name = outdir_name+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
     if Data['P_Radar'].name == 'WSR88D':
-        output_name = config.g_plots_directory+config.day+'/plots/'+config.p_var+'/WSR/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
-    print(output_name)
+        output_name = outdir_name+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
+    #  if Data['P_Radar'].name in pform_names('KA'):
+        #  output_name = config.g_plots_directory+config.day+'/plots/'+Data['P_Radar'].type+'/'+config.p_var+'/'+np.around(Data['P_Radar'].swp, decimals=1)+'/'
+        #  +Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
+    #  if Data['P_Radar'].name == 'NOXP':
+        #  output_name = config.g_plots_directory+config.day+'/plots/NOXP/'+config.p_var+'/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
+    #  if Data['P_Radar'].name == 'WSR88D':
+        #  output_name = config.g_plots_directory+config.day+'/plots/WSR/'+config.p_var+'/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
+    #  print(output_name)
 
     plt.savefig(output_name, bbox_inches='tight', pad_inches=.3)
     print("Plot took "+ str(time.time() - start_comptime)+ " to complete")
@@ -343,7 +353,7 @@ def ppiplot(Data, print_long, e_test, start_comptime):
 
     ## Makes a ding noise
     print('\a')
-    if print_long == True: print('~~~~~~~~~~~made it through ppiplot~~~~~~~~~~~~~~~~~~')
+    if print_long == True: print('~~~~~~~~~~~made it through plotting~~~~~~~~~~~~~~~~~~')
     print('Done Plotting \n \n***************************************************************************************************')
 
 # * * * * * *  *
@@ -352,7 +362,7 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
     ----
     INPUTS:
     mom: str, indicates which radar moment you would like to plot (ie Reflectivity, Velocity, Spectrum Width etc)
-    Data: dict as described in the ppiplot defn
+    Data: dict as described in the plotting defn
     PLT: .....fill in objected containing subplot info such as domain and radar.display
     leg: bool str whether or not you want a legend associated with this particular subplot
     print_long & e_test: bool str as described in the ppi defn
@@ -392,14 +402,14 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
         if isinstance(p, Torus_Insitu):
             if print_long == True: print(p.name)
             legend_elements.append(p.leg_entry)
-            PLT.plot_Tpform(p, Data, ax_n, print_long, e_test)
+            PLT.plot_TORUSpform(p, Data, ax_n, print_long, e_test)
 
         ######
         #Plot Stationary Inistu Platforms ( aka mesonets and ASOS) if desired and available
         if isinstance(p, Stationary_Insitu):
             if print_long == True: print(p.name)
             # determine if any of the sites fall within the plotting domain
-            sites_subdf, valid_sites = Platform.grab_pform_subset(p, print_long, e_test, Data, bounding= PLT.Domain)
+            sites_subdf, valid_sites = p.grab_pform_subset( p, print_long, e_test, Data, bounding= PLT.Domain)
             # if there are sites within the domain plot the markers and include in the legend
             if valid_sites == True:
                 legend_elements.append(p.leg_entry)
@@ -416,7 +426,7 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
             if p.type != 'MAINR':
                 if print_long == True: print(p.name)
                 #det if (any of) the radar is located within the area included in the plot domain at the time of the plot
-                sites_subdf, valid_sites = Platform.grab_pform_subset(p, print_long, e_test, Data, bounding= PLT.Domain)
+                sites_subdf, valid_sites = p.grab_pform_subset(p, print_long, e_test, Data, bounding= PLT.Domain)
 
                 #if these conditions are met then plot the radar marker(s)
                 if valid_sites == True:
@@ -426,7 +436,7 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
                         ax_n.plot(p.lon, p.lat, transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
                                   markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
                         ## Plot RHI spokes
-                        if config.rhi_ring == True: p.rhi_spokes_rings()
+                        if config.rhi_ring == True: PLT.rhi_spokes_rings(p)
                         ## Optional textlabel on plot
                         if p.marker_label == True:
                             ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')])
@@ -501,7 +511,7 @@ def time_series(ts, ax_n, Data, PLT, print_long, e_test):
     ----
     INPUTS:
     ts: ........fill in
-    Data: dict as described in ppiplot defn
+    Data: dict as described in plotting defn
     print_long & e_test: bool str as described in the ppi defn
     '''
     if print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
@@ -627,14 +637,10 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     ''' Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
     ----------
     INPUTS
-    radar_id : string
-        four letter radar designation
-    start: datetime
-        start of the desired timerange
-    end: datetime
-        end of the desired timerange
-    download_directory: string
-        location for the downloaded radarfiles
+    radar_id : string,  four letter radar designation
+    start: datetime,  start of the desired timerange
+    end: datetime,  end of the desired timerange
+    download_directory: string,  location for the downloaded radarfiles
     -------
     RETURN
     radar_list : Py-ART Radar Objects
@@ -769,7 +775,7 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
 
     ## Proceed to plot the radar
     ##### + + + + + + + + + + + +
-    ppiplot(Data, print_long, e_test, start_comptime)
+    plotting(Data, print_long, e_test, start_comptime)
     #  except:
         #  print('something went wrong')
     '''if config.Radar_Plot_Type == 'KA_Plotting' and valid_time == False: pass
@@ -784,7 +790,7 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
 
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
-        ppiplot(Data, print_long, e_test, start_comptime)
+        plotting(Data, print_long, e_test, start_comptime)
     '''
 ##############################################################################################
 
