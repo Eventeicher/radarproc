@@ -493,13 +493,13 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             refl_mask = np.ma.MaskedArray(reflectivity, mask=normal_mask)
             sw_mask = np.ma.MaskedArray(spectrum_width, mask=normal_mask)
             vel_mask = np.ma.MaskedArray(velocity, mask=normal_mask)
-            try:
-                #create the dictionary for the masks
-                refl_dict, sw_dict, vel_dict = {'data':refl_mask}, {'data':sw_mask}, {'data':vel_mask}
-                rfile.add_field('refl_fix', refl_dict)
-                rfile.add_field('sw_fix', sw_dict)
-                rfile.add_field('vel_fix', vel_dict)
-            except: print('Did not add radar feilds')
+            
+            #create the dictionary for the masks
+            refl_dict, sw_dict, vel_dict = {'data':refl_mask}, {'data':sw_mask}, {'data':vel_mask}
+            rfile.add_field('refl_fix', refl_dict, replace_existing=True) # Is this ok?  Sometimes it already exists
+            rfile.add_field('sw_fix', sw_dict, replace_existing=True) # Is this ok?  Sometimes it already exists
+            rfile.add_field('vel_fix', vel_dict, replace_existing=True) # Is this ok?  Sometimes it already exists
+
 
             ## Det the attribute of the Main Radar (MR)
             #det the scantime
@@ -699,7 +699,7 @@ class Platform:
             return end_lat, end_lon
 
     # * * *
-    def grab_pform_subset(self, print_long, e_test, Data, bounding=None, time_offset=None):
+    def grab_pform_subset(pform, print_long, e_test, Data, bounding=None, time_offset=None):
         ''' This def will take a given point or pandas dataframe (df) and subset it either spatially or temporially
                 1) If time_offset is given the data will be subset temporally
                         Grabs the observed thermo data +/- x mins around radar scan_time.
@@ -714,7 +714,7 @@ class Platform:
         Returns: The subset dataset (df_sub) and a True/False statement regarding any data in the original dataset
                     matched the subsetting criteria (p_deploy)
         '''
-        if self.type == 'KA' or self.type == 'NOXP': Single_Point = True
+        if pform.type == 'KA' or pform.type == 'NOXP': Single_Point = True
         else: Single_Point = False
 
         #Temporal subset
@@ -722,22 +722,22 @@ class Platform:
         if time_offset != None:
             if Single_Point == True:  print('Code not written yet to spatially subset a platform without a pandas df (like radars)')
             else:
-                aaa = self.df.loc[(self.df['datetime'] >= self.Scan_time-dt.timedelta(minutes=time_offset))]
-                df_sub = aaa.loc[(aaa['datetime'] <= self.Scan_time+dt.timedelta(minutes=time_offset))]
+                aaa = pform.df.loc[(pform.df['datetime'] >= pform.Scan_time-dt.timedelta(minutes=time_offset))]
+                df_sub = aaa.loc[(aaa['datetime'] <= pform.Scan_time+dt.timedelta(minutes=time_offset))]
                 if print_long == True: print('Dataset has been temporally subset')
 
         #Spatial Subset
         ##### + + + + +
         if bounding != None:
             if Single_Point == True:
-                if np.logical_and(self.lat > bounding.ymin, np.logical_and(self.lat < bounding.ymax,
-                       np.logical_and(self.lon > bounding.xmin, self.lon < bounding.xmax))): p_deploy = True
+                if np.logical_and(pform.lat > bounding.ymin, np.logical_and(pform.lat < bounding.ymax,
+                       np.logical_and(pform.lon > bounding.xmin, pform.lon < bounding.xmax))): p_deploy = True
                 else: p_deploy = False
             else:
                 #if both time_offset and bounding area is given then the spatial subset start from the already
                     #temporally subset dataframe... if not will start with the full platform dataframe
-                if time_offset != None: aaa = df_sub.loc[(self.df['lat'] >= bounding.ymin)]
-                else: aaa = self.df.loc[(self.df['lat'] >= bounding.ymin)]
+                if time_offset != None: aaa = df_sub.loc[(pform.df['lat'] >= bounding.ymin)]
+                else: aaa = pform.df.loc[(pform.df['lat'] >= bounding.ymin)]
 
                 bbb = aaa.loc[(aaa['lat'] <= bounding.ymax)]
                 ccc = bbb.loc[(bbb['lon'] >= bounding.xmin)]

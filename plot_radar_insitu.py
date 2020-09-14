@@ -168,7 +168,7 @@ class Master_Plt:
         ax.yaxis.set_label_coords(-.03, .5)
     
     # * * *
-    def plot_Tpform(self, Data, ax, print_long, e_test, border_c='xkcd:light grey', labelbias=(0,0)):
+    def plot_Tpform(pform, Data, ax, print_long, e_test, border_c='xkcd:light grey', labelbias=(0,0)):
         ''' Plot the in situ platform markers, barbs and pathline
         ----
         INPUTS: file: the in situ pandas dataframe
@@ -181,7 +181,7 @@ class Master_Plt:
         if print_long == True: print('made it into platform_plot')
 
         #grab the subset of data of +- interval around radar scan
-        p_sub, p_deploy = Platform.grab_pform_subset(print_long, e_test, Data, time_offset=config.cline_extent)
+        p_sub, p_deploy = Platform.grab_pform_subset( pform, print_long, e_test, Data, time_offset=config.cline_extent)
 
         if p_deploy == False:
             if print_long == True: print('The platform was not deployed at this time')
@@ -208,8 +208,8 @@ class Master_Plt:
             mid_lon, mid_lat = p_sub.iloc[mid_point, col_lon], p_sub.iloc[mid_point, col_lat]
 
             #plot the platform marker at the time closest to the scantime (aka the time at the halfway point of the subset platform dataframe)
-            ax.plot(mid_lon, mid_lat, transform=ccrs.PlateCarree(), marker=self.m_style, markersize=self.m_size,
-                    markeredgewidth='3', color=self.m_color, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=10)
+            ax.plot(mid_lon, mid_lat, transform=ccrs.PlateCarree(), marker=pform.m_style, markersize=pform.m_size,
+                    markeredgewidth='3', color=pform.m_color, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=10)
             #plot labels for the marker on the plot itself
             if config.TIn_lab == True:
                 plt.text(mid_lon+labelbias[0], mid_lat+labelbias[1], p.name, transform=ccrs.PlateCarree(), fontsize=20, path_effects=[patheffects.withstroke(linewidth=4)])
@@ -224,35 +224,35 @@ class Master_Plt:
         if print_long == True: print('made it through platform_plot')
 
     # * * *
-    def rhi_spokes_rings(self):
+    def rhi_spokes_rings(self, pform):
         ''' Plot the RHI spoke and ring for a radar
         '''
         if print_long == True: print('made it into rhi_spokes_rings')
 
         # if there is not actually rhi info then it will not plot a ring and not stop the code
-        if np.isnan(self.rhib) == True or np.isnan(self.rhie)== True:
+        if np.isnan(pform.rhib) == True or np.isnan(pform.rhie)== True:
             print('Could not plot RHI spokes')
 
         #produce spoke and ring
         else:
-            for j in range(int(self.rhib), int(self.rhie)+1, 10):
-                ang = self.head + j
+            for j in range(int(pform.rhib), int(pform.rhie)+1, 10):
+                ang = pform.head + j
                 if ang > 360.: ang= int(ang - 360.)
                 #  radius = Data['P_Radar'].rfile.range['data'][-1]-500.)/1000.
-                if self.type == 'KA': radius= 20.905
+                if pform.type == 'KA': radius= 20.905
                 else: print('code not written for other radars yet')
 
                 #this plots a circle that connects the spokes
                 latArray, lonArray = [], []
-                for bearing in range(int(self.head + self.rhib), int(self.head + self.rhie+1)): #degrees of sector
-                    lat2, lon2 = self.getLocation(radius, given_bearing=bearing)
+                for bearing in range(int(pform.head + pform.rhib), int(pform.head + pform.rhie+1)): #degrees of sector
+                    lat2, lon2 = Platform.getLocation(pform, radius, given_bearing=bearing)
                     latArray.append(lat2)
                     lonArray.append(lon2)
                 Master_Plt.display.plot_line_geo(lonArray, latArray, marker=None, color='grey', linewidth=.25) #this plots a circle that connects the spokes
 
                 #plt the spokes
-                C, D = self.getLocation(radius, given_bearing = ang)
-                Master_Plt.display.plot_line_geo([self.lon, D], [self.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
+                C, D = Platform.getLocation(pform, radius, given_bearing = ang)
+                Master_Plt.display.plot_line_geo([pform.lon, D], [pform.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
 
                 ## optional labels
                 if config.RHI_lab == True:
@@ -399,7 +399,7 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
         if isinstance(p, Stationary_Insitu):
             if print_long == True: print(p.name)
             # determine if any of the sites fall within the plotting domain
-            sites_subdf, valid_sites = p.grab_pform_subset(print_long, e_test, Data, bounding= PLT.Domain)
+            sites_subdf, valid_sites = Platform.grab_pform_subset(p, print_long, e_test, Data, bounding= PLT.Domain)
             # if there are sites within the domain plot the markers and include in the legend
             if valid_sites == True:
                 legend_elements.append(p.leg_entry)
@@ -416,7 +416,7 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
             if p.type != 'MAINR':
                 if print_long == True: print(p.name)
                 #det if (any of) the radar is located within the area included in the plot domain at the time of the plot
-                sites_subdf, valid_sites = p.grab_pform_subset(print_long, e_test, Data, bounding= PLT.Domain)
+                sites_subdf, valid_sites = Platform.grab_pform_subset(p, print_long, e_test, Data, bounding= PLT.Domain)
 
                 #if these conditions are met then plot the radar marker(s)
                 if valid_sites == True:
