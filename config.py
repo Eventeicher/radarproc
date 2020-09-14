@@ -13,7 +13,6 @@ from os.path import expanduser
 ###############
 ## File paths
 # ************
-#KA_Plotting or WSR_Plotting
 #  Radar_Plot_Type = 'NOXP_Plotting'
 Radar_Plot_Type = 'KA_Plotting'
 #  Radar_Plot_Type = 'WSR_Plotting'
@@ -22,25 +21,25 @@ print_radar_info= False
 nCPU=1
 
 if Radar_Plot_Type == 'KA_Plotting':
-    day = '20190525' #'YYYYMMDD'
-    p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
+    day = '20190518' #'YYYYMMDD'
+    p_var = "Thetae" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 21 #21 is the best for KA
     Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
     p_tilt = 1 #what radar elevation tilt (deg) do you want to plot
 
 if Radar_Plot_Type == 'NOXP_Plotting':
-    day = '20190518' #'YYYYMMDD'
+    day = '20190615' #'YYYYMMDD'
     p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 37 #21 is the best for KA
     Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
     p_tilt = .5 #what radar elevation tilt (deg) do you want to plot
 
-if Radar_Plot_Type == 'KA_Plotting':
-    day = '20190520' #'YYYYMMDD'
-    p_var = "Thetae" #which var to plot (current options; Thetae, Thetav)
-    offsetkm = 40 #21 is the best for KA
+if Radar_Plot_Type == 'WSR_Plotting':
+    day = '20190608' #'YYYYMMDD'
+    p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
+    offsetkm = 60 #21 is the best for KA
     Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
     p_tilt = .5 #what radar elevation tilt (deg) do you want to plot
