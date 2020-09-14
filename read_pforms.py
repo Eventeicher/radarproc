@@ -650,7 +650,7 @@ class Platform:
             return False
 
     # * * *
-    def getLocation(self, offsetkm, given_bearing= False):
+    def getLocation(pform, offsetkm, given_bearing= False):
         ''' This definition has two functions:
                 1) If no bearing is specified it will return a namedtuple containing the max/min lat/lons
                     to form a square surrounding the point indicated by lat1,lon1 by x km.
@@ -662,11 +662,11 @@ class Platform:
                 given_bearing: True/False, are you given a specified direction of "travel"
         '''
         #  determine starting point lat and lon
-        if isinstance(self, Radar):
-            start_lat, start_lon = self.lat, self.lon
+        if isinstance(pform, Radar):
+            start_lat, start_lon = pform.lat, pform.lon
         else:
             # locate the data entry that has the closest time as the plotting radar scantime
-            a=self.df.iloc[self.df['datetime'].sub(self.Scan_time).abs().idxmin()]
+            a=pform.df.iloc[pform.df['datetime'].sub(pform.Scan_time).abs().idxmin()]
             start_lat, start_lon = a.lat, a.lon
 
         lat1, lon1 = start_lat * np.pi/180.0 , start_lon * np.pi/180.0
@@ -699,7 +699,7 @@ class Platform:
             return end_lat, end_lon
 
     # * * *
-    def grab_pform_subset(pform, print_long, e_test, Data, bounding=None, time_offset=None):
+    def grab_pform_subset(self, pform, print_long, e_test, Data, bounding=None, time_offset=None):
         ''' This def will take a given point or pandas dataframe (df) and subset it either spatially or temporially
                 1) If time_offset is given the data will be subset temporally
                         Grabs the observed thermo data +/- x mins around radar scan_time.
@@ -813,8 +813,9 @@ class Radar(Platform):
             # Convert time into fancy date string to use in overall plot title
             self.fancy_date_str = self.Scan_time.strftime('%Y-%m-%d %H:%M UTC')
 
-            if self.name in pform_names('KA'): self.site_name = self.name
-            if self.name == 'WSR88D': self.site_name = self.rfile.metadata['instrument_name']
+            if self.name in pform_names('KA'):  self.site_name, self.dir_name = self.name, 'KA'
+            if self.name == 'WSR88D':  self.site_name, self.dir_name = self.rfile.metadata['instrument_name'], 'WSR'
+            if self.name == 'NOXP':  self.dir_name = 'NOXP'
 
         ## Otherwise you are initlizing info for radars that doent have to do with plotting actual radar data (aka loc of radars etc but not the data itself)
         elif Plotting_Radar == False:
@@ -851,16 +852,14 @@ class Pvar:
         for p in Dict.values():
             if hasattr(p,'Min') == True: val_hold.append(p.Min)
             if hasattr(p,'Max') == True: val_hold.append(p.Max)
-# ask data 
-        if len(val_hold) == 0:
-            log.debug("Pvar min max = 0.0, 1.0")
-            val_hold.append(0.0)
-            val_hold.append(1.0)
-            log.debug("Pvar min max Could not be determined.  Used sketchy default values.")
+        
+        if len(val_hold) != 0: self.global_min, self.global_max = min(val_hold), max(val_hold)
+        #  if len(val_hold) == 0:
+            #  log.debug("Pvar min max = 0.0, 1.0")
+            #  val_hold.append(0.0)
+            #  val_hold.append(1.0)
+            #  log.debug("Pvar min max Could not be determined.  Used sketchy default values.")
 
-        self.global_min, self.global_max = min(val_hold), max(val_hold)
-        if self.global_min == None or self.global_max == None:
-            log.debug("Pvar min max = None")
 
     # * * *
     def make_dummy_plot(self):

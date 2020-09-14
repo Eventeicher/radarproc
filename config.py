@@ -34,7 +34,7 @@ if Radar_Plot_Type == 'NOXP_Plotting':
     offsetkm = 37 #21 is the best for KA
     Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
-    p_tilt = .5 #what radar elevation tilt (deg) do you want to plot
+    p_tilt = 0.5 #what radar elevation tilt (deg) do you want to plot
 
 if Radar_Plot_Type == 'WSR_Plotting':
     day = '20190608' #'YYYYMMDD'
@@ -42,15 +42,12 @@ if Radar_Plot_Type == 'WSR_Plotting':
     offsetkm = 60 #21 is the best for KA
     Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
-    p_tilt = .5 #what radar elevation tilt (deg) do you want to plot
-
-
+    p_tilt = 0.5 #what radar elevation tilt (deg) do you want to plot
 
 
 ## Timeframe
 # ***********
 #  day = '20190520' #'YYYYMMDD'
-#  day = '20190517' #'YYYYMMDD'
 #crop the start or end time to a time you specify (set to None to do the whole day)
 #  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 55, 0)
 #  tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),22,45,0)

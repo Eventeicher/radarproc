@@ -51,7 +51,9 @@ from joblib import Memory, Parallel, delayed
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import cProfile
 import logging
+from pandas.plotting import register_matplotlib_converters
 
+register_matplotlib_converters()
 logging.basicConfig(filename='this_is.log')
 log = logging.getLogger(__name__)
 # To run with a) warnings and b) stack trace on abort
@@ -60,8 +62,7 @@ log = logging.getLogger(__name__)
 ## Imports form other files
 ############################
 import config #this is the file with the plotting controls to access any of the vars in that file use config.var
-if config.country_roads == True:
-    import osmnx as ox
+if config.country_roads == True: import osmnx as ox
 
 #rename a few commonly used vars so that the config.var does not have to be used repeatedly
 print_long, e_test = config.print_long, config.e_test
@@ -115,6 +116,9 @@ class Master_Plt:
 
         #if we are plotting radar
         if len(config.r_mom) != 0:
+            #####
+            #maybe read in the radar data here
+            #####
             #redefine the classvariable for Domain and display
             Master_Plt.Domain = Platform.getLocation(Data[config.Centered_Pform], offsetkm= config.offsetkm)
             #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
@@ -166,7 +170,265 @@ class Master_Plt:
         ax.set_xlabel('Time (UTC)')
         ax.set_ylabel(YLab)
         ax.yaxis.set_label_coords(-.03, .5)
-    
+   
+    # * * * * * * *
+    def time_series(self, ts, ax_n, Data, print_long, e_test):
+        ''' Plot a time series (sub)plot; could be of pvar info from various intstruments or of wind info
+        ----
+        INPUTS:
+        ts: ........fill in
+        Data: dict as described in plotting defn
+        print_long & e_test: bool str as described in the ppi defn
+        '''
+        if print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
+
+        #  t_TS.T_Plt_settings(ts,ax_n)
+        TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
+        ## MAKE THE TIMESERIES
+        #### * * * * * * * * *
+        if ts in ['Thetav', 'Thetae']:
+            for p in Data.values():
+                if isinstance(p, Torus_Insitu):
+                    if print_long == True: print('Plotting '+str(p.name)+' on time series')
+                    ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
+                    if p.type in config.TS_masking[:]: plotting_data= p.ts_mask_df
+                    else: plotting_data= p.df[config.p_var].values
+
+                    ## Plot
+                    ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color) #assigning label= is what allows the legend to work
+                    TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
+                    TSleg_elements.append(TSleg_entry)
+
+            ## Set up XY axes tick locations
+            #  ax_n.set_ylim(bottom=Data['Var'].global_min, top=Data['Var'].global_max)
+            self.T_Plt_settings(ts, ax=ax_n, YLab=Data['Var'].v_lab)
+
+            leg = ax_n.legend(handles= TSleg_elements, loc='center left')
+
+        # * * *
+        if ts == 'Wind':
+            p = Data[config.Wind_Pform]
+            if print_long == True: print('Plotting '+str(p.name)+' on time series')
+
+            ax_n.plot(p.df['datetime'], p.df['spd'])
+            ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
+            TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
+            TSleg_elements.append(TSleg_entry)
+
+            ax_n.axhline(0, color='k', linewidth=5, zorder=10)
+
+            ax_2 = ax_n.twinx()
+            ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05)
+            TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
+            TSleg_elements.append(TSleg_entry)
+
+            self.T_Plt_settings(ts, ax=ax_n, YLab='Wind Speed', ax_t=ax_2, YLab_t='Wind Dir ($^{\circ}$)')
+            
+            leg = ax_n.legend(handles= TSleg_elements, loc='center left')
+            #  h, le = ax_n.get_legend_handles_labels()
+            #  print('kkkkkk')
+            #  print(h)
+            #  print(le)
+            #  leg = ax_n.legend(loc='center left')
+            leg.set_title(config.Wind_Pform, prop=self.leg_title_font)
+            leg.remove()
+            ax_2.add_artist(leg)
+            
+        #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
+        #  num_of_TS= len(config.Time_Series)
+        #  if num_of_TS != 1 and ax_n.rowNum != (num_of_TS-1): plt.setp(ax_n.get_xticklabels(), visible=False)
+
+        ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
+        #  radar scan and the timerange ploted (via filled colorline) on the radar plots
+        if len(config.r_mom) != 0:
+            ax_n.axvline(Platform.Scan_time, color='r', linewidth=4, alpha=.5)
+            ax_n.axvspan(Platform.Scan_time - timedelta(minutes=config.cline_extent), Platform.Scan_time + timedelta(minutes=config.cline_extent), facecolor='0.5', alpha=0.4)
+
+        ## Include the legend
+        #  leg = ax_n.legend(handles= TSleg_elements, loc='center left')
+        #  if ts == 'Wind':
+            #  leg.set_title(config.Wind_Pform, prop=self.leg_title_font)
+
+        #  print(ax_n.lines)
+        #  print(vars(ax_n))
+        if print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
+
+
+    # * * * * * *  *
+    def radar_subplots(self, mom, ax_n, Data, leg, print_long, e_test):
+        ''' Plots each of the radar subplots including the marker overlays corresponding to the additional platforms
+        ----
+        INPUTS:
+        mom: str, indicates which radar moment you would like to plot (ie Reflectivity, Velocity, Spectrum Width etc)
+        Data: dict as described in the plotting defn
+        leg: bool str whether or not you want a legend associated with this particular subplot
+        print_long & e_test: bool str as described in the ppi defn
+        '''
+        if print_long == True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
+
+        ## SET UP VARS FOR EACH RADAR MOMENTS
+        if mom == 'refl':
+            p_title, c_label, c_scale = 'Reflectivity', 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow'
+            if Data['P_Radar'].name in pform_names('KA'):
+                field, vminb, vmaxb, sweep = 'refl_fix', -30., 30., Data['P_Radar'].swp
+            if Data['P_Radar'].name == 'NOXP':
+                field, vminb, vmaxb, sweep = 'DBZ', -30., 30., Data['P_Radar'].swp
+            if Data['P_Radar'].name == 'WSR88D':
+                field, vminb, vmaxb, sweep =  'reflectivity', -10., 75., Data['P_Radar'].swp[0]
+        elif mom == 'vel':
+            p_title, c_label, c_scale = 'Radial Velocity', 'Velocity [m/s]', 'pyart_balance'
+            if Data['P_Radar'].name in pform_names('KA'):
+                field, vminb, vmaxb, sweep = 'vel_fix', -40., 40., Data['P_Radar'].swp
+            if Data['P_Radar'].name == 'NOXP':
+                field, vminb, vmaxb, sweep = 'VEL', -40., 40., Data['P_Radar'].swp
+            if Data['P_Radar'].name == 'WSR88D':
+                field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
+        else: print("Hey what just happened!\n Check the Radar moments for spelling")
+
+        ## Plot the radar
+        ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
+        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=config.offsetkm*2000, height=config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
+        #  ax_n.tick_params(which='major', axis='both', width=2, length=14, color='black', grid_linewidth=2.5)
+        #  ax_n.xaxis.set_major_locator(MultipleLocator(5000)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
+        #  ax_n.locator_params(MultipleLocator())
+        #  ax_n.grid(True)
+        #  test= ax_n.get_xticks()
+        #  print(test)
+#  axins2.yaxis.get_major_locator().set_params(nbins=7)
+#  axins2.xaxis.get_major_locator().set_params(nbins=7)
+        xmin, xmax = ax_n.get_xlim()
+        
+        ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
+        #  iterate over each object contained in dict Data (returns the actual objects not their keys)
+        legend_elements = [] #empty list to append the legend entries to for each platfrom that is actually plotted
+        for p in Data.values():
+            ######
+            #Plot Inistu Torus Platforms (if desired and available)
+            if isinstance(p, Torus_Insitu):
+                if print_long == True: print(p.name)
+                legend_elements.append(p.leg_entry)
+                self.plot_TORUSpform(p, Data, ax_n, print_long, e_test)
+
+            ######
+            #Plot Stationary Inistu Platforms ( aka mesonets and ASOS) if desired and available
+            if isinstance(p, Stationary_Insitu):
+                if print_long == True: print(p.name)
+                # determine if any of the sites fall within the plotting domain
+                sites_subdf, valid_sites = p.grab_pform_subset( p, print_long, e_test, Data, bounding= self.Domain)
+                # if there are sites within the domain plot the markers and include in the legend
+                if valid_sites == True:
+                    legend_elements.append(p.leg_entry)
+                    ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=ccrs.PlateCarree(), marker=p.m_style, linestyle='None', markersize= p.m_size, color=p.m_color)
+                    # include labels for the sites on the plots
+                    if p.marker_label == True:
+                        for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['Stn_ID']):
+                            trans = self.R_Proj.transform_point(x+.009, y-.002, ccrs.Geodetic())
+                            ax_n.text(trans[0], trans[1], lab, fontsize= 20)
+
+            #####
+            #Plot Radar Platforms (if desired and available)
+            if isinstance(p, Radar):
+                if p.type != 'MAINR':
+                    if print_long == True: print(p.name)
+                    #det if (any of) the radar is located within the area included in the plot domain at the time of the plot
+                    sites_subdf, valid_sites = p.grab_pform_subset(p, print_long, e_test, Data, bounding= self.Domain)
+
+                    #if these conditions are met then plot the radar marker(s)
+                    if valid_sites == True:
+                        legend_elements.append(p.leg_entry)
+                        if p.type == 'KA':
+                            ## Plot the marker
+                            ax_n.plot(p.lon, p.lat, transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
+                                      markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
+                            ## Plot RHI spokes
+                            if config.rhi_ring == True: self.rhi_spokes_rings(p)
+                            ## Optional textlabel on plot
+                            if p.marker_label == True:
+                                ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')])
+                        if p.type == 'NOXP': 
+                            ## Plot the marker
+                            ax_n.plot(p.lon, p.lat, transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
+                                      markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
+                            ## Optional textlabel on plot
+                            if p.marker_label == True:
+                                ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')])
+                        if p.type == 'WSR':
+                            ## Plot the marker
+                            ax_n.plot(sites_subdf['lon'], sites_subdf['lat'], transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
+                                      markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=8)
+                            # include labels for the sites on the plots
+                            if p.marker_label == True:
+                                for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['R_Name']):
+                                    trans = self.R_Proj.transform_point(x, y, ccrs.Geodetic())
+                                    ax_n.text(trans[0]+.03, trans[1]-.01, lab, fontsize= 27)
+
+
+        ## PLOT BACKGROUND FEATURES
+        if config.country_roads == True:
+            ox.config(log_file=True, log_console=True, use_cache=True) #the config in this line has nothing to do with config.py
+            G = ox.graph_from_bbox(self.Domain.ymax, self.Domain.ymin, self.Domain.xmax, self.Domain.xmin)
+            ox.save_load.save_graph_shapefile(G, filename='tmp'+str(0), folder=config.g_roads_directory , encoding='utf-8')
+            fname = config.g_roads_directory + 'tmp'+str(0)+'/edges/edges.shp'
+            shape_feature = ShapelyFeature(Reader(fname).geometries(), ccrs.PlateCarree(), edgecolor='gray', linewidth=0.5)
+            ax_n.add_feature(shape_feature, facecolor='none')
+            shutil.rmtree(config.g_roads_directory+'tmp'+str(0)+'/')
+        if config.hwys == True:
+            fname = config.g_roads_directory+'GPhighways.shp'
+            shape_feature = ShapelyFeature(Reader(fname).geometries(), ccrs.PlateCarree(), edgecolor='grey')#edgecolor='black')
+            ax_n.add_feature(shape_feature, facecolor='none')
+        if config.county_lines == True:
+            fname = config.g_roads_directory+'cb_2017_us_county_5m.shp'
+            shape_feature = ShapelyFeature(Reader(fname).geometries(), ccrs.PlateCarree(), edgecolor='gray')
+            ax_n.add_feature(shape_feature, facecolor='none', linewidth=1.5, linestyle="--")
+        if config.state_lines == True:
+            states_provinces = cartopy.feature.NaturalEarthFeature(category='cultural', name='admin_1_states_provinces_lines', scale='10m', facecolor='none')
+            ax_n.add_feature(states_provinces, edgecolor='black', linewidth=2)
+        if print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
+
+        #  self.display.plot_grid_lines(ax=ax_n, col='k', ls='-')
+
+        ## DEAL WITH COLORBARS
+        # Attach colorbar to each subplot
+        divider = make_axes_locatable(plt.gca())
+        c_ax = divider.append_axes("right", "5%", pad="2%", axes_class=plt.Axes)
+        sm = plt.cm.ScalarMappable(cmap=c_scale, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
+        sm._A = []
+        cb = plt.colorbar(sm, cax=c_ax, label=c_label)
+
+        ## SET UP LEGENDS
+        if leg == True: #this means you are currently making the left subplot
+            #add legend for platform markers
+            l = ax_n.legend(handles=legend_elements, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1)#, title="Platforms")
+            #  h, le = ax_n.get_legend_handles_labels()
+            #  print('iiiiii')
+            #  print(h)
+            #  print(le)
+            #  l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1)#, title="Platforms")
+            l.set_title("Platforms", prop=self.leg_title_font)
+        if leg == False:  #this means you are currently making the right subplot
+            ## Plot platform colorbar
+            #set up colorbar axis that will be as tall and 5% as wide as the 'parent' radar subplot
+            cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.19, 0,1,1))
+            cbar = plt.colorbar(Data['Var'].CS3, cax=cbar_ax, orientation='vertical', label=Data['Var'].v_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(Data['p_var'].global_min, Data['p_var'].global_max+1,2))
+        ax_n.tick_params(which='major', axis='both', width=2, length=14, color='black', grid_linewidth=2.5)
+        #  ax_n.gridlines(crs=ccrs.PlateCarree(), draw_labels=True)
+        #  ax_n.xaxis.set_major_locator(MultipleLocator(5000)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
+        ax_n.xlocator = MultipleLocator(5000)
+        self.display.plot_grid_lines(ax=ax_n, col='k')
+        #  ax_n.locator_params(MultipleLocator())
+        ax_n.grid(True)
+        test= ax_n.get_xticks()
+        print(test)
+        print(ax_n)
+        print(type(ax_n))
+
+        #  print('RRRRRRR')
+        #  print(vars(ax_n))
+        #  print(ax_n.lines)
+        #  print(ax_n.get_lines)
+        #  print('PPPPPPPPPPP')
+
+
     # * * *
     def plot_TORUSpform(self, pform, Data, ax, print_long, e_test, border_c='xkcd:light grey', labelbias=(0,0)):
         ''' Plot the in situ platform markers, barbs and pathline
@@ -229,8 +491,7 @@ class Master_Plt:
         if print_long == True: print('made it into rhi_spokes_rings')
 
         # if there is not actually rhi info then it will not plot a ring and not stop the code
-        if np.isnan(pform.rhib) == True or np.isnan(pform.rhie)== True:
-            print('Could not plot RHI spokes')
+        if np.isnan(pform.rhib) == True or np.isnan(pform.rhie)== True: print('Could not plot RHI spokes')
 
         #produce spoke and ring
         else:
@@ -280,7 +541,6 @@ class Master_Plt:
     #  def plot_bground_features():
 ##########
 
-
 ##########################################################################
 ###########################
 ## PLOTTING DEFINTIONS  ###
@@ -309,7 +569,7 @@ def plotting(Data, print_long, e_test, start_comptime):
             ax_n= PLT.fig.add_subplot(PLT.r_gs[:, subcol], projection= PLT.R_Proj)
             if subcol==0: leg = True
             else: leg = False
-            radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test)
+            PLT.radar_subplots(mom, ax_n, Data, leg, print_long, e_test)
 
     ## Make the Times Series Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
@@ -318,299 +578,43 @@ def plotting(Data, print_long, e_test, start_comptime):
             print('Time Series plot: '+ ts +', Outer GridSpec Pos: [1, :], SubGridSpec Pos: ['+str(subrow)+', :]')
             if subrow==0: ax_n= PLT.fig.add_subplot(PLT.ts_gs[subrow,:])
             else:  ax_n=PLT.fig.add_subplot(PLT.ts_gs[subrow,:], sharex=ax_n)
-            time_series(ts, ax_n, Data, PLT, print_long, e_test)
+            PLT.time_series(ts, ax_n, Data, print_long, e_test)
 
-    ## Plot title
+    ## Finish plot
+    #### * * * * *
+    #Add a title in the plot
     if Data['P_Radar'].name in pform_names('KA') or Data['P_Radar'].name =='WSR88D':
         plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
     else: 
         plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
     file_string = '_'.join(config.Time_Series)
-
-    # Setup Function Cache for speedup
-    if not os.path.exists(g_cache_directory): Path(g_cache_directory).mkdir(parents=True)
-    ## Finish plot
-    # dir     
-    outdir_name = config.g_plots_directory+config.day+'/plots/'+Data['P_Radar'].type+'/'+config.p_var+'/'+np.around(Data['P_Radar'].swp, decimals=1)+'/'
+    
+    #This is the directory path for the output file
+    outdir_name = config.g_plots_directory+config.day+'/plots/'+Data['P_Radar'].dir_name+'/'+config.p_var+'/'+str(config.p_tilt)+'_deg/'
+    # Setup Function Cache for speedup, if path directory does not make the directory 
+    if not os.path.exists(outdir_name): Path(outdir_name).mkdir(parents=True)
+    
+    #add the file name 
     if Data['P_Radar'].name in pform_names('KA'):
         output_name= outdir_name+Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
     if Data['P_Radar'].name == 'NOXP':
         output_name = outdir_name+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
     if Data['P_Radar'].name == 'WSR88D':
         output_name = outdir_name+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
-    #  if Data['P_Radar'].name in pform_names('KA'):
-        #  output_name = config.g_plots_directory+config.day+'/plots/'+Data['P_Radar'].type+'/'+config.p_var+'/'+np.around(Data['P_Radar'].swp, decimals=1)+'/'
-        #  +Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
-    #  if Data['P_Radar'].name == 'NOXP':
-        #  output_name = config.g_plots_directory+config.day+'/plots/NOXP/'+config.p_var+'/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
-    #  if Data['P_Radar'].name == 'WSR88D':
-        #  output_name = config.g_plots_directory+config.day+'/plots/WSR/'+config.p_var+'/'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
-    #  print(output_name)
+    print(output_name)
 
     plt.savefig(output_name, bbox_inches='tight', pad_inches=.3)
     print("Plot took "+ str(time.time() - start_comptime)+ " to complete")
     plt.close()
 
-    ## Makes a ding noise
-    print('\a')
+    print('\a') ## Makes a ding noise
     if print_long == True: print('~~~~~~~~~~~made it through plotting~~~~~~~~~~~~~~~~~~')
     print('Done Plotting \n \n***************************************************************************************************')
-
-# * * * * * *  *
-def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
-    ''' Plots each of the radar subplots including the marker overlays corresponding to the additional platforms
-    ----
-    INPUTS:
-    mom: str, indicates which radar moment you would like to plot (ie Reflectivity, Velocity, Spectrum Width etc)
-    Data: dict as described in the plotting defn
-    PLT: .....fill in objected containing subplot info such as domain and radar.display
-    leg: bool str whether or not you want a legend associated with this particular subplot
-    print_long & e_test: bool str as described in the ppi defn
-    '''
-    if print_long == True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
-
-    ## SET UP VARS FOR EACH RADAR MOMENTS
-    if mom == 'refl':
-        p_title, c_label, c_scale = 'Reflectivity', 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow'
-        if Data['P_Radar'].name in pform_names('KA'):
-            field, vminb, vmaxb, sweep = 'refl_fix', -30., 30., Data['P_Radar'].swp
-        if Data['P_Radar'].name == 'NOXP':
-            field, vminb, vmaxb, sweep = 'DBZ', -30., 30., Data['P_Radar'].swp
-        if Data['P_Radar'].name == 'WSR88D':
-            field, vminb, vmaxb, sweep =  'reflectivity', -10., 75., Data['P_Radar'].swp[0]
-    elif mom == 'vel':
-        p_title, c_label, c_scale = 'Radial Velocity', 'Velocity [m/s]', 'pyart_balance'
-        if Data['P_Radar'].name in pform_names('KA'):
-            field, vminb, vmaxb, sweep = 'vel_fix', -40., 40., Data['P_Radar'].swp
-        if Data['P_Radar'].name == 'NOXP':
-            field, vminb, vmaxb, sweep = 'VEL', -40., 40., Data['P_Radar'].swp
-        if Data['P_Radar'].name == 'WSR88D':
-            field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
-    else: print("Hey what just happened!\n Check the Radar moments for spelling")
-
-    ## Plot the radar
-    ax_n.set_title(p_title, y=-.067, fontdict=PLT.Radar_title_font)
-    PLT.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=config.offsetkm*2000, height=config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
-
-    ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
-    #  iterate over each object contained in dict Data (returns the actual objects not their keys)
-    legend_elements = [] #empty list to append the legend entries to for each platfrom that is actually plotted
-    for p in Data.values():
-        #  print(vars(p))
-        ######
-        #Plot Inistu Torus Platforms (if desired and available)
-        if isinstance(p, Torus_Insitu):
-            if print_long == True: print(p.name)
-            legend_elements.append(p.leg_entry)
-            PLT.plot_TORUSpform(p, Data, ax_n, print_long, e_test)
-
-        ######
-        #Plot Stationary Inistu Platforms ( aka mesonets and ASOS) if desired and available
-        if isinstance(p, Stationary_Insitu):
-            if print_long == True: print(p.name)
-            # determine if any of the sites fall within the plotting domain
-            sites_subdf, valid_sites = p.grab_pform_subset( p, print_long, e_test, Data, bounding= PLT.Domain)
-            # if there are sites within the domain plot the markers and include in the legend
-            if valid_sites == True:
-                legend_elements.append(p.leg_entry)
-                ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=ccrs.PlateCarree(), marker=p.m_style, linestyle='None', markersize= p.m_size, color=p.m_color)
-                # include labels for the sites on the plots
-                if p.marker_label == True:
-                    for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['Stn_ID']):
-                        trans = PLT.R_Proj.transform_point(x+.009, y-.002, ccrs.Geodetic())
-                        ax_n.text(trans[0], trans[1], lab, fontsize= 20)
-
-        #####
-        #Plot Radar Platforms (if desired and available)
-        if isinstance(p, Radar):
-            if p.type != 'MAINR':
-                if print_long == True: print(p.name)
-                #det if (any of) the radar is located within the area included in the plot domain at the time of the plot
-                sites_subdf, valid_sites = p.grab_pform_subset(p, print_long, e_test, Data, bounding= PLT.Domain)
-
-                #if these conditions are met then plot the radar marker(s)
-                if valid_sites == True:
-                    legend_elements.append(p.leg_entry)
-                    if p.type == 'KA':
-                        ## Plot the marker
-                        ax_n.plot(p.lon, p.lat, transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
-                                  markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
-                        ## Plot RHI spokes
-                        if config.rhi_ring == True: PLT.rhi_spokes_rings(p)
-                        ## Optional textlabel on plot
-                        if p.marker_label == True:
-                            ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')])
-                    if p.type == 'NOXP': 
-                        ## Plot the marker
-                        ax_n.plot(p.lon, p.lat, transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
-                                  markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
-                        ## Optional textlabel on plot
-                        if p.marker_label == True:
-                            ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')])
-                    if p.type == 'WSR':
-                        ## Plot the marker
-                        ax_n.plot(sites_subdf['lon'], sites_subdf['lat'], transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
-                                  markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=8)
-                        # include labels for the sites on the plots
-                        if p.marker_label == True:
-                            for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['R_Name']):
-                                trans = PLT.R_Proj.transform_point(x, y, ccrs.Geodetic())
-                                ax_n.text(trans[0]+.03, trans[1]-.01, lab, fontsize= 27)
-
-
-    ## PLOT BACKGROUND FEATURES
-    if config.country_roads == True:
-        ox.config(log_file=True, log_console=True, use_cache=True) #the config in this line has nothing to do with config.py
-        G = ox.graph_from_bbox(PLT.Domain.ymax, PLT.Domain.ymin, PLT.Domain.xmax, PLT.Domain.xmin)
-        ox.save_load.save_graph_shapefile(G, filename='tmp'+str(0), folder=config.g_roads_directory , encoding='utf-8')
-        fname = config.g_roads_directory + 'tmp'+str(0)+'/edges/edges.shp'
-        shape_feature = ShapelyFeature(Reader(fname).geometries(), ccrs.PlateCarree(), edgecolor='gray', linewidth=0.5)
-        ax_n.add_feature(shape_feature, facecolor='none')
-        shutil.rmtree(config.g_roads_directory+'tmp'+str(0)+'/')
-    if config.hwys == True:
-        fname = config.g_roads_directory+'GPhighways.shp'
-        shape_feature = ShapelyFeature(Reader(fname).geometries(), ccrs.PlateCarree(), edgecolor='grey')#edgecolor='black')
-        ax_n.add_feature(shape_feature, facecolor='none')
-    if config.county_lines == True:
-        fname = config.g_roads_directory+'cb_2017_us_county_5m.shp'
-        shape_feature = ShapelyFeature(Reader(fname).geometries(), ccrs.PlateCarree(), edgecolor='gray')
-        ax_n.add_feature(shape_feature, facecolor='none', linewidth=1.5, linestyle="--")
-    if config.state_lines == True:
-        states_provinces = cartopy.feature.NaturalEarthFeature(category='cultural', name='admin_1_states_provinces_lines', scale='10m', facecolor='none')
-        ax_n.add_feature(states_provinces, edgecolor='black', linewidth=2)
-    if print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
-
-    ## DEAL WITH COLORBARS
-    # Attach colorbar to each subplot
-    divider = make_axes_locatable(plt.gca())
-    c_ax = divider.append_axes("right", "5%", pad="2%", axes_class=plt.Axes)
-    sm = plt.cm.ScalarMappable(cmap=c_scale, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
-    sm._A = []
-    cb = plt.colorbar(sm, cax=c_ax, label=c_label)
-
-    ## SET UP LEGENDS
-    if leg == True: #this means you are currently making the left subplot
-        #add legend for platform markers
-        l = ax_n.legend(handles=legend_elements, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1)#, title="Platforms")
-        l.set_title("Platforms", prop=PLT.leg_title_font)
-    if leg == False:  #this means you are currently making the right subplot
-        ## Plot platform colorbar
-        #set up colorbar axis that will be as tall and 5% as wide as the 'parent' radar subplot
-        cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.19, 0,1,1))
-        cbar = plt.colorbar(Data['Var'].CS3, cax=cbar_ax, orientation='vertical', label=Data['Var'].v_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(Data['p_var'].global_min, Data['p_var'].global_max+1,2))
-
-    #  print('RRRRRRR')
-    #  print(vars(ax_n))
-    #  print(ax_n.lines)
-    #  print(ax_n.get_lines)
-    #  print('PPPPPPPPPPP')
-
-# * * * * * * *
-def time_series(ts, ax_n, Data, PLT, print_long, e_test):
-    ''' Plot a time series (sub)plot; could be of pvar info from various intstruments or of wind info
-    ----
-    INPUTS:
-    ts: ........fill in
-    Data: dict as described in plotting defn
-    print_long & e_test: bool str as described in the ppi defn
-    '''
-    if print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
-
-    #  t_TS.T_Plt_settings(ts,ax_n)
-    TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
-    ## MAKE THE TIMESERIES
-    #### * * * * * * * * *
-    if ts in ['Thetav', 'Thetae']:
-        for p in Data.values():
-            if isinstance(p, Torus_Insitu):
-                if print_long == True: print('Plotting '+str(p.name)+' on time series')
-                ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
-                if p.type in config.TS_masking[:]: plotting_data= p.ts_mask_df
-                else: plotting_data= p.df[config.p_var].values
-
-                ## Plot
-                ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color) #assigning label= is what allows the legend to work
-                TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
-                TSleg_elements.append(TSleg_entry)
-
-        ## Set up XY axes tick locations
-        #  ax_n.set_ylim(bottom=Data['Var'].global_min, top=Data['Var'].global_max)
-        PLT.T_Plt_settings(ts, ax=ax_n, YLab=Data['Var'].v_lab)
-
-        leg = ax_n.legend(handles= TSleg_elements, loc='center left')
-
-    # * * *
-    if ts == 'Wind':
-        p = Data[config.Wind_Pform]
-        if print_long == True: print('Plotting '+str(p.name)+' on time series')
-
-        ax_n.plot(p.df['datetime'], p.df['spd'])
-        ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
-        TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
-        TSleg_elements.append(TSleg_entry)
-
-        ax_n.axhline(0, color='k', linewidth=5, zorder=10)
-
-        ax_2 = ax_n.twinx()
-        ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05)
-        TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
-        TSleg_elements.append(TSleg_entry)
-
-        PLT.T_Plt_settings(ts, ax=ax_n, YLab='Wind Speed', ax_t=ax_2, YLab_t='Wind Dir ($^{\circ}$)')
-        
-        leg = ax_n.legend(handles= TSleg_elements, loc='center left')
-        leg.set_title(config.Wind_Pform, prop=PLT.leg_title_font)
-        leg.remove()
-        ax_2.add_artist(leg)
-        
-    #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
-    #  num_of_TS= len(config.Time_Series)
-    #  if num_of_TS != 1 and ax_n.rowNum != (num_of_TS-1): plt.setp(ax_n.get_xticklabels(), visible=False)
-
-    ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
-    #  radar scan and the timerange ploted (via filled colorline) on the radar plots
-    if len(config.r_mom) != 0:
-        ax_n.axvline(Platform.Scan_time, color='r', linewidth=4, alpha=.5)
-        ax_n.axvspan(Platform.Scan_time - timedelta(minutes=config.cline_extent), Platform.Scan_time + timedelta(minutes=config.cline_extent), facecolor='0.5', alpha=0.4)
-
-    ## Include the legend
-    #  leg = ax_n.legend(handles= TSleg_elements, loc='center left')
-    #  if ts == 'Wind':
-        #  leg.set_title(config.Wind_Pform, prop=PLT.leg_title_font)
-
-    #  print(ax_n.lines)
-    #  print(vars(ax_n))
-    if print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
 ##############################################################################################
 #######################
 ## RADAR DEFINITIONS ##
 #######################
-#  def det_radar_fields(radar):
-    #  creating the mask for attenuation
-    #  reflectivity = radar.fields['reflectivity']['data']
-    #  spectrum_width = radar.fields['spectrum_width']['data']
-    #  velocity = radar.fields['corrected_velocity']['data']
-    #  total_power = radar.fields['total_power']['data']
-    #  normal = radar.fields['normalized_coherent_power']['data']
-    #  normal_mask = (normal.flatten() < 0.4)
-    #  range_mask = np.zeros(np.shape(reflectivity))
-#
-    #  for i in range(0, len(range_mask[:,0])): range_mask[i,:] = radar.range['data'] > (radar.range['data'][-1]-1000.)
-#
-    #  range_mask = range_mask.astype(bool)
-    #  total_mask = [any(t) for t in zip(range_mask.flatten(), normal_mask.flatten())]
-    #  refl_mask = np.ma.MaskedArray(reflectivity, mask=normal_mask)
-    #  sw_mask = np.ma.MaskedArray(spectrum_width, mask=normal_mask)
-    #  vel_mask = np.ma.MaskedArray(velocity, mask=normal_mask)
-    #  try:
-        #  create the dictionary for the masks
-        #  refl_dict, sw_dict, vel_dict = {'data':refl_mask}, {'data':sw_mask}, {'data':vel_mask}
-        #  radar.add_field('refl_fix', refl_dict)
-        #  radar.add_field('sw_fix', sw_dict)
-        #  radar.add_field('vel_fix', vel_dict)
-    #  except: print('Did not add radar feilds')
-
 # * * *
 def det_nearest_WSR(p_df):
     ''' locate the nearest WSR88D site to the specified insitu instruments
