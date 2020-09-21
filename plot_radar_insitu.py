@@ -434,6 +434,7 @@ class Master_Plt:
         ## Plot the radar
         ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
         self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=config.offsetkm*2000, height=config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
+        ax_n.set_extent(self.Domain)
         
         ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
         #  iterate over each object contained in dict Data (returns the actual objects not their keys)
@@ -547,17 +548,13 @@ class Master_Plt:
 
         ax_n.grid(True)
         ###################
-        test= ax_n.get_xticks()
-        print(test)
+        #  tick_locs = ax_n.get_xticks()
         ax_n.set_xticklabels([])    
+
         #  ax_n.xlocator = MultipleLocator(5000)
 
         #  ax_n.xaxis.set_major_locator(MultipleLocator(5000)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
         #  ax_n.locator_params(MultipleLocator())
-
-        #  print(vars(ax_n))
-        #  print(ax_n.lines)
-        #  print(ax_n.get_lines)
 
         if print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 

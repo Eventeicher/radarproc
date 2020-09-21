@@ -14,17 +14,17 @@ from os.path import expanduser
 ## File paths
 # ************
 #  Radar_Plot_Type = 'NOXP_Plotting'
-#  Radar_Plot_Type = 'KA_Plotting'
-Radar_Plot_Type = 'WSR_Plotting'
+Radar_Plot_Type = 'KA_Plotting'
+#  Radar_Plot_Type = 'WSR_Plotting'
 print_radar_info= False
 
 nCPU=1
 
 if Radar_Plot_Type == 'KA_Plotting':
-    day = '20190526' #'YYYYMMDD'
+    day = '20190517' #'YYYYMMDD'
     p_var = "Thetae" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 21 #21 is the best for KA
-    Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
+    Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
     p_tilt = 1 #what radar elevation tilt (deg) do you want to plot
 
@@ -49,7 +49,7 @@ if Radar_Plot_Type == 'WSR_Plotting':
 # ***********
 #  day = '20190520' #'YYYYMMDD'
 #crop the start or end time to a time you specify (set to None to do the whole day)
-#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 0, 0)
+#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 16, 0, 0)
 #  tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),22,45,0)
 tstart, tend = None, None
 #  tend = None
@@ -100,7 +100,7 @@ r_plotting, t_plotting = True, True
 #  Wind_Pform = 'Prb1'
 #  p_tilt = .5 #what radar elevation tilt (deg) do you want to plot
 #  p_tilt = .5 #what radar elevation tilt (deg) do you want to plot
-rhi_ring = True #do you want the rhi spokes for the KA radars
+rhi_ring = False #do you want the rhi spokes for the KA radars
 r_mom = ['refl', 'vel'] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
 
 #which other platforms do you wish to plot as overlays to the radar image (aka as markers, colorlines etc) if data is available

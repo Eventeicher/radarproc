@@ -72,6 +72,14 @@ def error_printing(e_test):
         #print( "<p>Error: %s</p>" % e )
         print("Error:", e[:-2], '\n')
 
+def timer(start,end, total_runtime=False):
+   hours, rem = divmod(end-start, 3600)
+   minutes, seconds = divmod(rem, 60)
+   if total_runtime == False:
+       print("Plot took {:0>2} hrs, {:0>2} min, {:05.2f} sec to complete".format(int(hours),int(minutes), seconds))
+   if total_runtime == True:
+       print("\nIt took {:0>2} hrs, {:0>2} min, {:05.2f} to complete all of the plots\n".format(int(hours),int(minutes), seconds))
+   
 ###########
 # Data Prep
 ###########
@@ -132,7 +140,7 @@ def pform_attr(pname):
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor='black', markeredgewidth=3, label=legend_str, markerfacecolor=marker_color, markersize=26)
     elif pname == 'WSR88D':
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, markeredgewidth=3, label=legend_str, markersize=26, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')])
-    elif pname in ['WTx_M','OK_M','IA_M', 'ASOS']:
+    elif pname in ['WTx_M','OK_M','IA_M','KS_M', 'ASOS']:
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, label=legend_str, markersize=26)
     else:
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, markeredgewidth=3, label=legend_str, markersize=26, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')])
@@ -698,8 +706,8 @@ class Platform:
                 elif brng == 270: min_lon= new_lon
 
             #set up a namedtuple object to hold the new info
-            box_extent = namedtuple('box_extent', ['ymin','ymax','xmin','xmax'])
-            box = box_extent(ymin= min_lat, ymax= max_lat, xmin= min_lon, xmax= max_lon)
+            box_extent = namedtuple('box_extent', ['xmin', 'xmax','ymin','ymax'])
+            box = box_extent(xmin= min_lon, xmax= max_lon, ymin= min_lat, ymax= max_lat)
             return box
         # + + + + + + + + + + + + ++ + +
 
