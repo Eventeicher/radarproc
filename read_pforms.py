@@ -10,16 +10,18 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as PathEffects
-from matplotlib.ticker import (LinearLocator, FixedLocator, MaxNLocator, MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 from matplotlib import ticker
+from matplotlib.ticker import (LinearLocator, FixedLocator, MaxNLocator, MultipleLocator, FormatStrFormatter, AutoMinorLocator)
+from matplotlib.ticker import FuncFormatter
 from matplotlib.colors import ListedColormap, Normalize
 import matplotlib.cm as cmx
 from matplotlib.transforms import Bbox
 from matplotlib.lines import Line2D
 from matplotlib.font_manager import FontProperties
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-import matplotlib.patheffects as PathEffects
+from cycler import cycler
 import datetime as dt
 from datetime import datetime, date, timedelta
 import cartopy
@@ -30,30 +32,24 @@ from cartopy.io.shapereader import Reader
 from shapely.geometry import Polygon
 from shapely.ops import cascaded_union
 import metpy
-from metpy.plots import StationPlot
-from metpy.plots import ctables
+from metpy.plots import StationPlot, ctables
 from metpy.units import units
 import metpy.calc as mpcalc
 import pandas as pd
+from pandas.plotting import register_matplotlib_converters
 import numpy as np
-import numpy.ma as ma
 import xarray as xr
 from netCDF4 import num2date
-import os, os.path
+import argparse, cProfile, logging, time, os, os.path
 from os.path import expanduser
 from pathlib import Path
+from joblib import Memory, Parallel, delayed
 from scipy import ndimage, interpolate
 from operator import attrgetter
 from collections import namedtuple
-import pyart, sys, traceback, shutil, glob, gc, cmocean
-import argparse
-import time
-import nexradaws
-from joblib import Memory, Parallel, delayed
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-import cProfile
-import logging
+import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
 
+register_matplotlib_converters()
 logging.basicConfig(filename='this_is.log')
 log = logging.getLogger(__name__)
 
@@ -93,14 +89,13 @@ def pform_names(Type):
         INPUT: Type [str]: valid options include 'ALL','RADAR', 'TInsitu','UNL','NSSL','KA'
         Output: P_list: list of pnames containing the names of the requested type
     '''
-    if Type == 'ALL': P_list = ['WTx_M','OK_M','IA_M','ASOS','AWOS','METAR','FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS', 'Ka1','Ka2','NOXP','WSR88D']
-    elif Type == "STN_I": P_list= ['WTx_M','OK_M','IA_M','ASOS']
+    if Type == 'ALL': P_list = ['WTx_M','OK_M','IA_M','KS_M','ASOS','FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS', 'Ka1','Ka2','NOXP','WSR88D']
+    elif Type == "STN_I": P_list= ['WTx_M','OK_M','IA_M','KS_M', 'ASOS']
+    elif Type == 'MESO': P_list = ['WTx_M','OK_M','IA_M', 'KS_M']
     elif Type == 'TInsitu': P_list = ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']
-    elif Type == 'RADAR': P_list = ['Ka1','Ka2','NOXP','WSR88D']
-    elif Type == 'MESO': P_list = ['WTx_M','OK_M','IA_M']
-    elif Type == 'NWS': P_list= ['ASOS','AWOS','METAR']
     elif Type == 'UNL': P_list = ['CoMeT1','CoMeT2','CoMeT3']
     elif Type == 'NSSL': P_list = ['FFld','LIDR','Prb1','Prb2','WinS']
+    elif Type == 'RADAR': P_list = ['Ka1','Ka2','NOXP','WSR88D']
     elif Type == 'KA': P_list = ['Ka1','Ka2']
     else: print('Please enter a valid list name')
     return P_list
@@ -125,6 +120,7 @@ def pform_attr(pname):
     elif pname == "WTx_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\AA$', 'black', 23, 'black', 'WTxM'
     elif pname == "OK_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\gamma$', 'black', 23, 'black', 'OKM'
     elif pname == "IA_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\Upsilon$', 'black', 23, 'black', 'IAM'
+    elif pname == "KS_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\yen$', 'black', 23, 'black', 'KSM'
         #U+1278, #u20a9
     elif pname == 'Ka2': marker_style, marker_color, marker_size, line_color, legend_str= '8', 'xkcd:crimson', 18, 'xkcd:crimson', 'Ka2'
     elif pname == 'Ka1': marker_style, marker_color, marker_size, line_color, legend_str= '8', 'mediumseagreen', 18, 'mediumseagreen', 'Ka1'
@@ -299,10 +295,15 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
     '''
     if pname in pform_names('UNL'):
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
-        mtest = mmfile[0] #if there is no files this will will cause the script to fail (in a good way)
-        #if the code has not failed by this point there is data present; if calling defn in a testing capacity
-        #  the defn will exit at this point (saving computing time) otherwise the defn will cont
-        if d_testing == True: return True
+        
+        # Test Data availability
+        if d_testing == True:
+            try:
+                #if there is no files this will will cause the try statement to fail
+                mtest = mmfile[0]
+                return True
+            except: return False
+        #  if the defn was only called to it will exit at this point (saving computing time) 
         # + + + + + + + + + + + + ++ + +
 
         data_hold = [] #empty list to append to
@@ -329,9 +330,10 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
                 'U': (dims, U.m, {'units':str(U.units)}),
                 'V': (dims, V.m, {'units':str(V.units)}),
                 'Theta': (dims, ds.theta.values, {'units':str(ds.theta.units)}),
-                'Thetav': (dims, ds.theta_v.values, {'units':str(ds.theta_v.units)}),
-                'Thetae': (dims, ds.theta_e.values, {'units':str(ds.theta_e.units)})
+                'Thetae': (dims, ds.theta_e.values, {'units':str(ds.theta_e.units)}),
+                'Thetav': (dims, ds.theta_v.values, {'units':str(ds.theta_v.units)})
             }
+            
             subds = xr.Dataset(data_vars, coords)
 
             #convert to pandas
@@ -349,43 +351,53 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
 
         #convert the list holding the dataframes to one large dataframe
         data_unl = pd.concat(data_hold)
+        
+        #drop all the columns that we will not use past this point (to save memory/computing time)
+        data_unl = data_unl.drop(columns=['Temperature', 'Z_ASL', 'Z_AGL', 'Theta', 'Dewpoint', 'Pressure', 'RH'])
+        #  print(data_unl.memory_usage())
+        #  data_unl.set_index('datetime', inplace=True, drop=False)
         return data_unl, 'UNL'
 
     # * * *
     elif pname in pform_names('NSSL'):
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
-        file = mmfile[0]
-        #if the code has not failed by this point there is data present; if calling defn in a testing capacity
-        #  the defn will exit at this point (saving computing time) otherwise the defn will cont
-        if d_testing == True: return True
-        # + + + + + + + + + + + + ++ + +
 
+        # Test Data availability
+        if d_testing == True:
+            try:
+                #if there is no files this will will cause the try statement to fail
+                mtest = mmfile[0]
+                return True
+            except: return False
+        # + + + + + + + + + + + + ++ + +
+        
+        mmfile=mmfile[0]
         # Read NSSL file using column names from readme
         column_names = ['id','time','lat','lon','alt','tfast','tslow','rh','p','dir','spd','qc1','qc2','qc3','qc4']
-        data = pd.read_csv(file, header=0, delim_whitespace=True, names=column_names)
+        data = pd.read_csv(mmfile, header=0, delim_whitespace=True, names=column_names)
         data = data.drop_duplicates()
 
         # Find timedelta of hours since start of iop (IOP date taken from filename!)
-        tiop = dt.datetime(2019, np.int(file[-15:-13]), np.int(file[-13:-11]), 0, 0, 0)
+        tiop = dt.datetime(2019, np.int(mmfile[-15:-13]), np.int(mmfile[-13:-11]), 0, 0, 0)
 
         if tstart is None:
             hstart = tiop
             hstart_dec = hstart.hour + (hstart.minute/60) + (hstart.second/3600) #convert to decimal hours HH.HHH
         else:
-            hstart = (tstart - tiop).seconds/3600
+            hstart = float((tstart - tiop).seconds)/3600
             hstart_dec = hstart
 
         if tend is None:
             hend = data['time'].iloc[-1]
         else:
             hend = (tend - tiop)
-            if hend >= dt.timedelta(days=1): hend = (tend-tiop).seconds/3600 + 24.
-            else: hend = (tend-tiop).seconds/3600
+            if hend >= dt.timedelta(days=1): hend = float((tend-tiop).seconds)/3600 + 24.
+            else: hend = float((tend-tiop)).seconds/3600
 
         # Save only desired iop data
         data_nssl = data.loc[(data['time'] >= hstart_dec) & (data['time'] <= hend)]
         # Convert time into timedeltas
-        date = dt.datetime.strptime('2019-'+file[-15:-13]+'-'+file[-13:-11],'%Y-%m-%d')
+        date = dt.datetime.strptime('2019-'+mmfile[-15:-13]+'-'+mmfile[-13:-11],'%Y-%m-%d')
         time_deltas = []
         for i in np.arange(len(data_nssl)):
             j = data_nssl['time'].iloc[i]
@@ -394,17 +406,16 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
 
         ## Caclulate desired variables
         p, t = data_nssl['p'].values * units.hectopascal, data_nssl['tfast'].values * units.degC
-        theta = mpcalc.potential_temperature(p, t)
-        data_nssl['Theta'] = theta.magnitude
-
         r_h = data_nssl['rh'].values/100
-        mixing = mpcalc.mixing_ratio_from_relative_humidity(r_h, t, p)
-        thetav = mpcalc.virtual_potential_temperature(p, t, mixing)
-        data_nssl['Thetav'] = thetav.magnitude
+        data_nssl['Theta'] = (mpcalc.potential_temperature(p, t)).m
 
-        td = mpcalc.dewpoint_rh(temperature= t, rh= r_h)
-        thetae = mpcalc.equivalent_potential_temperature(p, t, td)
-        data_nssl['Thetae'] = thetae.magnitude
+        if 'Thetav' == config.p_var:
+            mixing = mpcalc.mixing_ratio_from_relative_humidity(r_h, t, p)
+            data_nssl['Thetav'] = (mpcalc.virtual_potential_temperature(p, t, mixing)).m
+
+        if 'Thetae' == config.p_var:
+            td = mpcalc.dewpoint_rh(temperature= t, rh= r_h)
+            data_nssl['Thetae'] = (mpcalc.equivalent_potential_temperature(p, t, td)).m
 
         Spd, dire = data_nssl['spd'].values * units('m/s') , data_nssl['dir'].values * units('degrees')
         u, v = mpcalc.wind_components(Spd, dire)
@@ -413,12 +424,11 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         #  q_list = ['qc1','qc2','qc3','qc4']
         q_list = config.NSSL_qcflags
         data_nssl['all_qc_flags'] = data_nssl[q_list].sum(axis=1)
-
-        #  t = []
-        #  for i in range(0, len(data_nssl)):
-            #  t.append([i] *120)
-        #  data_nssl['group'] = tuple(t)
-        #  data_nssl['wmax'] = data_nssl.groupby(['group'])['spd'].transform(max)
+        #  data_nssl.set_index('datetime', inplace=True, drop=False)
+      
+        #drop all the columns that we will not use past this point (to save memory/computing time)
+        data_nssl = data_nssl.drop(columns=['rh', 'p', 'time', 'alt', 'Theta', 'tfast', 'tslow'])
+        #  print(data_nssl.memory_usage())
         return data_nssl, 'NSSL'
 
     # * * *
@@ -433,41 +443,40 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
         if so record locations and names of the sites
     '''
     if pname == 'WTx_M':
-        wtm_df = pd.read_csv(config.g_root+'/West_TX_mesonets.csv')
-        #if there is not a file in your directory this will cause a failure for d_testing
-        p_test = wtm_df.iloc[0]
-        #  if testing for data availability (and the defn has not failed yet) the func will end here
-        if d_testing == True: return True
-        else: return wtm_df, 'WTM'
+        file_name= '/West_TX_mesonets.csv'
+        ptype = 'WTM'
+    elif pname == 'OK_M':
+        file_name= '/OKmeso.csv'
+        ptype = 'OK_M'
+    elif pname == 'KS_M':
+        file_name= '/KS_Meso.csv'
+        ptype = 'KSM'
+    elif pname == 'IA_M':
+        file_name= '/IA_meso.csv'
+        ptype = 'IAM'
+    elif pname == 'ASOS':    
+        file_name= '/ASOS_stations.csv'
+        ptype = 'ASOS'
 
-    # * * *
+    stnry_df = pd.read_csv(config.g_root+file_name)
+
     if pname == 'OK_M':
-        wtm_df = pd.read_csv(config.g_root+'/OKmeso.csv')
-        wtm_df.rename(columns = {'nlat':'lat', 'elon':'lon'}, inplace = True)
-        #if there is not a file in your directory this will cause a failure for d_testing
-        p_test = wtm_df.iloc[0]
-        #  if testing for data availability (and the defn has not failed yet) the func will end here
-        if d_testing == True: return True
-        else: return wtm_df, 'WTM'
-
-    # * * *
-    if pname == 'IA_M':
-        wtm_df = pd.read_csv(config.g_root+'/Iowa_meso.csv')
-        #if there is not a file in your directory this will cause a failure for d_testing
-        p_test = wtm_df.iloc[0]
-        #  if testing for data availability (and the defn has not failed yet) the func will end here
-        if d_testing == True: return True
-        else: return wtm_df, 'WTM'
-
-    # * * *
+        stnry_df.rename(columns = {'nlat':'lat', 'elon':'lon'}, inplace = True)
+    if pname == 'KS_M':
+        stnry_df.rename(columns = {'LATITUDE':'lat', 'LONGITUDE':'lon', 'ABBR':'Stn_ID'}, inplace = True)
     if pname == 'ASOS':
-        ASOS_df = pd.read_csv(config.g_root+'/ASOS_stations.csv')
-        ASOS_df.rename(columns = {'CALL':'Stn_ID', 'LAT':'lat', 'LON':'lon'}, inplace = True)
-        #if there is not a file in your directory this will cause a failure for d_testing
-        p_test = ASOS_df.iloc[0]
-        #  if testing for data availability (and the defn has not failed yet) the func will end here
-        if d_testing == True: return True
-        else: return ASOS_df, 'ASOS'
+        stnry_df.rename(columns = {'CALL':'Stn_ID', 'LAT':'lat', 'LON':'lon'}, inplace = True)
+
+    # Test Data availability
+    if d_testing == True:
+        try:
+            #if there is no files this will will cause the try statement to fail
+            p_test = stnry_df.iloc[0]
+            return True
+        except: return False
+    # + + + + + + + + + + + + ++ + +
+    
+    else: return stnry_df, ptype
 
 #**************
 def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False):
@@ -553,9 +562,6 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
             NOXPfiles = sorted(glob.glob(path))
             file = NOXPfiles[0]
-            #if the code has not failed by this point there is data present; if calling defn in a testing capacity
-            #  the defn will exit at this point (saving computing time) otherwise the defn will cont
-            #  if d_testing == True: return True
            
             checking=0
             for file in NOXPfiles:
@@ -594,17 +600,22 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             return MR_time, MR_lat, MR_lon , 'MAINR'
 
         #  Determine what other WSR sites could fall withing the plotting domain
-        #  if rfile == None:
+        if rfile == None:
             #  save the nexrad locations to an array from the PyART library
             wsr_locs = pyart.io.nexrad_common.NEXRAD_LOCATIONS
             WSR_df= pd.DataFrame.from_dict(wsr_locs, orient= 'index')
             WSR_df.reset_index(self, level=None, drop=False, inplace=False, col_level=0, col_fill='')
             WSR_df.index.name = 'R_Name'
             WSR_df.reset_index(inplace= True, drop=False)
-            #  if no sites in domain this will cause a failure for d_testing
-            p_test = WSR_df.iloc[0]
-            #  if testing for data availability (and the defn has not failed yet) the func will end here
-            if d_testing == True: return True
+            
+            # Test Data availability
+            if d_testing == True:
+                try:
+                    #  if no sites in domain this will cause a failure 
+                    p_test = WSR_df.iloc[0]
+                    return True
+                except:return False
+            
             else: return WSR_df, 'WSR'
 
 
@@ -666,11 +677,12 @@ class Platform:
             start_lat, start_lon = pform.lat, pform.lon
         else:
             # locate the data entry that has the closest time as the plotting radar scantime
-            a=pform.df.iloc[pform.df['datetime'].sub(pform.Scan_time).abs().idxmin()]
-            start_lat, start_lon = a.lat, a.lon
+            ScanT_entry =pform.df.loc[pform.df['datetime'].sub(pform.Scan_time).abs().idxmin()]
+            start_lat, start_lon = ScanT_entry.lat, ScanT_entry.lon
 
         lat1, lon1 = start_lat * np.pi/180.0 , start_lon * np.pi/180.0
         R = 6378.1 #earth radius (R = ~ 3959 MilesR = 3959)
+        # + + + + + + + + + + + + ++ + +
 
         if given_bearing == False:
             for brng in [0, 90, 180, 270]:
@@ -689,6 +701,7 @@ class Platform:
             box_extent = namedtuple('box_extent', ['ymin','ymax','xmin','xmax'])
             box = box_extent(ymin= min_lat, ymax= max_lat, xmin= min_lon, xmax= max_lon)
             return box
+        # + + + + + + + + + + + + ++ + +
 
         else: #if a bearing is provided
             bearing = (given_bearing/90.) * np.pi/2.
@@ -716,15 +729,17 @@ class Platform:
         '''
         if pform.type == 'KA' or pform.type == 'NOXP': Single_Point = True
         else: Single_Point = False
+        # + + + + + + + + + + + + ++ + +
 
         #Temporal subset
         ##### + + + + + +
         if time_offset != None:
             if Single_Point == True:  print('Code not written yet to spatially subset a platform without a pandas df (like radars)')
             else:
-                aaa = pform.df.loc[(pform.df['datetime'] >= pform.Scan_time-dt.timedelta(minutes=time_offset))]
-                df_sub = aaa.loc[(aaa['datetime'] <= pform.Scan_time+dt.timedelta(minutes=time_offset))]
+                lower_tbound, upper_tbound = (pform.Scan_time-dt.timedelta(minutes=time_offset)), (pform.Scan_time+dt.timedelta(minutes=time_offset))
+                df_sub = pform.df.loc[(pform.df['datetime'] >= lower_tbound) & (pform.df['datetime'] <= upper_tbound)]
                 if print_long == True: print('Dataset has been temporally subset')
+        # + + + + + + + + + + + + ++ + +
 
         #Spatial Subset
         ##### + + + + +
@@ -734,15 +749,16 @@ class Platform:
                        np.logical_and(pform.lon > bounding.xmin, pform.lon < bounding.xmax))): p_deploy = True
                 else: p_deploy = False
             else:
-                #if both time_offset and bounding area is given then the spatial subset start from the already
-                    #temporally subset dataframe... if not will start with the full platform dataframe
-                if time_offset != None: aaa = df_sub.loc[(pform.df['lat'] >= bounding.ymin)]
-                else: aaa = pform.df.loc[(pform.df['lat'] >= bounding.ymin)]
+                # if the dataset has not been temporally subset (aka time_offset is none) the dataframe 
+                #  to do the spatiol subsetting is equivilant to the full original dataset; 
+                #  otherwise use the previously det df_sub that results from the temporal subset
+                if time_offset == None: df_sub = pform.df
 
-                bbb = aaa.loc[(aaa['lat'] <= bounding.ymax)]
-                ccc = bbb.loc[(bbb['lon'] >= bounding.xmin)]
-                df_sub = ccc.loc[(ccc['lon'] <= bounding.xmax)]
+                #conduct the spatial subset
+                df_sub = df_sub.loc[(df_sub['lat'] >= bounding.ymin) & (df_sub['lat'] <= bounding.ymax) & 
+                                    (df_sub['lon'] >= bounding.xmin) & (df_sub['lon'] <= bounding.xmax)]
             if print_long == True: print('Dataset has been spatially subset')
+        # + + + + + + + + + + + + ++ + +
 
         #Determine what to return
         if Single_Point == True: df_sub= 'filler'
@@ -854,12 +870,6 @@ class Pvar:
             if hasattr(p,'Max') == True: val_hold.append(p.Max)
         
         if len(val_hold) != 0: self.global_min, self.global_max = min(val_hold), max(val_hold)
-        #  if len(val_hold) == 0:
-            #  log.debug("Pvar min max = 0.0, 1.0")
-            #  val_hold.append(0.0)
-            #  val_hold.append(1.0)
-            #  log.debug("Pvar min max Could not be determined.  Used sketchy default values.")
-
 
     # * * *
     def make_dummy_plot(self):
@@ -870,7 +880,7 @@ class Pvar:
         Z = [[0,0],[0,0]]
 
         levels = np.arange(self.global_min, self.global_max+1, 1)
-        self.CS3 = plt.contourf(Z, levels, cmap=cmap)#,transform=datacrs)
+        self.CS3 = plt.contourf(Z, levels, cmap=cmap)
         plt.clf()
 
 #

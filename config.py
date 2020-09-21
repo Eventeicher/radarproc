@@ -14,14 +14,14 @@ from os.path import expanduser
 ## File paths
 # ************
 #  Radar_Plot_Type = 'NOXP_Plotting'
-Radar_Plot_Type = 'KA_Plotting'
-#  Radar_Plot_Type = 'WSR_Plotting'
+#  Radar_Plot_Type = 'KA_Plotting'
+Radar_Plot_Type = 'WSR_Plotting'
 print_radar_info= False
 
 nCPU=1
 
 if Radar_Plot_Type == 'KA_Plotting':
-    day = '20190518' #'YYYYMMDD'
+    day = '20190526' #'YYYYMMDD'
     p_var = "Thetae" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 21 #21 is the best for KA
     Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
@@ -37,7 +37,7 @@ if Radar_Plot_Type == 'NOXP_Plotting':
     p_tilt = 0.5 #what radar elevation tilt (deg) do you want to plot
 
 if Radar_Plot_Type == 'WSR_Plotting':
-    day = '20190608' #'YYYYMMDD'
+    day = '20190517' #'YYYYMMDD'
     p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 60 #21 is the best for KA
     Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
@@ -49,7 +49,7 @@ if Radar_Plot_Type == 'WSR_Plotting':
 # ***********
 #  day = '20190520' #'YYYYMMDD'
 #crop the start or end time to a time you specify (set to None to do the whole day)
-#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 55, 0)
+#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 0, 0)
 #  tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),22,45,0)
 tstart, tend = None, None
 #  tend = None
@@ -107,7 +107,7 @@ r_mom = ['refl', 'vel'] #list; the radar moments to plot on the left and right s
 KAm, WSRm, NOXPm, NSSLm, NEBm, UASm, ASOSm, MESONETSm = True, True, True, True, True, False, True, True
 MESO_lab, WSR88D_lab, KA_lab, NOXP_lab, RHI_lab, TIn_lab, ASOS_lab = False, False, False, False, False, False, False
 country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
-cline_extent = 5 #how long would you like the colorlines for each platforms to cover +-x min (also control width of greybox on tseries)
+cline_extent = 10 #how long would you like the colorlines for each platforms to cover +-x min (also control width of greybox on tseries)
 ts_extent = 30 #so actually 60 min
 #  ts_extent = None #so actually 60 min
 
