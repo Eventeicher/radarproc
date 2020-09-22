@@ -262,7 +262,7 @@ class Master_Plt:
                 ticks = np.sort(ticks)
                 ticks = np.unique(ticks)
                 return ticks
-
+#
             #Det the boundaries of the domain 
             x0, x1 = ax.get_xbound()
             y0, y1 = ax.get_ybound()
@@ -278,12 +278,34 @@ class Master_Plt:
                 # if some plots look are too small for radar might want to try this...
                 #yrange, xrange = (y0, y1), (x0, x1)
                 #ax_n.set_ylim(yrange)
+            #  print(keys(ax))
+            #  ax.xlocator = MaxNLocator(nbins=6, steps=[5, 10])
+            
+            #  test=ax.xaxis.set_major_locator(MaxNLocator(nbins=6, steps=[5, 10]))
+            #  print('908080808080808080')
+            #  print(test)
+            #  print(type(test))
+            #  print('908080808080808080')
+            
+            #  ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+            #  ax.yaxis.set_major_locator(MaxNLocator(nbins=6, steps=[5, 10]))
+            #  ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+            #  ax.set_yticks(MaxNLocator(nbins=6, steps=[5, 10]))
+            #  ax.set_xticks(MaxNLocator(nbins=6, steps=[5, 10]))
+            #  ax.set_major_locator(MaxNLocator(nbins=6, steps=[5, 10]))
+            #  ax.set_minor_locator(AutoMinorLocator(2))
+            #  ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+            #  loc = plticker.MultipleLocator(base=1.0) # this locator puts ticks at regular intervals
+            #  ax.xaxis.set_major_locator(loc)
         # + + + + + + + + + + + + ++ + +
         
         ##Tick Display Characteristics
         # # # # # # # # # # # # # # # #
         ax.tick_params(which='minor', axis='both', width=2, length=7, color='grey')
         ax.tick_params(which='major', axis='both', width=2, length=10, color='black')
+        if radar != None:
+            ax.tick_params(which='both', axis='both', direction='in', top=True, bottom=False, labelbottom=False,labeltop=True)
+            ax.tick_params(which='both', axis='y', labelrotation=90)
         # + + + + + + + + + + + + ++ + +
 
         ##Grid Display Characteristics
@@ -291,9 +313,9 @@ class Master_Plt:
         if ts != None:
             ax.tick_params(which='major', axis='both', grid_linewidth=2.5)
             ax.tick_params(which='major', axis='y', grid_color='grey', grid_linewidth=2, grid_linestyle='--', grid_alpha=.8)
-            ax.tick_params(which='minor', axis='y', grid_linestyle=':')
-            ax.grid(which='both')
         
+        ax.grid(which='both')
+        ax.tick_params(which='minor', axis='both', grid_linestyle=':')
         ax.set_axisbelow('line')
         # + + + + + + + + + + + + ++ + +
 
@@ -313,11 +335,10 @@ class Master_Plt:
             #since this is square grid both the x and y formatter will be the same
             ax.yaxis.set_major_formatter(FuncFormatter(km))
             ax.xaxis.set_major_formatter(FuncFormatter(km))
-            #  ax.xaxis.set_visible(False)
         # + + + + + + + + + + + + ++ + +
 
     # * * * * * * *
-    def time_series(self, ts, ax_n, Data, print_long, e_test):
+    def time_series(self, ts, ax_n, fig, Data, print_long, e_test):
         ''' Plot a time series (sub)plot; could be of pvar info from various intstruments or of wind info
         ----
         INPUTS:
@@ -394,6 +415,15 @@ class Master_Plt:
         # # # # # # # # #
         ax_n.set_xlabel('Time (UTC)')
         ax_n.yaxis.set_label_coords(-.03, .5)
+        
+        print('$$$$$$$$$')
+        print('TS ', ts)
+        box = ax_n.get_position()
+        box2=ax_n.get_tightbbox(fig.canvas.get_renderer(), call_axes_locator = True)
+        ax_n.set_frame_on(True)
+        print(box)
+        print(box2)
+        print('$$$$$$$$$')
 
         #  print(ax_n.lines)
         #  print(vars(ax_n))
@@ -401,7 +431,7 @@ class Master_Plt:
 
 
     # * * * * * *  *
-    def radar_subplots(self, mom, ax_n, Data, leg, print_long, e_test):
+    def radar_subplots(self, mom, ax_n, fig, Data, leg, print_long, e_test):
         ''' Plots each of the radar subplots including the marker overlays corresponding to the additional platforms
         ----
         INPUTS:
@@ -529,27 +559,42 @@ class Master_Plt:
         ## SET UP LEGENDS
         if leg == True: #this means you are currently making the left subplot
             #add legend for platform markers
-            l = ax_n.legend(handles=legend_elements, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.1,.5), handlelength=.1)#, title="Platforms")
+            l = ax_n.legend(handles=legend_elements, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.09,.5), handlelength=.1)#, title="Platforms")
             #  h, le = ax_n.get_legend_handles_labels()
             #  l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1)#, title="Platforms")
             l.set_title("Platforms", prop=self.leg_title_font)
+            print(vars(l))
+            lbbox=l.get_window_extent()
+            print(lbbox)
         if leg == False:  #this means you are currently making the right subplot
             ## Plot platform colorbar
             #set up colorbar axis that will be as tall and 5% as wide as the 'parent' radar subplot
-            cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.29, 0,1,1))
+            cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.225, 0,1,1))
             cbar = plt.colorbar(Data['Var'].CS3, cax=cbar_ax, orientation='vertical', label=Data['Var'].v_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(Data['p_var'].global_min, Data['p_var'].global_max+1,2))
-        
+        print('$$$$$$$$$')
+        print('RMOM ', mom)
+        box = ax_n.get_position()
+        box2=ax_n.get_tightbbox(fig.canvas.get_renderer(), call_axes_locator = True)
+        ax_n.set_frame_on(True)
+        print(box)
+        print(box2)
+        print('$$$$$$$$$')
+
+
+        # Shrink current axis by 20%
+        #  box = ax.get_position()
+        #  ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        # Shrink current axis's height by 10% on the bottom
+        #  box = ax.get_position()
+        #  ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
+          #  plt.subplots_adjust(right=0.7)
         ###################
-        self.tick_grid_settings(ax=ax_n, radar=True, interval=10*1000)
+        self.tick_grid_settings(ax=ax_n, radar=True, interval=20*1000)
         scale_bar(ax_n, 10) # 10 KM
-
-        #  set_ticks(ax_n, 10 * 1000) # 10K meters
-        #  set_km_axis_formatter(ax_n)
-
-        ax_n.grid(True)
+        #  ax_n.grid(True)
         ###################
         #  tick_locs = ax_n.get_xticks()
-        ax_n.set_xticklabels([])    
+        #  ax_n.set_xticklabels([])
 
         #  ax_n.xlocator = MultipleLocator(5000)
 
@@ -583,15 +628,16 @@ class Master_Plt:
             C = cmocean.cm.thermal((p_sub[config.p_var].values - Data['Var'].global_min) / (Data['Var'].global_max - Data['Var'].global_min))
             ax = plt.gca()
 
-            #  ax.plot(p_sub.lon, p_sub.lat, c=border_c, linewidth=10.5, transform=ccrs.PlateCarree(), zorder=3)
-            #  ax.plot(p_sub.lon, p_sub.lat, c=C, linewidth=7.5, transform=ccrs.PlateCarree(), zorder=4)
+            #  for lon, lat, Cfill in zip(p_sub.lon, p_sub.lat, C):
+                #  ax.plot(lon, lat, c=Cfill, linewidth=7.5, transform=self.trans_Proj, zorder=4)
+            #  '''
             for i in np.arange(len(p_sub['lon']) - 1):
                 #This is the border of the colorline
                 x, y = p_sub['lon'].values, p_sub['lat'].values
                 ax.plot([x[i], x[i+1]], [y[i], y[i+1]], c=border_c, linewidth=10.5, transform=self.trans_Proj, zorder=3)
                 #This is the colorramp colorline
                 ax.plot([x[i], x[i+1]], [y[i], y[i+1]], c=C[i], linewidth=7.5, transform=self.trans_Proj, zorder=4)
-                #  ax.plot([x[i], x[i+1]], [y[i], y[i+1]], c=C[i], linewidth=7.5, transform=ccrs.PlateCarree(), zorder=4,path_effects=[PathEffects.withStroke(linewidth=10.5, color=border_c)] )
+            #  '''
 
             #determine the row of the pform data at scantime
             C_Point=p_sub.loc[p_sub['datetime'].sub(pform.Scan_time).abs().idxmin()]
@@ -698,7 +744,7 @@ def plotting(Data, print_long, e_test, start_comptime):
             ax_n= PLT.fig.add_subplot(PLT.r_gs[:, subcol], projection= PLT.R_Proj)
             if subcol==0: leg = True
             else: leg = False
-            PLT.radar_subplots(mom, ax_n, Data, leg, print_long, e_test)
+            PLT.radar_subplots(mom, ax_n, PLT.fig, Data, leg, print_long, e_test)
 
     ## Make the Times Series Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
@@ -707,15 +753,17 @@ def plotting(Data, print_long, e_test, start_comptime):
             print('Time Series plot: '+ ts +', Outer GridSpec Pos: [1, :], SubGridSpec Pos: ['+str(subrow)+', :]')
             if subrow==0: ax_n= PLT.fig.add_subplot(PLT.ts_gs[subrow,:])
             else:  ax_n=PLT.fig.add_subplot(PLT.ts_gs[subrow,:], sharex=ax_n)
-            PLT.time_series(ts, ax_n, Data, print_long, e_test)
+            PLT.time_series(ts, ax_n, PLT.fig, Data, print_long, e_test)
 
     ## Finish plot
     #### * * * * *
     #Add a title in the plot
+    #old title_spacer=.92
+    title_spacer=.93
     if Data['P_Radar'].name in pform_names('KA') or Data['P_Radar'].name =='WSR88D':
-        plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
+        plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
     else: 
-        plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
+        plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
     file_string = '_'.join(config.Time_Series)
     
     #This is the directory path for the output file
@@ -771,8 +819,7 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     ----------
     INPUTS
     radar_id : string,  four letter radar designation
-    start: datetime,  start of the desired timerange
-    end: datetime,  end of the desired timerange
+    start & end: datetime,  start & end of the desired timerange
     download_directory: string,  location for the downloaded radarfiles
     -------
     RETURN
@@ -785,14 +832,9 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     scans = conn.get_avail_scans_in_range(start, end, radar_id)
     print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
 
-    #download the files that were identified
-    #results = conn.download(scans[0:4], filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
-    #results = conn.download(scans, filesys+'TORUS_Data/'+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
-    #results = conn.download(scans[0:4], temploc+day+'/radar/Nexrad/Nexrad_files/', keep_aws_folders=False)
-
     # Don't download files that you already have...
     path =  download_directory + config.day +'/radar/Nexrad/Nexrad_files/'
-
+    # If you dont have the path already make it and download the files
     if not os.path.exists(path): Path(path).mkdir(parents=True)
 
     # missing_scans is a list of scans we don't have and need to download
@@ -800,11 +842,12 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     # [-1] returns the directory+filename
     missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
 
-    # missing files is the list of filenames of files we need to down load
+    # missing files is the list of filenames of files we need to download
     missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
     print("missing ", len(missing_files), "of ", len(scans), " files")
     print(missing_files)
 
+    # Download the files
     results = conn.download(missing_scans, path, keep_aws_folders=False)
     print(results.success)
     print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
@@ -820,9 +863,8 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
         print(missing_files_after)
         exit()
 
-    radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
-
     # Return list of files
+    radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
     return radar_files
 
 # * * *
@@ -833,7 +875,6 @@ def read_from_KA_file(radar_file):
     radar = pyart.io.read(radar_file)
     return radar
 def read_from_NOXP_file(radar_file):
-    #  radar = pyart.io.read(radar_file)
     radar = pyart.io.read_cfradial(radar_file)
     return radar
 # Note: Cached version is cached on the file name, not the file contents.
@@ -929,7 +970,6 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
         plotting(Data, print_long, e_test, start_comptime)
     '''
 ##############################################################################################
-
 #  parser = argparse.ArgumentParser(description='Process Radar')
 # parser.add_argument('integers', metavar='N', type=int, nargs='+', help='an integer for the accumulator')
 #  parser.add_argument("--day", help='override day in config file')
