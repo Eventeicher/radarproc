@@ -244,7 +244,7 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
 
             # if you do want to read in data
             if read_in_data == True:
-                data_avail = Platform.test_data(pname, Data)
+                data_avail = Platform.test_data(pname)
                 if data_avail == True:
                     #  dont repeatedly append to the list if the platform is already included
                     if pname in subset_pnames: pass
@@ -638,10 +638,9 @@ class Platform:
 
     # * * *
     @classmethod
-    def test_data(self, pname, Data=None):
+    def test_data(self, pname):
         '''test if there is a datafile for the platform
         Inputs: pname= the name of the file being tested
-                Data= the dict containing previous ojects (only needed if testing a radar platform)
         @classmethod allows you to call the defn without creating an object yet via Platforms.test_data
         '''
         try:
