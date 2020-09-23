@@ -59,8 +59,6 @@ log = logging.getLogger(__name__)
 import config #this is the file with the plotting controls to access any of the vars in that file use config.var
 if config.country_roads == True: import osmnx as ox
 
-#rename a few commonly used vars so that the config.var does not have to be used repeatedly
-print_long, e_test = config.print_long, config.e_test
 
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
@@ -1074,13 +1072,13 @@ subset_pnames = [] #array of platforms that actually have data for the time rang
 Data = {} #dictionary in which all the class objects will be stored (will contain platform data, locations, plotting variables etc)
 
 ## Read in the data for the TORUS Insitu platforms (if available)
-Data, subset_pnames = Add_to_DATA('TInsitu', Data, subset_pnames, print_long)
+Data, subset_pnames = Add_to_DATA('TInsitu', Data, subset_pnames, config.print_long)
 ## Establish info for the plotting variable (aka max min etc)
 TVARS=Thermo_Plt_Vars(Data)
 
 print('\nRead in Stationary Platforms Arrays')
 ## Read in the data for the Stationary Array platforms (if available)
-Data, subset_pnames = Add_to_DATA('STN_I', Data, subset_pnames, print_long)
+Data, subset_pnames = Add_to_DATA('STN_I', Data, subset_pnames, config.print_long)
 
 
 ###################################
@@ -1101,7 +1099,7 @@ if config.r_plotting == True:
             if len(radar_files)==0: print(path)
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
-        Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, print_long, e_test) for r_file in radar_files)
+        Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, config.print_long, config.e_test) for r_file in radar_files)
 
     # * * *
     if config.Radar_Plot_Type == 'NOXP_Plotting':
@@ -1111,13 +1109,13 @@ if config.r_plotting == True:
 
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
-        Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, print_long, e_test) for r_file in radar_files)
+        Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, config.print_long, config.e_test) for r_file in radar_files)
 
     # * * *
     if config.Radar_Plot_Type == 'WSR_Plotting':
         #Det the unique radar sites to be plotted
         unique_r_sites=det_nearest_WSR( Data[config.Centered_Pform].df)
-        if print_long == True: print(unique_r_sites)
+        if config.print_long == True: print(unique_r_sites)
 
         #set up empty dataframe
         tranges_each_r = pd.DataFrame()
@@ -1144,7 +1142,7 @@ if config.r_plotting == True:
 
             ## Proceed to plot the radar
             ##### + + + + + + + + + + + +
-            Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_id= swp_id) for r_file in radar_files)
+            Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, config.print_long, config.e_test, swp_id= swp_id) for r_file in radar_files)
 
         print(tranges_each_r)
 
