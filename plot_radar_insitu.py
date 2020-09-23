@@ -183,8 +183,6 @@ class Thermo_Plt_Vars:
             if var == 'Thetae': 
                 if hasattr(p, 'Te_Min') == True:  val_hold.append(p.Te_Min)
                 if hasattr(p, 'Te_Max') == True:  val_hold.append(p.Te_Max)
-        print(var)
-        print(val_hold)
         if len(val_hold) != 0: global_min, global_max = min(val_hold), max(val_hold)
         return global_min, global_max
     
@@ -193,7 +191,6 @@ class Thermo_Plt_Vars:
         if colorbar==True:
             Z = [[0,0],[0,0]]
             levels = np.arange(self.R_Tvar_GMin, self.R_Tvar_GMax+1, 1)
-            
             self.CS3 = plt.contourf(Z, levels, cmap=cmap)
             plt.clf()
     
@@ -266,16 +263,11 @@ class Master_Plt:
         #### * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
         #if we are plotting radar
         if len(config.r_mom) != 0:
-            #####
-            #maybe read in the radar data here
-            #####
-            
             # The extent of the area to be plotted
             #redefine the classvariable for Domain and display
             self.Domain = Platform.getLocation(Data[config.Centered_Pform], offsetkm= config.offsetkm)
             #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
             
-            # Define pyart display object for plotting radarfile
             # Define pyart display object for plotting radarfile
             self.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile)
             
@@ -346,18 +338,15 @@ class Master_Plt:
                 # if some plots look are too small for radar might want to try this...
                 #yrange, xrange = (y0, y1), (x0, x1)
                 #ax_n.set_ylim(yrange)
-            #  print(keys(ax))
             #  ax.xlocator = MaxNLocator(nbins=6, steps=[5, 10])
-            #  test=ax.xaxis.set_major_locator(MaxNLocator(nbins=6, steps=[5, 10]))
-            loc=MaxNLocator(nbins=6, steps=[5, 10])
-            test=ax.get_xaxis().set_major_locator(loc)
-            test=ax.get_yaxis().set_major_locator(loc)
-            print('908080808080808080')
-            print(test)
-            print(type(test))
-            print('908080808080808080')
-            
-            #  ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+            ax.xaxis.set_major_locator(MaxNLocator(nbins=6, steps=[1, 5, 10]))
+            ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+            #  ax.get_xaxis().set_major_locator(MaxNLocator(nbins=6, steps=[1, 5, 10]))
+            ax.get_yaxis().set_major_locator(MaxNLocator(nbins=6, steps=[1, 5, 10]))
+            #  ax.get_yaxis.set_minor_locator(AutoMinorLocator(2))
+            plt.setp(ax.get_xticklabels(), visible=True)
+            #  plt.setp(ax.get_ytick(), visible=True)
+
             #  ax.yaxis.set_major_locator(MaxNLocator(nbins=6, steps=[5, 10]))
             #  ax.yaxis.set_minor_locator(AutoMinorLocator(2))
             #  ax.set_yticks(MaxNLocator(nbins=6, steps=[5, 10]))
@@ -367,6 +356,7 @@ class Master_Plt:
             #  ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
             #  loc = plticker.MultipleLocator(base=1.0) # this locator puts ticks at regular intervals
             #  ax.xaxis.set_major_locator(loc)
+            #  fig.savefig('samplefigure', bbox_extra_artists=(lgd,text), bbox_inches='tight')
         # + + + + + + + + + + + + ++ + +
         
         ##Tick Display Characteristics
@@ -422,11 +412,7 @@ class Master_Plt:
         ## MAKE THE TIMESERIES
         #### * * * * * * * * *
         if ts in ['Thetav', 'Thetae']:
-            print('6666666666')
-            print(ts)
             TVARS.det_TS_Tvar(ts)
-            print(TVARS.TS_Tvar_lab)
-            print('6666666666')
             for p in Data.values():
                 if isinstance(p, Torus_Insitu):
                     if print_long == True: print('Plotting '+str(p.name)+' on time series')
@@ -437,58 +423,54 @@ class Master_Plt:
                     else: plotting_data= p.df[ts].values
                     
                     ## Plot
-                    ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color) #assigning label= is what allows the legend to work
-                    TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
-                    TSleg_elements.append(TSleg_entry)
+                    ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str) #assigning label= is what allows the legend to work
 
             ## Set up XY axes tick locations and Labels
             self.tick_grid_settings(ax=ax_n, ts=ts)
             ax_n.set_ylabel(TVARS.TS_Tvar_lab)
 
-            ## Plot legend
-            leg = ax_n.legend(handles= TSleg_elements, loc='center left')
 
         # * * *
         if ts == 'Wind':
             p = Data[config.Wind_Pform]
             if print_long == True: print('Plotting '+str(p.name)+' on time series')
 
-            ax_n.plot(p.df['datetime'], p.df['spd'])
+            ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
             ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
             ax_n.set_ylabel('Wind Speed')
             self.tick_grid_settings(ax=ax_n, ts=ts)
-            TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
-            TSleg_elements.append(TSleg_entry)
-
+            #  TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
+            #  TSleg_elements.append(TSleg_entry)
 
             ax_2 = ax_n.twinx()
-            ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05)
+            ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05, label='Wind Dir')
             ax_2.set_ylabel('Wind Dir ($^{\circ}$)')
             self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True)
-            TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
-            TSleg_elements.append(TSleg_entry)
+            #  TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
+            #  TSleg_elements.append(TSleg_entry)
 
-            
-            ## Plot legend
-            leg = ax_n.legend(handles= TSleg_elements, loc='center left')
-            #  h, le = ax_n.get_legend_handles_labels()
-            #  leg = ax_n.legend(loc='center left')
+        ## Plot legend
+        #  leg = ax_n.legend(handles= TSleg_elements, loc='center left')
+        leg = ax_n.legend(loc='center left')
+        if ts == 'Wind':
             leg.set_title(config.Wind_Pform, prop=self.leg_title_font)
             leg.remove()
             ax_2.add_artist(leg)
-           
+        
         #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
         num_of_TS= len(config.Time_Series)
         #  if you are makeing the second Time series
-        if num_of_TS != 1 and ax_n.rowNum != (num_of_TS-1): 
-            plt.setp(ax_n.get_xticklabels(), visible=False)
-            ax_n.spines['bottom'].set_linewidth(5)
-            ax_n.spines['bottom'].set_color('k')
-            if ts in ['Thetav', 'Thetae']: leg.remove()
+        if num_of_TS != 1:
+            if ax_n.rowNum != (1): 
+                if ('Thetav' in config.Time_Series) and ('Thetae' in config.Time_Series): 
+                    print('put more code here')
+            if ax_n.rowNum != (num_of_TS-1): 
+                plt.setp(ax_n.get_xticklabels(), visible=False)
+                ax_n.spines['bottom'].set_linewidth(5)
+                ax_n.spines['bottom'].set_color('k')
+                if ts in ['Thetav', 'Thetae']: 
+                    leg.remove()
 
-        #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
-        #  num_of_TS= len(config.Time_Series)
-        #  if num_of_TS != 1 and ax_n.rowNum != (num_of_TS-1): plt.setp(ax_n.get_xticklabels(), visible=False)
 
         ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
         #  radar scan and the timerange ploted (via filled colorline) on the radar plots
@@ -500,15 +482,22 @@ class Master_Plt:
         # # # # # # # # #
         ax_n.set_xlabel('Time (UTC)')
         ax_n.yaxis.set_label_coords(-.03, .5)
-        
+        '''
         print('$$$$$$$$$')
         print('TS ', ts)
-        box = ax_n.get_position()
-        box2=ax_n.get_tightbbox(fig.canvas.get_renderer(), call_axes_locator = True)
-        ax_n.set_frame_on(True)
-        print(box)
-        print(box2)
+        bbox = ax_n.get_tightbbox(fig.canvas.renderer, call_axes_locator=True) 
+        x0, y0, width, height = bbox.transformed(fig.transFigure.inverted()).bounds 
+        # slightly increase the very tight bounds: 
+        #  xpad = width
+        #  ypad = height
+        #  ax_n.patch((x0, y0), width, height, edgecolor='red', linewidth=3, fill=False)
+
+        #  box = ax_n.get_position()
+        #  box2=ax_n.get_tightbbox(fig.canvas.get_renderer(), call_axes_locator = True)
+        #  print(box)
+        #  print(box2)
         print('$$$$$$$$$')
+        ''' 
 
         #  print(ax_n.lines)
         #  print(vars(ax_n))
@@ -554,13 +543,11 @@ class Master_Plt:
         
         ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
         #  iterate over each object contained in dict Data (returns the actual objects not their keys)
-        legend_elements = [] #empty list to append the legend entries to for each platfrom that is actually plotted
         for p in Data.values():
             ######
             #Plot Inistu Torus Platforms (if desired and available)
             if isinstance(p, Torus_Insitu):
                 if print_long == True: print(p.name)
-                legend_elements.append(p.leg_entry)
                 self.plot_TORUSpform(p, TVARS, Data, ax_n, print_long, e_test)
 
             ######
@@ -571,9 +558,8 @@ class Master_Plt:
                 sites_subdf, valid_sites = p.grab_pform_subset( p, print_long, e_test, Data, bounding= self.Domain)
                 # if there are sites within the domain plot the markers and include in the legend
                 if valid_sites == True:
-                    legend_elements.append(p.leg_entry)
                     ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=self.trans_Proj, marker=p.m_style, 
-                              linestyle='None', markersize= p.m_size, color=p.m_color)
+                              linestyle='None', markersize= p.m_size, color=p.m_color, label=p.leg_str)
                     # include labels for the sites on the plots
                     if p.marker_label == True:
                         for x, y, lab in zip(sites_subdf['lon'], sites_subdf['lat'], sites_subdf['Stn_ID']):
@@ -590,10 +576,9 @@ class Master_Plt:
 
                     #if these conditions are met then plot the radar marker(s)
                     if valid_sites == True:
-                        legend_elements.append(p.leg_entry)
                         if p.type == 'KA' or p.type == 'NOXP':
                             ## Plot the marker
-                            ax_n.plot(p.lon, p.lat, transform=self.trans_Proj, marker=p.m_style, color=p.m_color, markersize=p.m_size,
+                            ax_n.plot(p.lon, p.lat, transform=self.trans_Proj, marker=p.m_style, color=p.m_color, label=p.leg_str, markersize=p.m_size,
                                       markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
                             ## Optional textlabel on plot
                             if p.marker_label == True:
@@ -606,7 +591,7 @@ class Master_Plt:
                             
                         if p.type == 'WSR':
                             ## Plot the marker
-                            ax_n.plot(sites_subdf['lon'], sites_subdf['lat'], transform=self.trans_Proj, marker=p.m_style, color=p.m_color, markersize=p.m_size,
+                            ax_n.plot(sites_subdf['lon'], sites_subdf['lat'], transform=self.trans_Proj, marker=p.m_style, label=p.leg_str, color=p.m_color, markersize=p.m_size,
                                       markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=8)
                             # include labels for the sites on the plots
                             if p.marker_label == True:
@@ -647,18 +632,20 @@ class Master_Plt:
         ## SET UP LEGENDS
         if leg == True: #this means you are currently making the left subplot
             #add legend for platform markers
-            l = ax_n.legend(handles=legend_elements, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.1,.5), handlelength=.1)#, title="Platforms")
+            #  l = ax_n.legend(handles=legend_elements, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.1,.5), handlelength=.1)#, title="Platforms")
+            l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.09,.5), handlelength=.1)#, title="Platforms")
             #  h, le = ax_n.get_legend_handles_labels()
             #  l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1)#, title="Platforms")
             l.set_title("Platforms", prop=self.leg_title_font)
-            print(vars(l))
-            lbbox=l.get_window_extent()
-            print(lbbox)
+            #  print(vars(l))
+            #  lbbox=l.get_window_extent()
+            #  print(lbbox)
         if leg == False:  #this means you are currently making the right subplot
             ## Plot platform colorbar
             #set up colorbar axis that will be as tall and 5% as wide as the 'parent' radar subplot
-            cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.225, 0,1,1))
+            cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.226, 0,1,1))
             cbar = plt.colorbar(TVARS.CS3, cax=cbar_ax, orientation='vertical', label=TVARS.R_Tvar_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(Data['p_var'].global_min, Data['p_var'].global_max+1,2))
+        '''
         print('$$$$$$$$$')
         print('RMOM ', mom)
         box = ax_n.get_position()
@@ -667,6 +654,7 @@ class Master_Plt:
         print(box)
         print(box2)
         print('$$$$$$$$$')
+        '''
 
 
         # Shrink current axis by 20%
@@ -679,7 +667,7 @@ class Master_Plt:
         ###################
         self.tick_grid_settings(ax=ax_n, radar=True, interval=20*1000)
         #  scale_bar(ax_n, 10) # 10 KM
-        #  ax_n.grid(True)
+        ax_n.grid(True)
         ###################
         #  tick_locs = ax_n.get_xticks()
         #  ax_n.set_xticklabels([])
@@ -730,7 +718,7 @@ class Master_Plt:
             C_Point=p_sub.loc[p_sub['datetime'].sub(pform.Scan_time).abs().idxmin()]
 
             #plot the platform marker at the time closest to the scantime (aka the time at the halfway point of the subset platform dataframe)
-            ax.plot(C_Point.lon, C_Point.lat, transform=self.trans_Proj, marker=pform.m_style, markersize=pform.m_size,
+            ax.plot(C_Point.lon, C_Point.lat, transform=self.trans_Proj, marker=pform.m_style, markersize=pform.m_size, label=pform.leg_str,
                     markeredgewidth='3', color=pform.m_color, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')], zorder=10)
             #plot labels for the marker on the plot itself
             if config.TIn_lab == True:

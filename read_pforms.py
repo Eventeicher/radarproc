@@ -116,24 +116,38 @@ def pform_attr(pname):
                  m_color,m_style etc : the specifications regarding platform presentation on the plots (markershape, color, etc)
     '''
     ##assign the atributes for each platform
-    if pname == "Prb1": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:lightblue', 20, 'steelblue', 'Prb1'
-    elif pname == "Prb2": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:watermelon', 20, 'xkcd:dusty red', 'Prb2'
-    elif pname == "FFld": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:bubblegum pink', 20, 'xkcd:pig pink', 'FFld'
-    elif pname == "LIDR": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:pastel purple', 20, 'xkcd:light plum', 'LIDR'
-    elif pname == "WinS": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'xkcd:peach', 20, 'xkcd:dark peach', 'WinS'
-    elif pname == "CoMeT1": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'springgreen', 20, 'mediumseagreen','CoMeT1'
-    elif pname == "CoMeT2": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'yellow', 20, 'gold', 'CoMeT2'
-    elif pname == "CoMeT3": marker_style, marker_color, marker_size, line_color, legend_str= '1', 'peachpuff', 20, 'sandybrown', 'CoMeT3'
-    elif pname == "ASOS": marker_style, marker_color, marker_size, line_color, legend_str= r'$\mp$', 'black', 25, 'black', 'ASOS'
-    elif pname == "WTx_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\AA$', 'black', 23, 'black', 'WTxM'
-    elif pname == "OK_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\gamma$', 'black', 23, 'black', 'OKM'
-    elif pname == "IA_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\Upsilon$', 'black', 23, 'black', 'IAM'
-    elif pname == "KS_M": marker_style, marker_color, marker_size, line_color, legend_str= r'$\yen$', 'black', 23, 'black', 'KSM'
-        #U+1278, #u20a9
-    elif pname == 'Ka2': marker_style, marker_color, marker_size, line_color, legend_str= '8', 'xkcd:crimson', 18, 'xkcd:crimson', 'Ka2'
-    elif pname == 'Ka1': marker_style, marker_color, marker_size, line_color, legend_str= '8', 'mediumseagreen', 18, 'mediumseagreen', 'Ka1'
-    elif pname == 'NOXP': marker_style, marker_color, marker_size, line_color, legend_str= r'$\P$', 'green', 23, 'black', "NOXP"
-    elif pname == 'WSR88D': marker_style, marker_color, marker_size, line_color, legend_str= r'$\Omega$', 'white', 23, 'black', "WSR88D"
+    if pname in pform_names('TInsitu'):
+        marker_style, marker_size = '1', 20
+        if pname == "Prb1": marker_color, line_color, legend_str= 'xkcd:lightblue', 'steelblue', 'Prb1'
+        elif pname == "Prb2": marker_color, line_color, legend_str= 'xkcd:watermelon', 'xkcd:dusty red', 'Prb2'
+        elif pname == "FFld": marker_color, line_color, legend_str= 'xkcd:bubblegum pink', 'xkcd:pig pink', 'FFld'
+        elif pname == "LIDR": marker_color, line_color, legend_str= 'xkcd:pastel purple', 'xkcd:light plum', 'LIDR'
+        elif pname == "WinS": marker_color, line_color, legend_str= 'xkcd:peach', 'xkcd:dark peach', 'WinS'
+        elif pname == "CoMeT1": marker_color, line_color, legend_str= 'springgreen', 'mediumseagreen','CoMeT1'
+        elif pname == "CoMeT2": marker_color, line_color, legend_str= 'yellow', 'gold', 'CoMeT2'
+        elif pname == "CoMeT3": marker_color, line_color, legend_str= 'peachpuff', 'sandybrown', 'CoMeT3'
+
+    if pname in pform_names('STN_I'):
+        marker_color, line_color = 'black', 'black'
+        if pname in pform_names('MESO'):
+            marker_size = 23 #U+1278, #u20a9
+            if pname == "WTx_M": marker_style,  legend_str= r'$\AA$', 'WTxM'
+            elif pname == "OK_M": marker_style, legend_str= r'$\gamma$', 'OKM'
+            elif pname == "IA_M": marker_style, legend_str= r'$\Upsilon$', 'IAM'
+            elif pname == "KS_M": marker_style, legend_str= r'$\yen$', 'KSM'
+        else:
+            marker_size = 25
+            if pname == "ASOS": marker_style, legend_str= r'$\mp$', 'ASOS'
+
+    if pname in pform_names('RADAR'):
+        if pname in pform_names('KA'):
+            marker_style, marker_size = '8', 18
+            if pname == 'Ka2': marker_color, line_color, legend_str= 'xkcd:crimson', 'xkcd:crimson', 'Ka2'
+            elif pname == 'Ka1': marker_color, line_color, legend_str= 'mediumseagreen', 'mediumseagreen', 'Ka1'
+        else:
+            line_color, marker_size = 'black', 23
+            if pname == 'NOXP': marker_style, marker_color, legend_str= r'$\P$', 'green', "NOXP"
+            elif pname == 'WSR88D': marker_style, marker_color, legend_str= r'$\Omega$', 'white', "WSR88D"
 
        ##create the legend elements that will be appended to the legend array
     if pname in pform_names('KA'): #the legend entries for the KA radars
