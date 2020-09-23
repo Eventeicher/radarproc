@@ -347,7 +347,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
                     return loc, 'KA'
 
     # * * *
-    elif pname == 'NOXP': 
+    elif pname == 'NOXP':
         # if the main plotting radar is the NOXP radar
         if rfile != None:
             #det the scantime
@@ -355,7 +355,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             #det the location info
             MR_lat, MR_lon = rfile.latitude['data'][0], rfile.longitude['data'][0]
             return MR_time, MR_lat, MR_lon , 'MAINR'
-        
+
         # Determine whether the NOXP radar was in the plotting domain (if its not the radar being plotted)
         if rfile == None:
             path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
@@ -364,7 +364,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             #if the code has not failed by this point there is data present; if calling defn in a testing capacity
             #  the defn will exit at this point (saving computing time) otherwise the defn will cont
             #  if d_testing == True: return True
-           
+
             checking=0
             for file in NOXPfiles:
                 head_tail= os.path.split(file)
@@ -377,7 +377,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
                     #cache at some point
                     r = pyart.io.read_cfradial(file)
                     Nlat, Nlon = r.latitude['data'][0], r.longitude['data'][0]
-                    
+
                     #set up a namedtuple object to hold the new info
                     r_loc = namedtuple('r_loc', ['lat', 'lon'])
                     loc = r_loc(lat=Nlat, lon=Nlon)
@@ -386,7 +386,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
                     if checking > 1: print('HEYYYYYYYYY !!!!')
             if checking == 0:
                 if d_testing == True: return False
-            
+
             #  if checking <1:
                 #  r_loc = namedtuple('r_loc', ['lat', 'lon'])
                 #  loc = r_loc(lat=np.nan, lon=np.nan)
