@@ -101,7 +101,7 @@ def ppiplot(Data, print_long, e_test, start_comptime):
     ## Plot title
     if Data['P_Radar'].name in pform_names('KA') or Data['P_Radar'].name =='WSR88D':
         plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
-    else: 
+    else:
         plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=.92)
     file_string = '_'.join(config.Time_Series)
 
@@ -207,7 +207,7 @@ def radar_subplots(mom, ax_n, Data, PLT, leg, print_long, e_test):
                         ## Optional textlabel on plot
                         if p.marker_label == True:
                             ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=ccrs.PlateCarree(), path_effects=[PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')])
-                    if p.type == 'NOXP': 
+                    if p.type == 'NOXP':
                         ## Plot the marker
                         ax_n.plot(p.lon, p.lat, transform=ccrs.PlateCarree(), marker=p.m_style, color=p.m_color, markersize=p.m_size,
                                   markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
@@ -324,12 +324,12 @@ def time_series(ts, ax_n, Data, PLT, print_long, e_test):
         TSleg_elements.append(TSleg_entry)
 
         PLT.T_Plt_settings(ts, ax=ax_n, YLab='Wind Speed', ax_t=ax_2, YLab_t='Wind Dir ($^{\circ}$)')
-        
+
         leg = ax_n.legend(handles= TSleg_elements, loc='center left')
         leg.set_title(config.Wind_Pform, prop=PLT.leg_title_font)
         leg.remove()
         ax_2.add_artist(leg)
-        
+
     #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
     #  num_of_TS= len(config.Time_Series)
     #  if num_of_TS != 1 and ax_n.rowNum != (num_of_TS-1): plt.setp(ax_n.get_xticklabels(), visible=False)
@@ -495,7 +495,7 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
         try: radar = cached_read_from_nexrad_file(r_file)
         except: print("Failed to convert file: "+str(r_file))
         valid_time = True
-    
+
     if config.Radar_Plot_Type == 'KA_Plotting':
         head_tail= os.path.split(r_file)
         time_string= str(20)+str(head_tail[1][13:24])
@@ -510,7 +510,7 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
         #  if config.tend != None:
             #  if rtime <= config.tend: pass
             #  else: in_time_range = False
-        
+
         #  if in_time_range == False: print(rfile+' was not in the timerange being plotted')
         if valid_time == False: print(r_file+' was not in the timerange being plotted')
         else:
@@ -525,7 +525,7 @@ def plot_radar_file(r_file, Data, subset_pnames, print_long, e_test, swp_id= Non
                         print("\nProducing Radar Plot:")
                         #  Assign radar fields and masking
                     det_radar_fields(radar)
-    
+
     if config.Radar_Plot_Type == 'NOXP_Plotting':
         ## Read the radar file
         radar = cached_read_from_NOXP_file(r_file)
@@ -599,13 +599,13 @@ if config.r_plotting == True:
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)
-    
-    # * * * 
+
+    # * * *
     if config.Radar_Plot_Type == 'NOXP_Plotting':
         ## Get radar files
         path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
         radar_files = sorted(glob.glob(path))
-        
+
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, subset_pnames, print_long, e_test) for r_file in radar_files)

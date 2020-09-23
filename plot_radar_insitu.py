@@ -62,7 +62,7 @@ if config.country_roads == True: import osmnx as ox
 print_long, e_test = config.print_long, config.e_test
 
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
-from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu 
+from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
 from read_pforms import error_printing, timer, time_in_range
 
 totalcompT_start = time.time()
@@ -147,7 +147,7 @@ def set_km_axis_formatter(ax_n):
     km_formatter = FuncFormatter(km)
     ax_n.xaxis.set_major_formatter(km_formatter)
     ax_n.yaxis.set_major_formatter(km_formatter)
-'''   
+'''
 ################################################################################################
 ##########
 # Classes
@@ -155,57 +155,57 @@ def set_km_axis_formatter(ax_n):
 class Thermo_Plt_Vars:
     def __init__ (self, Data):
         self.Te_lab, self.Tv_lab = "Equi. Pot Temp [K]", "Vir. Pot Temp [K]"
-        self.Tv_GMin, self.Tv_GMax = self.find_global_max_min('Thetav', Data) 
+        self.Tv_GMin, self.Tv_GMax = self.find_global_max_min('Thetav', Data)
         self.Te_GMin, self.Te_GMax = self.find_global_max_min('Thetae', Data)
 
         #settings for the thermo var being plotted on radar subplots
         if len(config.r_mom) != 0:
-            if config.R_Tvar == "Thetae":  
+            if config.R_Tvar == "Thetae":
                 lab, GMin, GMax = self.Te_lab, self.Te_GMin, self.Te_GMax
-            elif config.R_Tvar == "Thetav":  
+            elif config.R_Tvar == "Thetav":
                 lab, GMin, GMax = self.Tv_lab, self.Tv_GMin, self.Tv_GMax
-            
+
             self.R_Tvar_lab, self.R_Tvar_GMin, self.R_Tvar_GMax = lab, GMin, GMax
-        
+
             ## Make a dummy plot to allow for ploting of colorbar
             #  cmap=plt.get_cmap('rainbow')
             self.pvar_color_setup(colorbar=True)
-    
+
     # * * *
     def find_global_max_min(self, var, Dict):
         '''determine the global max and min across all platforms for a given var
         '''
         val_hold = []
         for p in Dict.values():
-            if var == 'Thetav': 
+            if var == 'Thetav':
                 if hasattr(p, 'Tv_Min') == True:  val_hold.append(p.Tv_Min)
                 if hasattr(p, 'Tv_Max') == True:  val_hold.append(p.Tv_Max)
-            if var == 'Thetae': 
+            if var == 'Thetae':
                 if hasattr(p, 'Te_Min') == True:  val_hold.append(p.Te_Min)
                 if hasattr(p, 'Te_Max') == True:  val_hold.append(p.Te_Max)
         print(var)
         print(val_hold)
         if len(val_hold) != 0: global_min, global_max = min(val_hold), max(val_hold)
         return global_min, global_max
-    
+
     # * * *
     def pvar_color_setup(self, cmap=cmocean.cm.thermal, df=None, colorbar=False, colorramp=False):
         if colorbar==True:
             Z = [[0,0],[0,0]]
             levels = np.arange(self.R_Tvar_GMin, self.R_Tvar_GMax+1, 1)
-            
+
             self.CS3 = plt.contourf(Z, levels, cmap=cmap)
             plt.clf()
-    
+
         if colorramp==True:
             self.C = cmap((df[config.R_Tvar].values - self.R_Tvar_GMin) / (self.R_Tvar_GMax - self.R_Tvar_GMin))
             return self.C
 
     # * * *
     def det_TS_Tvar(self, var):
-        if var == "Thetae":  
+        if var == "Thetae":
             lab, GMin, GMax = self.Te_lab, self.Te_GMin, self.Te_GMax
-        elif var == "Thetav":  
+        elif var == "Thetav":
             lab, GMin, GMax = self.Tv_lab, self.Tv_GMin, self.Tv_GMax
         print('Made it here to TS_TVAR set up')
         print(lab, GMin, GMax)
@@ -263,38 +263,38 @@ class Master_Plt:
             print('this is the layout for radar plots only')
 
         ## Establish some vars that will be helpful to the plot later on
-        #### * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+        #### * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
         #if we are plotting radar
         if len(config.r_mom) != 0:
             #####
             #maybe read in the radar data here
             #####
-            
+
             # The extent of the area to be plotted
             #redefine the classvariable for Domain and display
             self.Domain = Platform.getLocation(Data[config.Centered_Pform], offsetkm= config.offsetkm)
             #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
-            
+
             # Define pyart display object for plotting radarfile
             # Define pyart display object for plotting radarfile
             self.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile)
-            
-            # Set the projection of the radar plot, and transformations 
+
+            # Set the projection of the radar plot, and transformations
             self.R_Proj = self.display.grid_projection
             self.trans_Proj = ccrs.PlateCarree()
-        
+
     # * * * * * * *
     def tick_grid_settings(self, ax, radar=None, ts=None, interval=None, twinax=False):
         ##Axis Limits
         # # # # # # # #
         #if you are calling this for a timeseries subplot set the limits for the plot
         if ts != None:
-            # Xaxis 
+            # Xaxis
             # if desired this subsets the timerange that is displayed in the timeseries
             if config.ts_extent != None:
                 ax.set_xlim(Platform.Scan_time - timedelta(minutes=config.ts_extent), Platform.Scan_time + timedelta(minutes=config.ts_extent))
-            
-            # Yaxis 
+
+            # Yaxis
             if ts in ['Thetav','Thetae']:
                 ax.set_ylim(TVARS.TS_Tvar_GMin, TVARS.TS_Tvar_GMax)
             #if plotting the wind time series and its the first ax being det
@@ -309,19 +309,19 @@ class Master_Plt:
         if ts != None:
             # Xaxis
             # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
-            ax.xaxis.set_minor_locator(AutoMinorLocator(6)) 
+            ax.xaxis.set_minor_locator(AutoMinorLocator(6))
             ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-            
+
             # Yaxis
             if ts in ['Thetav','Thetae']:
                 ax.yaxis.set_major_locator(MultipleLocator(5)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
                 ax.yaxis.set_minor_locator(AutoMinorLocator(5)) # set up minor ticks (this have it increment by 1's will want to change for diff vars)
             elif ts == 'Wind' and twinax == False:  ax.yaxis.set_major_locator(LinearLocator(numticks=5))
             elif ts == 'Wind' and twinax == True:  ax.yaxis.set_major_locator(FixedLocator(np.arange(0, 450, 90)))
-       
+
         #if you are calling this for a radar subplot locate the ticks
         if radar != None and interval != None:
-            
+
             def calc_ticks(a,b,interval):
                 ''' Given: range from a to b where a is negative and b is positive
                     Return: an array of tick locations including 0 and spaced interval amounts above and below 0
@@ -331,14 +331,14 @@ class Master_Plt:
                 ticks = np.sort(ticks)
                 ticks = np.unique(ticks)
                 return ticks
-            #Det the boundaries of the domain 
+            #Det the boundaries of the domain
             x0, x1 = ax.get_xbound()
             y0, y1 = ax.get_ybound()
-            
-            #Det the tick locations 
+
+            #Det the tick locations
             yticks, xticks = calc_ticks(y0, y1, interval), calc_ticks(x0, x1, interval)
 
-            #set the calculated ticks on the graph 
+            #set the calculated ticks on the graph
             ax.set_yticks(yticks)
             ax.set_xticks(xticks)
 
@@ -356,7 +356,7 @@ class Master_Plt:
             print(test)
             print(type(test))
             print('908080808080808080')
-            
+
             #  ax.xaxis.set_minor_locator(AutoMinorLocator(2))
             #  ax.yaxis.set_major_locator(MaxNLocator(nbins=6, steps=[5, 10]))
             #  ax.yaxis.set_minor_locator(AutoMinorLocator(2))
@@ -368,7 +368,7 @@ class Master_Plt:
             #  loc = plticker.MultipleLocator(base=1.0) # this locator puts ticks at regular intervals
             #  ax.xaxis.set_major_locator(loc)
         # + + + + + + + + + + + + ++ + +
-        
+
         ##Tick Display Characteristics
         # # # # # # # # # # # # # # # #
         ax.tick_params(which='minor', axis='both', width=2, length=7, color='grey')
@@ -383,7 +383,7 @@ class Master_Plt:
         if ts != None:
             ax.tick_params(which='major', axis='both', grid_linewidth=2.5)
             ax.tick_params(which='major', axis='y', grid_color='grey', grid_linewidth=2, grid_linestyle='--', grid_alpha=.8)
-        
+
         ax.grid(which='both')
         ax.tick_params(which='minor', axis='both', grid_linestyle=':')
         ax.set_axisbelow('line')
@@ -396,7 +396,7 @@ class Master_Plt:
             ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%H:%M')) #strip the date from the datetime object
             # Yaxis
             if ts == 'Wind' and twinax == False: ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
-        
+
         if radar != None:
             # Add km to x-axis.
             def km(x, pos):
@@ -431,11 +431,11 @@ class Master_Plt:
                 if isinstance(p, Torus_Insitu):
                     if print_long == True: print('Plotting '+str(p.name)+' on time series')
                     ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
-                    if p.type in config.TS_masking[:]: 
+                    if p.type in config.TS_masking[:]:
                         if ts == "Thetae":   plotting_data= p.Thetae_ts_mask_df
                         elif ts == "Thetav":   plotting_data= p.Thetav_ts_mask_df
                     else: plotting_data= p.df[ts].values
-                    
+
                     ## Plot
                     ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color) #assigning label= is what allows the legend to work
                     TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
@@ -468,7 +468,7 @@ class Master_Plt:
             TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
             TSleg_elements.append(TSleg_entry)
 
-            
+
             ## Plot legend
             leg = ax_n.legend(handles= TSleg_elements, loc='center left')
             #  h, le = ax_n.get_legend_handles_labels()
@@ -476,11 +476,11 @@ class Master_Plt:
             leg.set_title(config.Wind_Pform, prop=self.leg_title_font)
             leg.remove()
             ax_2.add_artist(leg)
-           
+
         #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
         num_of_TS= len(config.Time_Series)
         #  if you are makeing the second Time series
-        if num_of_TS != 1 and ax_n.rowNum != (num_of_TS-1): 
+        if num_of_TS != 1 and ax_n.rowNum != (num_of_TS-1):
             plt.setp(ax_n.get_xticklabels(), visible=False)
             ax_n.spines['bottom'].set_linewidth(5)
             ax_n.spines['bottom'].set_color('k')
@@ -500,7 +500,7 @@ class Master_Plt:
         # # # # # # # # #
         ax_n.set_xlabel('Time (UTC)')
         ax_n.yaxis.set_label_coords(-.03, .5)
-        
+
         print('$$$$$$$$$')
         print('TS ', ts)
         box = ax_n.get_position()
@@ -548,10 +548,10 @@ class Master_Plt:
 
         ## Plot the radar
         ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
-        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=config.offsetkm*2000, 
+        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=config.offsetkm*2000,
                                   height=config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
         ax_n.set_extent(self.Domain)
-        
+
         ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
         #  iterate over each object contained in dict Data (returns the actual objects not their keys)
         legend_elements = [] #empty list to append the legend entries to for each platfrom that is actually plotted
@@ -572,7 +572,7 @@ class Master_Plt:
                 # if there are sites within the domain plot the markers and include in the legend
                 if valid_sites == True:
                     legend_elements.append(p.leg_entry)
-                    ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=self.trans_Proj, marker=p.m_style, 
+                    ax_n.plot(sites_subdf.lon, sites_subdf.lat, transform=self.trans_Proj, marker=p.m_style,
                               linestyle='None', markersize= p.m_size, color=p.m_color)
                     # include labels for the sites on the plots
                     if p.marker_label == True:
@@ -597,13 +597,13 @@ class Master_Plt:
                                       markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
                             ## Optional textlabel on plot
                             if p.marker_label == True:
-                                ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=trans_Proj, 
+                                ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=trans_Proj,
                                           path_effects=[PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')])
-                            
+
                             if p.type == 'KA':
                                 ## Plot RHI spokes
                                 if config.rhi_ring == True: self.rhi_spokes_rings(p)
-                            
+
                         if p.type == 'WSR':
                             ## Plot the marker
                             ax_n.plot(sites_subdf['lon'], sites_subdf['lat'], transform=self.trans_Proj, marker=p.m_style, color=p.m_color, markersize=p.m_size,
@@ -849,23 +849,23 @@ def plotting(Data, TVARS, print_long, e_test, start_comptime):
     title_spacer=.93
     if Data['P_Radar'].name in pform_names('KA') or Data['P_Radar'].name =='WSR88D':
         plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
-    else: 
+    else:
         plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
     file_string = '_'.join(config.Time_Series)
-    
+
     if ('Thetae' in config.Time_Series) and ('Thetav' in config.Time_Series):
         Thermo_type='both'
     else:
         if len(config.r_mom) != 0:
             Thermo_type= config.R_Tvar
         else: print('write more code')
-    
+
     #This is the directory path for the output file
     outdir_name = config.g_plots_directory+config.day+'/plots/'+Data['P_Radar'].dir_name+'/'+Thermo_type+'/'+str(config.p_tilt)+'_deg/'
-    # Setup Function Cache for speedup, if path directory does not make the directory 
+    # Setup Function Cache for speedup, if path directory does not make the directory
     if not os.path.exists(outdir_name): Path(outdir_name).mkdir(parents=True)
-    
-    #add the file name 
+
+    #add the file name
     if Data['P_Radar'].name in pform_names('KA'):
         output_name= outdir_name+Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
     if Data['P_Radar'].name == 'NOXP':
@@ -988,11 +988,11 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_
     if config.Radar_Plot_Type == 'WSR_Plotting':
         #open file using pyart
         try: radar = cached_read_from_nexrad_file(r_file)
-        except: 
-            radar = 'NO FILE' 
+        except:
+            radar = 'NO FILE'
             print("Failed to convert file: "+str(r_file))
         valid_time = True
-    
+
     if config.Radar_Plot_Type == 'KA_Plotting':
         head_tail= os.path.split(r_file)
         time_string= str(20)+str(head_tail[1][13:24])
@@ -1007,7 +1007,7 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_
         #  if config.tend != None:
             #  if rtime <= config.tend: pass
             #  else: in_time_range = False
-        
+
         #  if in_time_range == False: print(rfile+' was not in the timerange being plotted')
         if valid_time == False: print(r_file+' was not in the timerange being plotted')
         else:
@@ -1022,7 +1022,7 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_
                         print("\nProducing Radar Plot:")
                         #  Assign radar fields and masking
                     #  det_radar_fields(radar)
-    
+
     if config.Radar_Plot_Type == 'NOXP_Plotting':
         ## Read the radar file
         radar = cached_read_from_NOXP_file(r_file)
@@ -1112,13 +1112,13 @@ if config.r_plotting == True:
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, print_long, e_test) for r_file in radar_files)
-    
-    # * * * 
+
+    # * * *
     if config.Radar_Plot_Type == 'NOXP_Plotting':
         ## Get radar files
         path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
         radar_files = sorted(glob.glob(path))
-        
+
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, print_long, e_test) for r_file in radar_files)
