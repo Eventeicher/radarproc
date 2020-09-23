@@ -991,10 +991,7 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_
 
     if config.Radar_Plot_Type == 'WSR_Plotting':
         #open file using pyart
-        try: radar = cached_read_from_nexrad_file(r_file)
-        except:
-            radar = 'NO FILE'
-            print("Failed to convert file: "+str(r_file))
+        radar = cached_read_from_nexrad_file(r_file)
         valid_time = True
 
     if config.Radar_Plot_Type == 'KA_Plotting':
