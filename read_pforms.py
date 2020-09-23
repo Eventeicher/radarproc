@@ -79,7 +79,7 @@ def timer(start,end, total_runtime=False):
        print("Plot took {:0>2} hrs, {:0>2} min, {:05.2f} sec to complete".format(int(hours),int(minutes), seconds))
    if total_runtime == True:
        print("\nIt took {:0>2} hrs, {:0>2} min, {:05.2f} to complete all of the plots\n".format(int(hours),int(minutes), seconds))
-   
+
 ###########
 # Data Prep
 ###########
@@ -307,7 +307,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
     '''
     if pname in pform_names('UNL'):
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
-        
+
         # Test Data availability
         if d_testing == True:
             try:
@@ -315,7 +315,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
                 mtest = mmfile[0]
                 return True
             except: return False
-        #  if the defn was only called to it will exit at this point (saving computing time) 
+        #  if the defn was only called to it will exit at this point (saving computing time)
         # + + + + + + + + + + + + ++ + +
 
         data_hold = [] #empty list to append to
@@ -345,7 +345,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
                 'Thetae': (dims, ds.theta_e.values, {'units':str(ds.theta_e.units)}),
                 'Thetav': (dims, ds.theta_v.values, {'units':str(ds.theta_v.units)})
             }
-            
+
             subds = xr.Dataset(data_vars, coords)
 
             #convert to pandas
@@ -363,7 +363,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
 
         #convert the list holding the dataframes to one large dataframe
         data_unl = pd.concat(data_hold)
-        
+
         #drop all the columns that we will not use past this point (to save memory/computing time)
         data_unl = data_unl.drop(columns=['Temperature', 'Z_ASL', 'Z_AGL', 'Theta', 'Dewpoint', 'Pressure', 'RH'])
         #  print(data_unl.memory_usage())
@@ -382,7 +382,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
                 return True
             except: return False
         # + + + + + + + + + + + + ++ + +
-        
+
         mmfile=mmfile[0]
         # Read NSSL file using column names from readme
         column_names = ['id','time','lat','lon','alt','tfast','tslow','rh','p','dir','spd','qc1','qc2','qc3','qc4']
@@ -435,7 +435,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         q_list = config.NSSL_qcflags
         data_nssl['all_qc_flags'] = data_nssl[q_list].sum(axis=1)
         #  data_nssl.set_index('datetime', inplace=True, drop=False)
-      
+
         #drop all the columns that we will not use past this point (to save memory/computing time)
         data_nssl = data_nssl.drop(columns=['rh', 'p', 'time', 'alt', 'Theta', 'tfast', 'tslow'])
         #  print(data_nssl.memory_usage())
@@ -464,7 +464,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
     elif pname == 'IA_M':
         file_name= '/IA_meso.csv'
         ptype = 'IAM'
-    elif pname == 'ASOS':    
+    elif pname == 'ASOS':
         file_name= '/ASOS_stations.csv'
         ptype = 'ASOS'
 
@@ -485,7 +485,7 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
             return True
         except: return False
     # + + + + + + + + + + + + ++ + +
-    
+
     else: return stnry_df, ptype
 
 #**************
@@ -512,7 +512,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             refl_mask = np.ma.MaskedArray(reflectivity, mask=normal_mask)
             sw_mask = np.ma.MaskedArray(spectrum_width, mask=normal_mask)
             vel_mask = np.ma.MaskedArray(velocity, mask=normal_mask)
-            
+
             #create the dictionary for the masks
             refl_dict, sw_dict, vel_dict = {'data':refl_mask}, {'data':sw_mask}, {'data':vel_mask}
             rfile.add_field('refl_fix', refl_dict, replace_existing=True) # Is this ok?  Sometimes it already exists
@@ -558,7 +558,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
                     return loc, 'KA'
 
     # * * *
-    elif pname == 'NOXP': 
+    elif pname == 'NOXP':
         # if the main plotting radar is the NOXP radar
         if rfile != None:
             #det the scantime
@@ -566,13 +566,13 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             #det the location info
             MR_lat, MR_lon = rfile.latitude['data'][0], rfile.longitude['data'][0]
             return MR_time, MR_lat, MR_lon , 'MAINR'
-        
+
         # Determine whether the NOXP radar was in the plotting domain (if its not the radar being plotted)
         if rfile == None:
             path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
             NOXPfiles = sorted(glob.glob(path))
             file = NOXPfiles[0]
-           
+
             checking=0
             for file in NOXPfiles:
                 head_tail= os.path.split(file)
@@ -585,7 +585,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
                     #cache at some point
                     r = pyart.io.read_cfradial(file)
                     Nlat, Nlon = r.latitude['data'][0], r.longitude['data'][0]
-                    
+
                     #set up a namedtuple object to hold the new info
                     r_loc = namedtuple('r_loc', ['lat', 'lon'])
                     loc = r_loc(lat=Nlat, lon=Nlon)
@@ -594,7 +594,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
                     if checking > 1: print('HEYYYYYYYYY !!!!')
             if checking == 0:
                 if d_testing == True: return False
-            
+
             #  if checking <1:
                 #  r_loc = namedtuple('r_loc', ['lat', 'lon'])
                 #  loc = r_loc(lat=np.nan, lon=np.nan)
@@ -617,15 +617,15 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             WSR_df.reset_index(self, level=None, drop=False, inplace=False, col_level=0, col_fill='')
             WSR_df.index.name = 'R_Name'
             WSR_df.reset_index(inplace= True, drop=False)
-            
+
             # Test Data availability
             if d_testing == True:
                 try:
-                    #  if no sites in domain this will cause a failure 
+                    #  if no sites in domain this will cause a failure
                     p_test = WSR_df.iloc[0]
                     return True
                 except:return False
-            
+
             else: return WSR_df, 'WSR'
 
 
@@ -759,13 +759,13 @@ class Platform:
                        np.logical_and(pform.lon > bounding.xmin, pform.lon < bounding.xmax))): p_deploy = True
                 else: p_deploy = False
             else:
-                # if the dataset has not been temporally subset (aka time_offset is none) the dataframe 
-                #  to do the spatiol subsetting is equivilant to the full original dataset; 
+                # if the dataset has not been temporally subset (aka time_offset is none) the dataframe
+                #  to do the spatiol subsetting is equivilant to the full original dataset;
                 #  otherwise use the previously det df_sub that results from the temporal subset
                 if time_offset == None: df_sub = pform.df
 
                 #conduct the spatial subset
-                df_sub = df_sub.loc[(df_sub['lat'] >= bounding.ymin) & (df_sub['lat'] <= bounding.ymax) & 
+                df_sub = df_sub.loc[(df_sub['lat'] >= bounding.ymin) & (df_sub['lat'] <= bounding.ymax) &
                                     (df_sub['lon'] >= bounding.xmin) & (df_sub['lon'] <= bounding.xmax)]
             if print_long == True: print('Dataset has been spatially subset')
         # + + + + + + + + + + + + ++ + +
@@ -782,7 +782,7 @@ class Platform:
                 p_deploy = False
                 error_printing(e_test)
         return df_sub, p_deploy
-    
+
 
 ####
 class Torus_Insitu(Platform):
