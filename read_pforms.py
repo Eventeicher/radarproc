@@ -56,8 +56,6 @@ log = logging.getLogger(__name__)
 ## Imports form other files
 ############################
 import config #this is the file with the plotting controls to access any of the vars in that file use config.var
-#rename a few commonly used vars so that the config.var does not have to be used repeatedly
-print_long, e_test = config.print_long, config.e_test
 
 ################################################################################################
 ##################
@@ -675,7 +673,7 @@ class Platform:
                 data_avail = read_Radar(pname, self.Print_long, self.E_test, d_testing=True)
             return data_avail
         except:
-            error_printing(e_test)
+            error_printing(self.E_test)
             return False
 
     # * * *
