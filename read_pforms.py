@@ -518,8 +518,17 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
             ## Read in files
             if pname == 'Ka1': r_testing='ka1' # r_testing is the name of the radar you are testing to see if deployed
             elif pname == 'Ka2': r_testing='ka2'
-            #  read in the csv file; if radar didn't dep that day there will be no csv file and the defn will fail (which is ok)
-            kadep = pd.read_csv(config.g_mesonet_directory+config.day+'/radar/TTUKa/csv/'+config.day+'_deployments_'+r_testing+'.csv')
+
+            filename = config.g_mesonet_directory+config.day+'/radar/TTUKa/csv/'+config.day+'_deployments_'+r_testing+'.csv'
+
+            kadep = []
+
+            if os.path.exists(filename):
+                #  read in the csv file; if radar didn't dep that day there will be no csv file and the defn will fail (which is ok)
+                kadep = pd.read_csv(filename)
+            else:
+                log.debug("File does not exist: %s" %(filename))
+                print("File does not exist: %s" %(filename))
 
             ## If Radar did dep this day det more info about the deployments
             for t in range(kadep.time_begin.count()):
