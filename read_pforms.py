@@ -57,7 +57,7 @@ log = logging.getLogger(__name__)
 ############################
 import config #this is the file with the plotting controls to access any of the vars in that file use config.var
 #rename a few commonly used vars so that the config.var does not have to be used repeatedly
-print_long, e_test, p_var = config.print_long, config.e_test, config.p_var
+print_long, e_test = config.print_long, config.e_test
 
 ################################################################################################
 ##################
@@ -174,9 +174,6 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
                     subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load data for the pform (aka initialize an object of the appropriate class); place in dict with key of pname
                     Data.update({pname: Torus_Insitu(pname)})
-                    #add a max/min value, if the object has type NSSL it will apply a mask (this can be easily changed/ mask applied to other platforms)
-                    if Data[pname].type == 'NSSL': Data[pname].min_max(config.p_var, mask=True)
-                    else: Data[pname].min_max(config.p_var)
                     if print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
                     if print_long == True: print("No data available to be read in for platform %s" %(pname))
@@ -260,13 +257,6 @@ def Add_to_DATA(DType, Data, subset_pnames, print_long, MR_file=None, swp=None):
             elif read_in_data == False:
                     if print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
 
-    # * * *
-    elif DType == 'PVar':
-        #Create a Pvar object add it to the data dict and find the global max and min
-        #  This object will only be once updated once (aka same for all images for a given run)
-        Data.update({'Var': Pvar(config.p_var)})
-        Data['Var'].find_global_max_min(Data)
-        Data['Var'].make_dummy_plot()
 
     # * * *
     ##Uncomment to check yourself
@@ -417,13 +407,11 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         r_h = data_nssl['rh'].values/100
         data_nssl['Theta'] = (mpcalc.potential_temperature(p, t)).m
 
-        if 'Thetav' == config.p_var:
-            mixing = mpcalc.mixing_ratio_from_relative_humidity(r_h, t, p)
-            data_nssl['Thetav'] = (mpcalc.virtual_potential_temperature(p, t, mixing)).m
+        mixing = mpcalc.mixing_ratio_from_relative_humidity(r_h, t, p)
+        data_nssl['Thetav'] = (mpcalc.virtual_potential_temperature(p, t, mixing)).m
 
-        if 'Thetae' == config.p_var:
-            td = mpcalc.dewpoint_rh(temperature= t, rh= r_h)
-            data_nssl['Thetae'] = (mpcalc.equivalent_potential_temperature(p, t, td)).m
+        td = mpcalc.dewpoint_rh(temperature= t, rh= r_h)
+        data_nssl['Thetae'] = (mpcalc.equivalent_potential_temperature(p, t, td)).m
 
         Spd, dire = data_nssl['spd'].values * units('m/s') , data_nssl['dir'].values * units('degrees')
         u, v = mpcalc.wind_components(Spd, dire)
@@ -780,6 +768,7 @@ class Platform:
                 p_deploy = False
                 error_printing(e_test)
         return df_sub, p_deploy
+    
 
 ####
 class Torus_Insitu(Platform):
@@ -788,34 +777,39 @@ class Torus_Insitu(Platform):
         self.df, self.type = read_TInsitu(Name, self.Print_long, self.E_test, self.Tstart, self.Tend)
         self.df.name ='{}_df'.format(Name) #assign a name to the pandas dataframe itself
         self.marker_label= config.TIn_lab
+        #add a max/min value, if the object has type NSSL it will apply a mask (this can be easily changed/ mask applied to other platforms)
+        if self.type == 'NSSL': mask=True
+        else: mask=False
+        self.Tv_Min, self.Tv_Max= self.min_max('Thetav', mask)
+        self.Te_Min, self.Te_Max= self.min_max('Thetae', mask)
         Platform.__init__(self, Name)
 
     # * * *
-    def min_max(self, p_var, mask=False):
+    def min_max(self, var, mask):
         #Mask the dataset(if applicable) and determine the max and min values of pvar:
         #  Masking is based of QC flags etc and can be diff for each platform
         if self.type == "NSSL":
             if mask == True: #mask is a bool, sent to False to by default
-                self.mask_allqc_df = np.ma.masked_where(self.df['all_qc_flags'].values > 0, self.df[p_var].values) #add masked dataset to the object
-                #  self.ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df[config.p_var].values) #add masked dataset to the object
-                self.ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df[config.p_var].values) #add masked dataset to the object
-                self.Min, self.Max = self.mask_allqc_df.min(), self.mask_allqc_df.max()#use the masked dataset to find max and min of p_var
+                mask_allqc_df = np.ma.masked_where(self.df['all_qc_flags'].values > 0, self.df[var].values) #add masked dataset to the object
+                #  self.ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df[config.var].values) #add masked dataset to the object
+                self.Thetae_ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df['Thetae'].values) #add masked dataset to the object
+                self.Thetav_ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df['Thetav'].values) #add masked dataset to the object
+                self.Min, self.Max = mask_allqc_df.min(), mask_allqc_df.max()#use the masked dataset to find max and min of var
             elif mask == False:
-                self.Min, self.Max = self.df.min()[p_var], self.df.max()[p_var] #use the orig dataset to find max/min
+                self.Min, self.Max = self.df.min()[var], self.df.max()[var] #use the orig dataset to find max/min
 
         elif self.type == "UNL":
             if mask == True: print('UNL masking code not written yet')
             elif mask == False:
-                self.Min, self.Max = self.df.min()[p_var], self.df.max()[p_var] #use the orig dataset to find max/min
+                self.Min, self.Max = self.df.min()[var], self.df.max()[var] #use the orig dataset to find max/min
 
         elif self.type == "UAS":
             if mask == True: print('UAS masked code not written yet')
             elif mask == False: print('UAS unmasked code not written yet')
 
-        else: print("What platform is this? ", self.type)
-        
         if self.Min== None: self.Min = np.nan
         if self.Max== None: self.Max = np.nan
+        return self.Min, self.Max
 
 ####
 class Stationary_Insitu(Platform):
@@ -861,34 +855,4 @@ class Radar(Platform):
 
 #########################################
 ### set up Pvar class (this is not a subclass of Platform)
-class Pvar:
-    def __init__(self, p_var):
-        self.name = p_var
-        #establish label for the colorbar and tseries ylabel
-        if self.name == "Thetae": self.v_lab = "Equi. Potential Temp [K]"
-        elif self.name == "Thetav": self.v_lab = "Vir. Potential Temp [K]"
-
-    # * * *
-    def find_global_max_min(self, Dict):
-        '''determine the global max and min across all platforms for p_var
-        '''
-        val_hold = []
-        for p in Dict.values():
-            if hasattr(p,'Min') == True: val_hold.append(p.Min)
-            if hasattr(p,'Max') == True: val_hold.append(p.Max)
-        
-        if len(val_hold) != 0: self.global_min, self.global_max = min(val_hold), max(val_hold)
-
-    # * * *
-    def make_dummy_plot(self):
-        ''' Make a dummy plot to allow for ploting of colorbar
-        '''
-        cmap = cmocean.cm.thermal
-        #  cmap=plt.get_cmap('rainbow')
-        Z = [[0,0],[0,0]]
-
-        levels = np.arange(self.global_min, self.global_max+1, 1)
-        self.CS3 = plt.contourf(Z, levels, cmap=cmap)
-        plt.clf()
-
 #

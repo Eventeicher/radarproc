@@ -22,7 +22,7 @@ nCPU=1
 
 if Radar_Plot_Type == 'KA_Plotting':
     day = '20190517' #'YYYYMMDD'
-    p_var = "Thetae" #which var to plot (current options; Thetae, Thetav)
+    R_Tvar = "Thetae" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 21 #21 is the best for KA
     Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
@@ -30,7 +30,7 @@ if Radar_Plot_Type == 'KA_Plotting':
 
 if Radar_Plot_Type == 'NOXP_Plotting':
     day = '20190615' #'YYYYMMDD'
-    p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
+    R_Tvar = "Thetav" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 37 #21 is the best for KA
     Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
@@ -38,7 +38,7 @@ if Radar_Plot_Type == 'NOXP_Plotting':
 
 if Radar_Plot_Type == 'WSR_Plotting':
     day = '20190517' #'YYYYMMDD'
-    p_var = "Thetav" #which var to plot (current options; Thetae, Thetav)
+    R_Tvar = "Thetae" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 60 #21 is the best for KA
     Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
@@ -49,7 +49,7 @@ if Radar_Plot_Type == 'WSR_Plotting':
 # ***********
 #  day = '20190520' #'YYYYMMDD'
 #crop the start or end time to a time you specify (set to None to do the whole day)
-tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 22, 50, 0)
+tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 50, 0)
 #  tend = dt.datetime(int(day[0:4]),int(day[4:6]),int(day[6:8]),22,45,0)
 #  tstart, tend = None, None
 tend = None
@@ -113,7 +113,9 @@ ts_extent = 30 #so actually 60 min
 
 #list; include in the list the type names for the pforms you would like masked (this only controls whats plotted on the Tseries)
 #  if none leave as blank list, will not work if a mask had not been previously applied to the dataset (which can be done in the classes)
-Time_Series = ['Wind', p_var]
+Time_Series = ['Thetav', R_Tvar]
+#  Time_Series = ['Wind', p_var]
+
 TS_masking = ['NSSL']
 NSSL_qcflags = ['qc1', 'qc2', 'qc3', 'qc4']
 # would you like to restrict the time series to display only a timespan +/- x time from the scantime (functionalitly not coded yet)
