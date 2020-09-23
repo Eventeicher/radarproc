@@ -46,6 +46,7 @@ from scipy import ndimage, interpolate
 from operator import attrgetter
 from collections import namedtuple
 import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
+import fnmatch
 
 register_matplotlib_converters()
 logging.basicConfig(filename='this_is.log')
@@ -919,6 +920,9 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     path =  download_directory + config.day +'/radar/Nexrad/Nexrad_files/'
     # If you dont have the path already make it and download the files
     if not os.path.exists(path): Path(path).mkdir(parents=True)
+
+    # Remove all files ending in _MDM
+    scans = list(filter(lambda x: not fnmatch.fnmatch(x.create_filepath(path, False)[-1], '*_MDM') , scans))
 
     # missing_scans is a list of scans we don't have and need to download
     # create_filepath returns tuple of (directory, directory+filename)
