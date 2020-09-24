@@ -39,7 +39,7 @@ import pandas as pd
 from pandas.plotting import register_matplotlib_converters
 import numpy as np
 import xarray as xr
-from netCDF4 import num2date
+#from netCDF4 import num2date
 import argparse, cProfile, logging, time, os, os.path
 from os.path import expanduser
 from pathlib import Path
@@ -48,6 +48,11 @@ from scipy import ndimage, interpolate
 from operator import attrgetter
 from collections import namedtuple
 import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
+import cftime # for num2pydate
+
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
+
 
 register_matplotlib_converters()
 logging.basicConfig(filename='this_is.log')
@@ -488,6 +493,8 @@ def read_Stationary(pname, print_long, e_test, d_testing=False):
 
 #**************
 def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False):
+    print("read_Radar(pname=",pname," rfile=", rfile, ")")
+
     ''' Determine if a given radar is deployed and if so assign the correct location values to it.
     '''
     if pname in pform_names('KA'):
@@ -539,7 +546,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
                 #  read in the csv file; if radar didn't dep that day there will be no csv file and the defn will fail (which is ok)
                 kadep = pd.read_csv(filename)
             else:
-                log.debug("File does not exist: %s" %(filename))
+                log.debug("    **** File does not exist: %s" %(filename))
                 print("File does not exist: %s" %(filename))
 
             ## If Radar did dep this day det more info about the deployments
@@ -612,7 +619,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
         #  if the main plotting radar is a Wsr88d radar
         if rfile != None:
             index_at_start = rfile.sweep_start_ray_index['data'][swp[0]] #Find the beginning loc of given sweep in data array
-            MR_time = num2date(rfile.time['data'][index_at_start], rfile.time['units'])
+            MR_time = cftime.num2pydate(rfile.time['data'][index_at_start], rfile.time['units'])
             MR_lat, MR_lon = rfile.latitude['data'][0], rfile.longitude['data'][0]
             return MR_time, MR_lat, MR_lon , 'MAINR'
 
