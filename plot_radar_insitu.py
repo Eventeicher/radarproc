@@ -48,6 +48,14 @@ from collections import namedtuple
 import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
 import fnmatch
 
+import copy
+
+import tracemalloc
+tracemalloc.start()
+
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
+
 register_matplotlib_converters()
 logging.basicConfig(filename='this_is.log')
 log = logging.getLogger(__name__)
@@ -539,6 +547,15 @@ class Master_Plt:
         ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
         self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=config.offsetkm*2000,
                                   height=config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
+
+        # Has to be here or it doesn't work
+        ax_n.set_extent(self.Domain)
+
+        self.tick_grid_settings(ax=ax_n, radar=True, interval=20*1000)
+        #scale_bar(ax_n, 10) # 10 KM
+        ax_n.grid(True)
+
+        # Do it again here to restore extent
         ax_n.set_extent(self.Domain)
 
         ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
@@ -665,9 +682,9 @@ class Master_Plt:
         #  ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
           #  plt.subplots_adjust(right=0.7)
         ###################
-        self.tick_grid_settings(ax=ax_n, radar=True, interval=20*1000)
+        #self.tick_grid_settings(ax=ax_n, radar=True, interval=20*1000)
         #  scale_bar(ax_n, 10) # 10 KM
-        ax_n.grid(True)
+        #ax_n.grid(True)
         ###################
         #  tick_locs = ax_n.get_xticks()
         #  ax_n.set_xticklabels([])
@@ -796,6 +813,11 @@ class Master_Plt:
 ## PLOTTING DEFINTIONS  ###
 ###########################
 def plotting(Data, TVARS, print_long, e_test, start_comptime):
+    print
+    print("*** Entering plotting() ")
+
+    plotting_start_time = time.time()
+
     ''' Initial plotting defenition: sets up fig size, layout, font size etc and will call timeseries and radar subplots
     ----------
     INPUTS:
@@ -866,9 +888,11 @@ def plotting(Data, TVARS, print_long, e_test, start_comptime):
     timer(start_comptime, time.time())
     plt.close()
 
+    plotting_time = plotting_start_time - time.time()
+
     print('\a') ## Makes a ding noise
     if print_long == True: print('~~~~~~~~~~~made it through plotting~~~~~~~~~~~~~~~~~~')
-    print('Done Plotting \n \n***************************************************************************************************')
+    print('*** Exiting Plotting() after ', plotting_time, 'sec \n \n***************************************************************************************************')
 
 ##############################################################################################
 #######################
@@ -973,7 +997,9 @@ cached_read_from_NOXP_file = function_cache_memory.cache( read_from_NOXP_file )
 
 # * * *
 def plot_radar_file(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_id= None):
-    print("open_pyart, scan file_name = {}\n".format(r_file))
+    print()
+    print("*******************************")
+    print("plot_radar_file, scan file_name = {}\n".format(r_file))
     start_comptime = time.time()
 
     if config.Radar_Plot_Type == 'WSR_Plotting':
@@ -1051,6 +1077,11 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_
         ##### + + + + + + + + + + + +
         plotting(Data, print_long, e_test, start_comptime)
     '''
+
+    print("done in plot_radar_file")
+
+
+
 ##############################################################################################
 #  parser = argparse.ArgumentParser(description='Process Radar')
 # parser.add_argument('integers', metavar='N', type=int, nargs='+', help='an integer for the accumulator')
@@ -1130,7 +1161,8 @@ if config.r_plotting == True:
 
             print("start "+str(trange_r_start[Rad_site])+ "\nend "+str(trange_r_end[Rad_site])+ "\n ***")
             radar_files = get_WSR_from_AWS(trange_r_start[Rad_site], trange_r_end[Rad_site], Rad_site, config.g_download_directory)
-            print('********\n Radar files to process:\n'+ str(radar_files))
+            print('********\n Radar files to process:')
+            pp.pprint(radar_files)
 
             #Hard code the swp numbers that will be associated with a given tilt angle
             if config.p_tilt == .5: swp_id=[0 , 1]
@@ -1142,7 +1174,28 @@ if config.r_plotting == True:
 
             ## Proceed to plot the radar
             ##### + + + + + + + + + + + +
-            Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, config.print_long, config.e_test, swp_id= swp_id) for r_file in radar_files)
+            #Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, config.print_long, config.e_test, swp_id= swp_id) for r_file in radar_files)
+
+            for r_file in radar_files:
+
+                # Make copy of data structures so we are starting fresh on every plot
+                # Consider doing this for all plots above
+                # Perhaps this will prevent memory from growing
+
+                Data_C = Data.copy()
+                subset_pnames_C = subset_pnames.copy()
+                #TVARS_C = copy.deepcopy(TVARS)
+                #TVARS_C = list(TVARS)
+                TVARS_C = TVARS  # Can't make a copy for some reason.  Need to fix
+
+                plot_radar_file(r_file, Data_C, TVARS_C, subset_pnames_C, config.print_long, config.e_test, swp_id= swp_id)
+
+                current, peak = tracemalloc.get_traced_memory()
+                pp.pprint(current/ 10**6)
+                pp.pprint(peak / 10**6)
+                print("Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
+
+
 
         print(tranges_each_r)
 
@@ -1161,3 +1214,5 @@ if config.r_plotting == False and config.t_plotting == True:
 plt.rcdefaults()
 timer(totalcompT_start, time.time(), total_runtime=True)
 print("ALL FINISHED")
+
+tracemalloc.stop()
