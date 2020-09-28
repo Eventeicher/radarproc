@@ -69,6 +69,8 @@ log = logging.getLogger(__name__)
 import config #this is the file with the plotting controls to access any of the vars in that file use config.var
 if config.country_roads == True: import osmnx as ox
 
+print_long =config.print_long
+e_test = config.e_test
 
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
@@ -117,47 +119,14 @@ def scale_bar(ax, length=None, location=(.96, -0.05), linewidth=3):
     #Plot the scalebar label
     ax.text(sbx, sby, str(length) + ' km', transform=tmc,
             horizontalalignment='center', verticalalignment='bottom')
-'''
-# Given range from a to b
-# where a is negative and b is positive
-# return an array of tick locations including 0 and spaced interval amounts above and below 0
-def calc_ticks(a,b,interval):
-    left = np.arange(0, a-1, -interval)
-    right = np.arange(0, b+1, interval)
-    ticks = np.concatenate([left,right])
-    ticks = np.sort(ticks)
-    ticks = np.unique(ticks)
-    return ticks
-# Set the x and y ticks supporting both
-# Axis ticks and Grid Lines
-def set_ticks(ax_n, interval):
-    x0, x1 = ax_n.get_xbound()
-    y0, y1 = ax_n.get_ybound()
-    yticks, xticks = calc_ticks(y0, y1, interval), calc_ticks(x0, x1, interval)
-    ax_n.set_yticks(yticks)
-    ax_n.set_xticks(xticks)
-    # Not sure we need to set range
-    # if some plots look are too small for radar might want to try this...
-    #yrange, xrange = (y0, y1), (x0, x1)
-    #ax_n.set_ylim(yrange)
-    #ax_n.set_xlim(xrange)
-# Define how axis ticks are labeled
-def set_km_axis_formatter(ax_n):
-    # Add km to x-axis.
-    def km(x, pos):
-        x = int(x/1000)
-        return '{} km'.format(x)
-    km_formatter = FuncFormatter(km)
-    ax_n.xaxis.set_major_formatter(km_formatter)
-    ax_n.yaxis.set_major_formatter(km_formatter)
-'''
+
 ################################################################################################
 ##########
 # Classes
 ##########
 class Thermo_Plt_Vars:
     def __init__ (self, Data):
-        self.Te_lab, self.Tv_lab = "Equi. Pot Temp [K]", "Vir. Pot Temp [K]"
+        self.Te_lab, self.Tv_lab = "Equi. Pot. Temp [K]", "Vir. Pot. Temp [K]"
         self.Tv_GMin, self.Tv_GMax = self.find_global_max_min('Thetav', Data)
         self.Te_GMin, self.Te_GMax = self.find_global_max_min('Thetae', Data)
 
@@ -226,7 +195,7 @@ class Master_Plt:
         #  print(plt.rcParams)
         plt.rc('font', size= 15)         # controls default text sizes
         plt.rc('axes', labelsize= 21) # fontsize of the axes title, and x and y labels
-        plt.rc('legend', fontsize= 23, borderpad=.5, facecolor='white', edgecolor= 'black', shadow=True, fancybox=True, framealpha=1)       # legend fontsize
+        plt.rc('legend', fontsize= 23, borderpad=.5, facecolor='white', edgecolor= 'black', shadow=True, fancybox=True, framealpha=1)# legend fontsize
         plt.rc('figure', titlesize= 50, facecolor='white')  # fontsize of the figure title
         #  self.leg_title_font=FontProperties(size=25, weight='bold')
         self.leg_title_font={'size':25, 'weight':'bold'}
@@ -242,20 +211,23 @@ class Master_Plt:
             self.fig= plt.figure(figsize=(32,20))
             if len(config.Time_Series) == 1:
                 self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=[3,2], hspace=.1)
-                self.ts_gs = GridSpecFromSubplotSpec(len(config.Time_Series), 1, subplot_spec=self.outer_gs[1, :])
             if len(config.Time_Series) == 2:
                 self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=[4,3], hspace=.1)
-                if 'Wind' in config.Time_Series:
-                    hratio=[2,3]
-                else:
-                    hratio=[1,1]
-                self.ts_gs = GridSpecFromSubplotSpec(len(config.Time_Series), 1, subplot_spec=self.outer_gs[1, :], height_ratios=hratio, hspace=0)
+                if 'Wind' in config.Time_Series: hratio=[2,3]
+                else: hratio=[1,1]
+            self.ts_gs = GridSpecFromSubplotSpec(len(config.Time_Series), 1, subplot_spec=self.outer_gs[1, :], height_ratios=hratio, hspace=0)
             self.r_gs = GridSpecFromSubplotSpec(1, len(config.r_mom), subplot_spec=self.outer_gs[0, :])
 
         # This is the layout for time series only
         if len(config.Time_Series) != 0 and len(config.r_mom) == 0:
             print('this is the layout for time series only')
-            self.fig= plt.figure(figsize=(32,20))
+            #  self.fig= plt.figure(figsize=(32,5))
+            self.fig= plt.figure(figsize=(32,10))
+            if len(config.Time_Series) == 1:  hratio=[1]
+            if len(config.Time_Series) == 2:
+                if 'Wind' in config.Time_Series: hratio=[2,3]
+                else: hratio=[1,1]
+            self.ts_gs = GridSpec(len(config.Time_Series), 1, height_ratios=hratio, hspace=0)
 
         # This is the layout for radar only
         if len(config.r_mom) != 0 and len(config.Time_Series) == 0:
@@ -315,7 +287,6 @@ class Master_Plt:
 
         #if you are calling this for a radar subplot locate the ticks
         if radar != None and interval != None:
-
             def calc_ticks(a,b,interval):
                 ''' Given: range from a to b where a is negative and b is positive
                     Return: an array of tick locations including 0 and spaced interval amounts above and below 0
@@ -336,29 +307,20 @@ class Master_Plt:
             ax.set_yticks(yticks)
             ax.set_xticks(xticks)
 
-                # Not sure we need to set range
-                # if some plots look are too small for radar might want to try this...
+            ax.locator_params(nbins=6)
+
+                # Not sure we need to set range if some plots look are too small for radar might want to try this...
                 #yrange, xrange = (y0, y1), (x0, x1)
                 #ax_n.set_ylim(yrange)
-            #  ax.xlocator = MaxNLocator(nbins=6, steps=[5, 10])
-            ax.xaxis.set_major_locator(MaxNLocator(nbins=6, steps=[1, 5, 10]))
+        
+            #  ax.xaxis.set_major_locator(MaxNLocator(6, steps=[1, 5, 10]))
             ax.xaxis.set_minor_locator(AutoMinorLocator(2))
-            #  ax.get_xaxis().set_major_locator(MaxNLocator(nbins=6, steps=[1, 5, 10]))
-            ax.get_yaxis().set_major_locator(MaxNLocator(nbins=6, steps=[1, 5, 10]))
-            #  ax.get_yaxis.set_minor_locator(AutoMinorLocator(2))
+            #  ax.yaxis.set_major_locator(MaxNLocator(nbins=6, steps=[1, 5, 10]))
+            ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+            
+            #set the calculated ticks on the graph
             plt.setp(ax.get_xticklabels(), visible=True)
-            #  plt.setp(ax.get_ytick(), visible=True)
-
-            #  ax.yaxis.set_major_locator(MaxNLocator(nbins=6, steps=[5, 10]))
-            #  ax.yaxis.set_minor_locator(AutoMinorLocator(2))
-            #  ax.set_yticks(MaxNLocator(nbins=6, steps=[5, 10]))
-            #  ax.set_xticks(MaxNLocator(nbins=6, steps=[5, 10]))
-            #  ax.set_major_locator(MaxNLocator(nbins=6, steps=[5, 10]))
-            #  ax.set_minor_locator(AutoMinorLocator(2))
-            #  ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
-            #  loc = plticker.MultipleLocator(base=1.0) # this locator puts ticks at regular intervals
-            #  ax.xaxis.set_major_locator(loc)
-            #  fig.savefig('samplefigure', bbox_extra_artists=(lgd,text), bbox_inches='tight')
+            plt.setp(ax.get_yticklabels(), visible=True)
         # + + + + + + + + + + + + ++ + +
 
         ##Tick Display Characteristics
@@ -376,6 +338,12 @@ class Master_Plt:
             ax.tick_params(which='major', axis='both', grid_linewidth=2.5)
             ax.tick_params(which='major', axis='y', grid_color='grey', grid_linewidth=2, grid_linestyle='--', grid_alpha=.8)
 
+        if radar != None:
+            #  ax.tick_params(which='both', axis='both', grid_linewidth=2, grid_color='black')
+            #  ax.tick_params(which='major', axis='both', grid_linestyle='--', grid_color='grey')
+            #  ax.tick_params(which='both', axis='both', grid_linewidth=2)
+            ax.tick_params(which='both', axis='both', grid_linewidth=2, grid_color='grey')
+            #  ax.tick_params(which='major', axis='both', grid_linestyle='--', grid_color='grey')
         ax.grid(which='both')
         ax.tick_params(which='minor', axis='both', grid_linestyle=':')
         ax.set_axisbelow('line')
@@ -427,6 +395,8 @@ class Master_Plt:
                     ## Plot
                     ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str) #assigning label= is what allows the legend to work
 
+                    TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
+                    TSleg_elements.append(TSleg_entry)
             ## Set up XY axes tick locations and Labels
             self.tick_grid_settings(ax=ax_n, ts=ts)
             ax_n.set_ylabel(TVARS.TS_Tvar_lab)
@@ -439,21 +409,21 @@ class Master_Plt:
 
             ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
             ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
-            ax_n.set_ylabel('Wind Speed')
+            ax_n.set_ylabel('Wind Speed (kn)')
             self.tick_grid_settings(ax=ax_n, ts=ts)
-            #  TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
-            #  TSleg_elements.append(TSleg_entry)
+            TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
+            TSleg_elements.append(TSleg_entry)
 
             ax_2 = ax_n.twinx()
             ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05, label='Wind Dir')
             ax_2.set_ylabel('Wind Dir ($^{\circ}$)')
             self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True)
-            #  TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
-            #  TSleg_elements.append(TSleg_entry)
+            TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
+            TSleg_elements.append(TSleg_entry)
 
         ## Plot legend
         #  leg = ax_n.legend(handles= TSleg_elements, loc='center left')
-        leg = ax_n.legend(loc='center left')
+        leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center left')
         if ts == 'Wind':
             leg.set_title(config.Wind_Pform, prop=self.leg_title_font)
             leg.remove()
@@ -470,8 +440,9 @@ class Master_Plt:
                 plt.setp(ax_n.get_xticklabels(), visible=False)
                 ax_n.spines['bottom'].set_linewidth(5)
                 ax_n.spines['bottom'].set_color('k')
-                if ts in ['Thetav', 'Thetae']:
-                    leg.remove()
+                if len(config.r_mom) != 0: 
+                    if ts in ['Thetav', 'Thetae']:
+                        leg.remove()
 
 
         ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
@@ -485,23 +456,15 @@ class Master_Plt:
         ax_n.set_xlabel('Time (UTC)')
         ax_n.yaxis.set_label_coords(-.03, .5)
         '''
-        print('$$$$$$$$$')
         print('TS ', ts)
         bbox = ax_n.get_tightbbox(fig.canvas.renderer, call_axes_locator=True)
         x0, y0, width, height = bbox.transformed(fig.transFigure.inverted()).bounds
         # slightly increase the very tight bounds:
-        #  xpad = width
-        #  ypad = height
+        #  xpad, ypad = width, height 
         #  ax_n.patch((x0, y0), width, height, edgecolor='red', linewidth=3, fill=False)
         #  box = ax_n.get_position()
         #  box2=ax_n.get_tightbbox(fig.canvas.get_renderer(), call_axes_locator = True)
-        #  print(box)
-        #  print(box2)
-        print('$$$$$$$$$')
         '''
-
-        #  print(ax_n.lines)
-        #  print(vars(ax_n))
         if print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
 
@@ -538,8 +501,7 @@ class Master_Plt:
 
         ## Plot the radar
         ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
-        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=config.offsetkm*2000,
-                                  height=config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
+        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=config.offsetkm*2000, height=config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
 
         # Has to be here or it doesn't work
         ax_n.set_extent(self.Domain)
@@ -589,7 +551,7 @@ class Master_Plt:
                         if p.type == 'KA' or p.type == 'NOXP':
                             ## Plot the marker
                             ax_n.plot(p.lon, p.lat, transform=self.trans_Proj, marker=p.m_style, color=p.m_color, label=p.leg_str, markersize=p.m_size,
-                                      markeredgewidth=5, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
+                                      markeredgewidth=2, path_effects=[PathEffects.withStroke(linewidth=15, foreground='k')], zorder=10)
                             ## Optional textlabel on plot
                             if p.marker_label == True:
                                 ax_n.text(p.lon+.009, p.lat-.002, p.name, transform=trans_Proj,
@@ -643,7 +605,7 @@ class Master_Plt:
         if leg == True: #this means you are currently making the left subplot
             #add legend for platform markers
             #  l = ax_n.legend(handles=legend_elements, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.1,.5), handlelength=.1)#, title="Platforms")
-            l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.09,.5), handlelength=.1)#, title="Platforms")
+            l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.07,.5), markerscale=1.2, labelspacing=.6, handlelength=.1)#, title="Platforms")
             #  h, le = ax_n.get_legend_handles_labels()
             #  l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(0,.5), handlelength=.1)#, title="Platforms")
             l.set_title("Platforms", prop=self.leg_title_font)
@@ -656,17 +618,11 @@ class Master_Plt:
             cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.226, 0,1,1))
             cbar = plt.colorbar(TVARS.CS3, cax=cbar_ax, orientation='vertical', label=TVARS.R_Tvar_lab, ticks=MaxNLocator(integer=True))#,ticks=np.arange(Data['p_var'].global_min, Data['p_var'].global_max+1,2))
         '''
-        print('$$$$$$$$$')
         print('RMOM ', mom)
         box = ax_n.get_position()
         box2=ax_n.get_tightbbox(fig.canvas.get_renderer(), call_axes_locator = True)
         ax_n.set_frame_on(True)
-        print(box)
-        print(box2)
-        print('$$$$$$$$$')
         '''
-
-
         # Shrink current axis by 20%
         #  box = ax.get_position()
         #  ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
@@ -675,18 +631,7 @@ class Master_Plt:
         #  ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
           #  plt.subplots_adjust(right=0.7)
         ###################
-        #self.tick_grid_settings(ax=ax_n, radar=True, interval=20*1000)
         #  scale_bar(ax_n, 10) # 10 KM
-        #ax_n.grid(True)
-        ###################
-        #  tick_locs = ax_n.get_xticks()
-        #  ax_n.set_xticklabels([])
-
-        #  ax_n.xlocator = MultipleLocator(5000)
-
-        #  ax_n.xaxis.set_major_locator(MultipleLocator(5000)) # set up major tick marks (this is set up to go by 5's will want to change for diff vars)
-        #  ax_n.locator_params(MultipleLocator())
-
         if print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 
     # * * *
@@ -748,7 +693,7 @@ class Master_Plt:
     def rhi_spokes_rings(self, pform):
         ''' Plot the RHI spoke and ring for a radar
         '''
-        if print_long == True: print('made it into rhi_spokes_rings')
+        if config.print_long == True: print('made it into rhi_spokes_rings')
 
         # if there is not actually rhi info then it will not plot a ring and not stop the code
         if np.isnan(pform.rhib) == True or np.isnan(pform.rhie)== True: print('Could not plot RHI spokes')
@@ -781,25 +726,6 @@ class Master_Plt:
                                  path_effects=([PathEffects.withStroke(linewidth=4, foreground='xkcd:pale blue')]))
             if print_long == True: print('made it through rhi_spokes_rings')
 
-#######################################################
-        #  plt.rc('axes', xmargin = 0,  ymargin=0)
-        #  if ts == 'Wind':
-            #  with mpl.rc_context(rc={})
-
-    #  def things_for_rc():
-        #  plt.rc('font',weight='bold')
-        #  plt.rc('xtick.major', size=5, pad=7)
-        #  plt.rc('xtick', labelsize=15)
-        #  plt.rc('grid',c='.5', ls='-',lw=5)
-#
-    #  @ticker.FuncFormatter
-    #  def ticklab_format(x, pos):
-        #  return f'[{x:.2f}]'
-    #  ax_n.xaxis.set_major_formatter(ticklab_format)
-
-    #  @staticmethod
-    #  def plot_bground_features():
-##########
 
 ##########################################################################
 ###########################
@@ -850,34 +776,49 @@ def plotting(Data, TVARS, print_long, e_test, start_comptime):
     #Add a title in the plot
     #old title_spacer=.92
     title_spacer=.93
-    if Data['P_Radar'].name in pform_names('KA') or Data['P_Radar'].name =='WSR88D':
-        plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
-    else:
-        plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
-    file_string = '_'.join(config.Time_Series)
 
-    if ('Thetae' in config.Time_Series) and ('Thetav' in config.Time_Series):
-        Thermo_type='both'
-    else:
+    if len(config.Time_Series) != 0:
+        #PLT TITLE STUFF
+        file_string = '_'.join(config.Time_Series)
+        if config.ts_extent !=None:
+            output_name= config.day+'_TS_'+file_string+'.png'
+        if config.ts_extent ==None:
+            output_name= config.day+'_TS_'+file_string+'_full.png'
+
+        # OUTDIR name stuff
+        if ('Thetae' in config.Time_Series) and ('Thetav' in config.Time_Series): Thermo_type='both'
+        else: Thermo_type= config.R_Tvar
+        
         if len(config.r_mom) != 0:
-            Thermo_type= config.R_Tvar
-        else: print('write more code')
+            #PLT TITLE STUFF
+            plt.suptitle(config.day+' Time Series', y=title_spacer)
+            plt_dir=Data['P_Radar'].dir_name+'/'+Thermo_type+'/'+str(config.p_tilt)+'_deg/'
+        else:
+            plt_dir='TSeries/'+Thermo_type+'/'
+        
+        #This is the directory path for the output file
+        outdir = config.g_plots_directory+config.day+'/plots/'+plt_dir
+        # Setup Function Cache for speedup, if path directory does not make the directory
+        if not os.path.exists(outdir): Path(outdir).mkdir(parents=True)
+    
+    if len(config.r_mom) != 0:
+        if Data['P_Radar'].name in pform_names('KA') or Data['P_Radar'].name =='WSR88D':
+            plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
+        else:
+            plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
+        
+        #add the file name
+        if Data['P_Radar'].name in pform_names('KA'):
+            output_name= Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
+        if Data['P_Radar'].name == 'NOXP':
+            output_name = Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
+        if Data['P_Radar'].name == 'WSR88D':
+            output_name = Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
+    
+    output_path_plus_name = outdir+output_name
+    print(output_path_plus_name)
 
-    #This is the directory path for the output file
-    outdir_name = config.g_plots_directory+config.day+'/plots/'+Data['P_Radar'].dir_name+'/'+Thermo_type+'/'+str(config.p_tilt)+'_deg/'
-    # Setup Function Cache for speedup, if path directory does not make the directory
-    if not os.path.exists(outdir_name): Path(outdir_name).mkdir(parents=True)
-
-    #add the file name
-    if Data['P_Radar'].name in pform_names('KA'):
-        output_name= outdir_name+Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
-    if Data['P_Radar'].name == 'NOXP':
-        output_name = outdir_name+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
-    if Data['P_Radar'].name == 'WSR88D':
-        output_name = outdir_name+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
-    print(output_name)
-
-    plt.savefig(output_name, bbox_inches='tight', pad_inches=.3)
+    plt.savefig(output_path_plus_name, bbox_inches='tight', pad_inches=.3)
     timer(start_comptime, time.time())
     plt.close()
 
@@ -1107,7 +1048,7 @@ Data, subset_pnames = Add_to_DATA('STN_I', Data, subset_pnames, config.print_lon
 # Create Plot for each radarfile ##
 ###################################
 ## If Radar will be plotted
-if config.r_plotting == True:
+if len(config.r_mom) != 0:
     print('\nYes Plot Radar \n')
 
     # * * *
@@ -1186,8 +1127,6 @@ if config.r_plotting == True:
                 pp.pprint(peak / 10**6)
                 print("Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB")
 
-
-
         print(tranges_each_r)
 
 
@@ -1195,11 +1134,11 @@ if config.r_plotting == True:
 # Create Timeseries only plot ##
 ################################
 #Only plot timeseries (this code isn't fully fleshed out but in theroy this code is built in such a way to allow for this)
-if config.r_plotting == False and config.t_plotting == True:
-    print("Plot Timeseries only \n"+ str(config.g_mesonet_directory+config.day+'/mesonets/NSSL/*.nc'))
-    time_series(Data)
-    fig.savefig('test2.png')
-    plt.close()
+if len(config.r_mom) == 0 and len(config.Time_Series) != 0:
+    print("\nPlot Timeseries only \n")
+           #  + str(config.g_mesonet_directory+config.day+'/mesonets/NSSL/*.nc'))
+    start_comptime = time.time()
+    plotting(Data,TVARS, config.print_long, config.e_test, start_comptime)
 
 ###########################
 plt.rcdefaults()
