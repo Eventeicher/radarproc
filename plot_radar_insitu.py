@@ -486,7 +486,7 @@ class Master_Plt:
             if Data['P_Radar'].name in pform_names('KA'):
                 field, vminb, vmaxb, sweep = 'refl_fix', -30., 30., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'NOXP':
-                field, vminb, vmaxb, sweep = 'DBZ', -30., 30., Data['P_Radar'].swp
+                field, vminb, vmaxb, sweep = 'DBZ', -10., 60., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'WSR88D':
                 field, vminb, vmaxb, sweep =  'reflectivity', -10., 75., Data['P_Radar'].swp[0]
         elif mom == 'vel':
@@ -521,6 +521,7 @@ class Master_Plt:
             if isinstance(p, Torus_Insitu):
                 if print_long == True: print(p.name)
                 self.plot_TORUSpform(p, TVARS, Data, ax_n, print_long, e_test)
+                print(p.df)
 
             ######
             #Plot Stationary Inistu Platforms ( aka mesonets and ASOS) if desired and available
@@ -911,6 +912,11 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     return radar_files
 
 # * * *
+def fix_NOXP(radar,sweep,field):
+    radar.fields[field]['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1,:]=radar.extract_sweeps([sweep]).fields[field]['data'][np.argsort(radar.get_azimuth(sweep)),:]
+    radar.azimuth['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1] = radar.get_azimuth(sweep)[np.argsort(radar.get_azimuth(sweep))]
+
+# * * *
 def read_from_nexrad_file(radar_file):
     radar = pyart.io.read_nexrad_archive(radar_file)
     return radar
@@ -918,7 +924,10 @@ def read_from_KA_file(radar_file):
     radar = pyart.io.read(radar_file)
     return radar
 def read_from_NOXP_file(radar_file):
-    radar = pyart.io.read_cfradial(radar_file)
+    #  radar = pyart.io.read_cfradial(radar_file)
+    radar = pyart.io.read(radar_file)
+    fix_NOXP(radar, 0, 'DBZ')
+    fix_NOXP(radar, 0, 'VEL')
     return radar
 # Note: Cached version is cached on the file name, not the file contents.
 # If file contents change you need to invalidate the cache or pass in the file contents directly to this function
@@ -978,6 +987,9 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_
             tilt_ang = radar.get_elevation(swp_id) ## Det the actual tilt angle of a given sweep (returns an array)
             ## Check to see if the radarfile matches the elevation tilt we are interested in
             if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
+                print(tilt_ang[0])
+                #  fix_NOXP(radar, tilt_ang[0], 'DBZ')
+                #  fix_NOXP(radar, tilt_ang[0], 'VEL')
                 print("\nProducing Radar Plot:")
                 #  Assign radar fields and masking
         valid_time = True
