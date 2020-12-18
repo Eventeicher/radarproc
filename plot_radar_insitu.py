@@ -49,6 +49,7 @@ from operator import attrgetter
 from collections import namedtuple
 import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
 import fnmatch
+import gc
 
 import copy
 
@@ -126,9 +127,10 @@ def scale_bar(ax, length=None, location=(.96, -0.05), linewidth=3):
 ##########
 class Thermo_Plt_Vars:
     def __init__ (self, Data):
-        self.Te_lab, self.Tv_lab = "Equi. Pot. Temp [K]", "Vir. Pot. Temp [K]"
+        self.Te_lab, self.Tv_lab, self.Tf_lab = "Equi. Pot. Temp [K]", "Vir. Pot. Temp [K]", "Temp (fast) [K]"
         self.Tv_GMin, self.Tv_GMax = self.find_global_max_min('Thetav', Data)
         self.Te_GMin, self.Te_GMax = self.find_global_max_min('Thetae', Data)
+        self.Tf_GMin, self.Tf_GMax = self.find_global_max_min('tfast', Data)
 
         #settings for the thermo var being plotted on radar subplots
         if len(config.r_mom) != 0:
@@ -136,6 +138,8 @@ class Thermo_Plt_Vars:
                 lab, GMin, GMax = self.Te_lab, self.Te_GMin, self.Te_GMax
             elif config.R_Tvar == "Thetav":
                 lab, GMin, GMax = self.Tv_lab, self.Tv_GMin, self.Tv_GMax
+            elif config.R_Tvar == "tfast":
+                lab, GMin, GMax = self.Tf_lab, self.Tf_GMin, self.Tf_GMax
 
             self.R_Tvar_lab, self.R_Tvar_GMin, self.R_Tvar_GMax = lab, GMin, GMax
 
@@ -155,7 +159,11 @@ class Thermo_Plt_Vars:
             if var == 'Thetae':
                 if hasattr(p, 'Te_Min') == True:  val_hold.append(p.Te_Min)
                 if hasattr(p, 'Te_Max') == True:  val_hold.append(p.Te_Max)
+            if var == 'tfast':
+                if hasattr(p, 'Tf_Min') == True:  val_hold.append(p.Tf_Min)
+                if hasattr(p, 'Tf_Max') == True:  val_hold.append(p.Tf_Max)
         if len(val_hold) != 0: global_min, global_max = min(val_hold), max(val_hold)
+        #  print(global_max)
         return global_min, global_max
 
     # * * *
@@ -262,7 +270,11 @@ class Master_Plt:
 
             # Yaxis
             if ts in ['Thetav','Thetae']:
-                ax.set_ylim(TVARS.TS_Tvar_GMin, TVARS.TS_Tvar_GMax)
+                if config.man_ylim == True:
+                    ax.set_ylim(335,350)
+                else:     
+                    ax.set_ylim(TVARS.TS_Tvar_GMin, TVARS.TS_Tvar_GMax)
+
             #if plotting the wind time series and its the first ax being det
             elif ts == 'Wind' and twinax == False: ax.set_ylim(0)
             #if plotting the wind time series and its the twin ax being det
@@ -274,9 +286,9 @@ class Master_Plt:
         #if you are calling this for a timeseries subplot locate the ticks
         if ts != None:
             # Xaxis
+            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
             # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
             ax.xaxis.set_minor_locator(AutoMinorLocator(6))
-            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
 
             # Yaxis
             if ts in ['Thetav','Thetae']:
@@ -430,19 +442,14 @@ class Master_Plt:
             ax_2.add_artist(leg)
 
         #if plotting more than one time series then only include the x axis label and ticks to the bottom timeseries
-        num_of_TS= len(config.Time_Series)
-        #  if you are makeing the second Time series
-        if num_of_TS != 1:
-            if ax_n.rowNum != (1):
-                if ('Thetav' in config.Time_Series) and ('Thetae' in config.Time_Series):
-                    print('put more code here')
-            if ax_n.rowNum != (num_of_TS-1):
-                plt.setp(ax_n.get_xticklabels(), visible=False)
-                ax_n.spines['bottom'].set_linewidth(5)
-                ax_n.spines['bottom'].set_color('k')
-                if len(config.r_mom) != 0: 
-                    if ts in ['Thetav', 'Thetae']:
-                        leg.remove()
+        #only label ticks for the outer axis of the timeseries (aka remove overlapping axis)
+        ax_n.label_outer()
+       
+        #if you are not making the bottom timeseries
+        if ax_n.get_subplotspec().rowspan.stop != len(config.Time_Series):
+            ax_n.spines['bottom'].set_linewidth(5)
+            # if you are doing two thermo plots while also plotting radar remove one of the legends (for space)
+            if (len(config.r_mom) != 0) & (ts in ['Thetav', 'Thetae']): leg.remove()
 
 
         ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
@@ -486,18 +493,22 @@ class Master_Plt:
             if Data['P_Radar'].name in pform_names('KA'):
                 field, vminb, vmaxb, sweep = 'refl_fix', -30., 30., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'NOXP':
-                field, vminb, vmaxb, sweep = 'DBZ', -10., 60., Data['P_Radar'].swp
+                field, vminb, vmaxb, sweep = 'DBZ', -10., 60., 0# Data['P_Radar'].swp
             if Data['P_Radar'].name == 'WSR88D':
                 field, vminb, vmaxb, sweep =  'reflectivity', -10., 75., Data['P_Radar'].swp[0]
         elif mom == 'vel':
             p_title, c_label, c_scale = 'Radial Velocity', 'Velocity [m/s]', 'pyart_balance'
             if Data['P_Radar'].name in pform_names('KA'):
-                field, vminb, vmaxb, sweep = 'vel_fix', -40., 40., Data['P_Radar'].swp
+                field, vminb, vmaxb, sweep = 'vel_fix', -30., 30., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'NOXP':
-                field, vminb, vmaxb, sweep = 'VEL', -40., 40., Data['P_Radar'].swp
+                field, vminb, vmaxb, sweep = 'VEL', -40., 40., 0  #Data['P_Radar'].swp
             if Data['P_Radar'].name == 'WSR88D':
                 field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
         else: print("Hey what just happened!\n Check the Radar moments for spelling")
+
+        print(Data['P_Radar'].swp)
+        tilt_ang = Data['P_Radar'].rfile.get_elevation(Data['P_Radar'].swp) ## Det the actual tilt angle of a given sweep (returns an array)
+        print(tilt_ang[0])
 
         ## Plot the radar
         ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
@@ -521,7 +532,7 @@ class Master_Plt:
             if isinstance(p, Torus_Insitu):
                 if print_long == True: print(p.name)
                 self.plot_TORUSpform(p, TVARS, Data, ax_n, print_long, e_test)
-                print(p.df)
+                #  print(p.df)
 
             ######
             #Plot Stationary Inistu Platforms ( aka mesonets and ASOS) if desired and available
@@ -775,7 +786,6 @@ def plotting(Data, TVARS, print_long, e_test, start_comptime):
     ## Finish plot
     #### * * * * *
     #Add a title in the plot
-    #old title_spacer=.92
     title_spacer=.93
 
     if len(config.Time_Series) != 0:
@@ -798,7 +808,7 @@ def plotting(Data, TVARS, print_long, e_test, start_comptime):
             plt_dir='TSeries/'+Thermo_type+'/'
         
         #This is the directory path for the output file
-        outdir = config.g_plots_directory+config.day+'/plots/'+plt_dir
+        outdir = config.g_plots_directory+config.day+'/plots/'+plt_dir+config.Wind_Pform+'/'
         # Setup Function Cache for speedup, if path directory does not make the directory
         if not os.path.exists(outdir): Path(outdir).mkdir(parents=True)
     
@@ -821,7 +831,9 @@ def plotting(Data, TVARS, print_long, e_test, start_comptime):
 
     plt.savefig(output_path_plus_name, bbox_inches='tight', pad_inches=.3)
     timer(start_comptime, time.time())
-    plt.close()
+    plt.close('all')   # close it
+    PLT.fig.clf()          # no really... close it
+    gc.collect()       # get tf outta here
 
     plotting_time = plotting_start_time - time.time()
 
@@ -915,7 +927,18 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
 def fix_NOXP(radar,sweep,field):
     radar.fields[field]['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1,:]=radar.extract_sweeps([sweep]).fields[field]['data'][np.argsort(radar.get_azimuth(sweep)),:]
     radar.azimuth['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1] = radar.get_azimuth(sweep)[np.argsort(radar.get_azimuth(sweep))]
+#
+    g=np.gradient(np.cos(np.deg2rad(radar.get_azimuth(sweep))))
+    if np.abs(np.amin(g))>0.015 or np.abs(np.amax(g))>0.015:
+        if np.abs(np.amax(g))>np.abs(np.amin(g)):
+            radar.azimuth['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1] = np.roll(radar.get_azimuth(sweep), -np.argmax(g)-1)
+            radar.fields[field]['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1,:] = np.roll(
+                np.ma.getdata(radar.extract_sweeps([sweep]).fields[field]['data']), -np.argmax(g)-1,axis=0)
 
+        elif np.abs(np.amax(g))<np.abs(np.amin(g)):
+            radar.azimuth['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1] = np.roll(radar.get_azimuth(sweep), -np.argmin(g)-1)
+            radar.fields[field]['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1,:] = np.roll(
+                np.ma.getdata(radar.extract_sweeps([sweep]).fields[field]['data']), -np.argmin(g)-1,axis=0)
 # * * *
 def read_from_nexrad_file(radar_file):
     radar = pyart.io.read_nexrad_archive(radar_file)
@@ -924,10 +947,7 @@ def read_from_KA_file(radar_file):
     radar = pyart.io.read(radar_file)
     return radar
 def read_from_NOXP_file(radar_file):
-    #  radar = pyart.io.read_cfradial(radar_file)
     radar = pyart.io.read(radar_file)
-    fix_NOXP(radar, 0, 'DBZ')
-    fix_NOXP(radar, 0, 'VEL')
     return radar
 # Note: Cached version is cached on the file name, not the file contents.
 # If file contents change you need to invalidate the cache or pass in the file contents directly to this function
@@ -951,47 +971,42 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_
         valid_time = True
 
     if config.Radar_Plot_Type == 'KA_Plotting':
-        head_tail= os.path.split(r_file)
-        time_string= str(20)+str(head_tail[1][13:24])
+        time_string= str(20)+str(os.path.split(r_file)[1][13:24])
         rtime = datetime.strptime(time_string, "%Y%m%d%H%M%S")
-        print(rtime)
         valid_time = time_in_range(config.tstart, config.tend, rtime)
-        print(valid_time)
-        #  in_time_range= True
-        #  if config.tstart != None:
-            #  if rtime >= config.tstart: pass
-            #  else: in_time_range = False
-        #  if config.tend != None:
-            #  if rtime <= config.tend: pass
-            #  else: in_time_range = False
-
-        #  if in_time_range == False: print(rfile+' was not in the timerange being plotted')
-        if valid_time == False: print(r_file+' was not in the timerange being plotted')
-        else:
+        
+        if valid_time == True:
             ## Read the radar file
-            radar = cached_read_from_KA_file(r_file)
+            if config.Radar_Plot_Type == 'KA_Plotting':
+                radar = cached_read_from_KA_file(r_file)
+        
             ## If file contains a ppi scan proceed; we are currently not interested in plotting the RHI scans
             if radar.scan_type == 'ppi':
-                for swp_id in range(radar.nsweeps):
-                    tilt_ang = radar.get_elevation(swp_id) ## Det the actual tilt angle of a given sweep (returns an array)
+                for i in range(radar.nsweeps):
+                    tilt_ang = radar.get_elevation(i) ## Det the actual tilt angle of a given sweep (returns an array)
+                    print('Swp_id:{}, Tilt:{}'.format(i, tilt_ang[0]))
                     ## Check to see if the radarfile matches the elevation tilt we are interested in
                     if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
-                        print("\nProducing Radar Plot:")
+                        swp_id = i 
+                        print('saved_Swp_id:{}, Tilt:{}'.format(swp_id, tilt_ang[0]))
                         #  Assign radar fields and masking
-                    #  det_radar_fields(radar)
+                        #  det_radar_fields(radar)
+        else: 
+            print(r_file+' was not in the timerange being plotted')
+            #end evaluation for this file (do not make a plot)
+            return
 
     if config.Radar_Plot_Type == 'NOXP_Plotting':
         ## Read the radar file
         radar = cached_read_from_NOXP_file(r_file)
-        for swp_id in range(radar.nsweeps):
-            tilt_ang = radar.get_elevation(swp_id) ## Det the actual tilt angle of a given sweep (returns an array)
+        for i in range(radar.nsweeps):
+            tilt_ang = radar.get_elevation(i) ## Det the actual tilt angle of a given sweep (returns an array)
             ## Check to see if the radarfile matches the elevation tilt we are interested in
-            if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
-                print(tilt_ang[0])
-                #  fix_NOXP(radar, tilt_ang[0], 'DBZ')
-                #  fix_NOXP(radar, tilt_ang[0], 'VEL')
-                print("\nProducing Radar Plot:")
-                #  Assign radar fields and masking
+            if np.around(tilt_ang[0], decimals=1) == config.p_tilt: 
+                swp_id = i 
+                print('saved_Swp_id:{}, Tilt:{}'.format(swp_id, tilt_ang[0]))
+                #  fix_NOXP(radar, tilt_ang, 'DBZ')
+                #  fix_NOXP(radar, tilt_ang, 'VEL')
         valid_time = True
 
     #  try:
@@ -999,16 +1014,16 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames, print_long, e_test, swp_
 
     ## Read in radar data and add to Data dict
     ##### + + + + + + + + + + + + + + + + + + +
-    if radar != 'NO FILE':
-        #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
-        Data, subset_pnames = Add_to_DATA('RADAR', Data, subset_pnames, print_long, MR_file=radar, swp=swp_id)
-        if print_long == True: print(str(Data)+'\n')
+    print("\nProducing Radar Plot:")
+    #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
+    Data, subset_pnames = Add_to_DATA('RADAR', Data, subset_pnames, print_long, MR_file=radar, swp=swp_id)
+    if print_long == True: print(str(Data)+'\n')
 
-        ## Proceed to plot the radar
-        ##### + + + + + + + + + + + +
-        plotting(Data, TVARS, print_long, e_test, start_comptime)
-        #  except:
-            #  print('something went wrong')
+    ## Proceed to plot the radar
+    ##### + + + + + + + + + + + +
+    plotting(Data, TVARS, print_long, e_test, start_comptime)
+    #  except:
+        #  print('something went wrong')
     '''if config.Radar_Plot_Type == 'KA_Plotting' and valid_time == False: pass
     else:
         if config.print_radar_info== True: print(radar.info(level='compact'))
