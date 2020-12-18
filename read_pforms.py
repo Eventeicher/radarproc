@@ -312,7 +312,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         OUTPUT: dataframe containing all data collected during desired times
     '''
     if pname in pform_names('UNL'):
-        print(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
+        #  print(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
 
         # Test Data availability
@@ -330,7 +330,7 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
             ds = xr.open_dataset(mmfile[i])
 
             #convert form epoch time to utc datetime object
-            timearray = np.array([dt.datetime.utcfromtimestamp(t/1e9) for t in ds.time.values])
+            timearray = np.array([dt.datetime.utcfromtimestamp(int(t)/1e9) for t in ds.time.values])
             U,V = mpcalc.wind_components(ds.wind_speed, ds.wind_dir)
             lats = np.array([40]) * units.degrees
 
@@ -342,10 +342,12 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
                 'lon': (dims, ds.lon.values, {'units':str(lats.units)}),
                 'Z_ASL': (dims, ds.alt.values, {'units':str(ds.alt.units)}),
                 'Z_AGL': (dims, np.zeros_like(ds.alt.values), {'units':str(ds.alt.units)}),
-                'Temperature': (dims, ds.fast_temp.values, {'units':str(ds.fast_temp.units)}),
+                'tfast': (dims, ds.fast_temp.values, {'units':str(ds.fast_temp.units)}),
                 'Dewpoint': (dims, ds.dewpoint.values, {'units':str(ds.dewpoint.units)}),
-                'RH': (dims, ds.calc_corr_RH.values, {'units':str(ds.calc_corr_RH.units)}),
+                #  'RH': (dims, ds.calc_corr_RH.values, {'units':str(ds.calc_corr_RH.units)}),
                 'Pressure': (dims, ds.pressure.values, {'units':str(ds.pressure.units)}),
+                'spd': (dims, ds.wind_speed.values, {'units':str(ds.wind_speed.units)}),
+                'dir': (dims, ds.wind_dir.values, {'units':str(ds.wind_dir.units)}),
                 'U': (dims, U.m, {'units':str(U.units)}),
                 'V': (dims, V.m, {'units':str(V.units)}),
                 'Theta': (dims, ds.theta.values, {'units':str(ds.theta.units)}),
@@ -372,14 +374,14 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
         data_unl = pd.concat(data_hold)
 
         #drop all the columns that we will not use past this point (to save memory/computing time)
-        data_unl = data_unl.drop(columns=['Temperature', 'Z_ASL', 'Z_AGL', 'Theta', 'Dewpoint', 'Pressure', 'RH'])
+        data_unl = data_unl.drop(columns=['Z_ASL', 'Z_AGL', 'Theta', 'Dewpoint', 'Pressure'])#, 'RH'])
         #  print(data_unl.memory_usage())
         #  data_unl.set_index('datetime', inplace=True, drop=False)
         return data_unl, 'UNL'
 
     # * * *
     elif pname in pform_names('NSSL'):
-        print(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
+        #  print(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
 
         # Test Data availability
@@ -415,37 +417,40 @@ def read_TInsitu(pname, print_long, e_test, tstart=None, tend=None, d_testing=Fa
             else: hend = float((tend-tiop)).seconds/3600
 
         # Save only desired iop data
-        data_nssl = data.loc[(data['time'] >= hstart_dec) & (data['time'] <= hend)]
+        data_nssl_sub = data.loc[(data['time'] >= hstart_dec)]
+        data_nssl = data_nssl_sub.loc[(data_nssl_sub['time'] <= hend)]
         # Convert time into timedeltas
         date = dt.datetime.strptime('2019-'+mmfile[-15:-13]+'-'+mmfile[-13:-11],'%Y-%m-%d')
+
         time_deltas = []
         for i in np.arange(len(data_nssl)):
             j = data_nssl['time'].iloc[i]
             time_deltas = np.append(time_deltas, date + dt.timedelta(hours=int(j), minutes=int((j*60) % 60), seconds=int((j*3600) % 60)))
-        data_nssl['datetime'] = time_deltas
+
+        data_nssl.loc[:,'datetime'] = time_deltas
 
         ## Caclulate desired variables
         p, t = data_nssl['p'].values * units.hectopascal, data_nssl['tfast'].values * units.degC
         r_h = data_nssl['rh'].values/100
-        data_nssl['Theta'] = (mpcalc.potential_temperature(p, t)).m
+        data_nssl.loc[:, 'Theta'] = (mpcalc.potential_temperature(p, t)).m
 
         mixing = mpcalc.mixing_ratio_from_relative_humidity(r_h, t, p)
-        data_nssl['Thetav'] = (mpcalc.virtual_potential_temperature(p, t, mixing)).m
+        data_nssl.loc[:, 'Thetav'] = (mpcalc.virtual_potential_temperature(p, t, mixing)).m
 
-        td = mpcalc.dewpoint_rh(temperature= t, rh= r_h)
-        data_nssl['Thetae'] = (mpcalc.equivalent_potential_temperature(p, t, td)).m
+        td = mpcalc.dewpoint_from_relative_humidity(temperature= t, rh=r_h)
+        data_nssl.loc[:, 'Thetae'] = (mpcalc.equivalent_potential_temperature(p, t, td)).m
 
         Spd, dire = data_nssl['spd'].values * units('m/s') , data_nssl['dir'].values * units('degrees')
         u, v = mpcalc.wind_components(Spd, dire)
-        data_nssl['U'], data_nssl['V'] = u.to('knot'), v.to('knot')
+        data_nssl.loc[:, 'U'], data_nssl.loc[:, 'V'] = u.to('knot'), v.to('knot')
 
         #  q_list = ['qc1','qc2','qc3','qc4']
         q_list = config.NSSL_qcflags
-        data_nssl['all_qc_flags'] = data_nssl[q_list].sum(axis=1)
+        data_nssl.loc[:, 'all_qc_flags'] = data_nssl[q_list].sum(axis=1)
         #  data_nssl.set_index('datetime', inplace=True, drop=False)
 
         #drop all the columns that we will not use past this point (to save memory/computing time)
-        data_nssl = data_nssl.drop(columns=['rh', 'p', 'time', 'alt', 'Theta', 'tfast', 'tslow'])
+        data_nssl = data_nssl.drop(columns=['rh', 'p', 'time', 'alt', 'Theta', 'tslow'])
         #  print(data_nssl.memory_usage())
         return data_nssl, 'NSSL'
 
@@ -609,7 +614,7 @@ def read_Radar(pname, print_long, e_test, swp=None, rfile= None, d_testing=False
                     r_loc = namedtuple('r_loc', ['lat', 'lon'])
                     loc = r_loc(lat=Nlat, lon=Nlon)
                     checking= checking+1
-                    print(checking)
+                    #  print(checking)
                     if checking > 1: print('HEYYYYYYYYY !!!!')
             if checking == 0:
                 if d_testing == True: return False
@@ -813,6 +818,7 @@ class Torus_Insitu(Platform):
         else: mask=False
         self.Tv_Min, self.Tv_Max= self.min_max('Thetav', mask)
         self.Te_Min, self.Te_Max= self.min_max('Thetae', mask)
+        self.Tf_Min, self.Tf_Max= self.min_max('tfast', mask)
         Platform.__init__(self, Name)
 
     # * * *
@@ -825,6 +831,7 @@ class Torus_Insitu(Platform):
                 #  self.ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df[config.var].values) #add masked dataset to the object
                 self.Thetae_ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df['Thetae'].values) #add masked dataset to the object
                 self.Thetav_ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df['Thetav'].values) #add masked dataset to the object
+                self.tfast_ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df['tfast'].values) #add masked dataset to the object
                 self.Min, self.Max = mask_allqc_df.min(), mask_allqc_df.max()#use the masked dataset to find max and min of var
             elif mask == False:
                 self.Min, self.Max = self.df.min()[var], self.df.max()[var] #use the orig dataset to find max/min
