@@ -1173,4 +1173,3 @@ timer(totalcompT_start, time.time(), total_runtime=True)
 print("ALL FINISHED")
 
 tracemalloc.stop()
-
