@@ -249,7 +249,7 @@ class Master_Plt:
         if len(config.r_mom) != 0:
             # The extent of the area to be plotted
             #redefine the classvariable for Domain and display
-            self.Domain = Platform.getLocation(Data[config.Centered_Pform], offsetkm= config.offsetkm)
+            self.Domain = Platform.getLocation(Data[config.Centered_Pform], scan_time=Data['P_Radar'].Scan_time, offsetkm= config.offsetkm)
             #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
 
             # Define pyart display object for plotting radarfile
@@ -260,7 +260,7 @@ class Master_Plt:
             self.Proj = ccrs.PlateCarree()
 
     # * * * * * * *
-    def tick_grid_settings(self, ax, radar=None, ts=None, interval=None, twinax=False):
+    def tick_grid_settings(self, ax, scan_time, radar=None, ts=None, interval=None, twinax=False):
         ##Axis Limits
         # # # # # # # #
         #if you are calling this for a timeseries subplot set the limits for the plot
@@ -268,7 +268,9 @@ class Master_Plt:
             # Xaxis
             # if desired this subsets the timerange that is displayed in the timeseries
             if config.ts_extent != None:
-                ax.set_xlim(Platform.Scan_time - timedelta(minutes=config.ts_extent), Platform.Scan_time + timedelta(minutes=config.ts_extent))
+
+                print(scan_time)
+                ax.set_xlim(scan_time - timedelta(minutes=config.ts_extent), scan_time + timedelta(minutes=config.ts_extent))
 
             # Yaxis
             if ts in ['Thetav','Thetae']:
@@ -386,7 +388,6 @@ class Master_Plt:
         Data: dict as described in plotting defn
         print_long & e_test: bool str as described in the ppi defn '''
         if Platform.Print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
-
         #  t_TS.T_Plt_settings(ts,ax_n)
         TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
         ## MAKE THE TIMESERIES
@@ -408,7 +409,7 @@ class Master_Plt:
                     TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
                     TSleg_elements.append(TSleg_entry)
             ## Set up XY axes tick locations and Labels
-            self.tick_grid_settings(ax=ax_n, ts=ts)
+            self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=Data['P_Radar'].Scan_time)
             ax_n.set_ylabel(TVARS.TS_Tvar_lab)
 
 
@@ -420,14 +421,14 @@ class Master_Plt:
             ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
             ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
             ax_n.set_ylabel('Wind Speed (kn)')
-            self.tick_grid_settings(ax=ax_n, ts=ts)
+            self.tick_grid_settings(ax=ax_n, ts=ts,scan_time=Data['P_Radar'].Scan_time)
             TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
             TSleg_elements.append(TSleg_entry)
 
             ax_2 = ax_n.twinx()
             ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05, label='Wind Dir')
             ax_2.set_ylabel('Wind Dir ($^{\circ}$)')
-            self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True)
+            self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True, scan_time=Data['P_Radar'].Scan_time)
             TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
             TSleg_elements.append(TSleg_entry)
 
@@ -453,9 +454,8 @@ class Master_Plt:
         ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
         #  radar scan and the timerange ploted (via filled colorline) on the radar plots
         if len(config.r_mom) != 0:
-            ax_n.axvline(Platform.Scan_time, color='r', linewidth=4, alpha=.5)
-            ax_n.axvspan(Platform.Scan_time - timedelta(minutes=config.cline_extent), Platform.Scan_time + timedelta(minutes=config.cline_extent), facecolor='0.5', alpha=0.4)
-
+            ax_n.axvline(Data['P_Radar'].Scan_time, color='r', linewidth=4, alpha=.5)
+            ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=config.cline_extent), Data['P_Radar'].Scan_time + timedelta(minutes=config.cline_extent), facecolor='0.5', alpha=0.4)
         ##Label Formatter
         # # # # # # # # #
         ax_n.set_xlabel('Time (UTC)')
@@ -513,7 +513,7 @@ class Master_Plt:
         # Has to be here or it doesn't work
         ax_n.set_extent(self.Domain)
 
-        self.tick_grid_settings(ax=ax_n, radar=True, interval=10*1000)
+        self.tick_grid_settings(ax=ax_n, radar=True,scan_time=None, interval=10*1000)
         #scale_bar(ax_n, 10) # 10 KM
         ax_n.grid(True)
 
@@ -561,7 +561,7 @@ class Master_Plt:
                 stationplot.plot_barb(p_sub.loc[::30, 'U'], p_sub.loc[::30, 'V'], sizes=dict(emptybarb=0), length=7)
 
                 #  determine the row of the pform data at scantime (for plotting marker)
-                C_Point=p_sub.loc[p_sub['datetime'].sub(p.Scan_time).abs().idxmin()]
+                C_Point=p_sub.loc[p_sub['datetime'].sub(Data['P_Radar'].Scan_time).abs().idxmin()]
                 return C_Point.lon, C_Point.lat 
 
             elif p_deploy == False:
@@ -674,13 +674,13 @@ class Master_Plt:
                 #this plots a circle that connects the spokes
                 latArray, lonArray = [], []
                 for bearing in range(int(pform.head + pform.rhib), int(pform.head + pform.rhie+1)): #degrees of sector
-                    lat2, lon2 = Platform.getLocation(pform, radius, given_bearing=bearing)
+                    lat2, lon2 = Platform.getLocation(pform, radius,scan_time=Data['P_Radar'].Scan_time, given_bearing=bearing)
                     latArray.append(lat2)
                     lonArray.append(lon2)
                 self.display.plot_line_geo(lonArray, latArray, marker=None, color='grey', linewidth=.25) #this plots a circle that connects the spokes
 
                 #plt the spokes
-                C, D = Platform.getLocation(pform, radius, given_bearing = ang)
+                C, D = Platform.getLocation(pform, radius,scan_time=Data['P_Radar'].Scan_time, given_bearing = ang)
                 self.display.plot_line_geo([pform.lon, D], [pform.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
 
                 ## optional labels
@@ -772,11 +772,11 @@ def plotting(Data, TVARS, start_comptime):
         
         #add the file name
         if Data['P_Radar'].name in pform_names('KA'):
-            output_name= Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
+            output_name= Data['P_Radar'].site_name+'_'+Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
         if Data['P_Radar'].name == 'NOXP':
-            output_name = Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
+            output_name = Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
         if Data['P_Radar'].name == 'WSR88D':
-            output_name = Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
+            output_name = Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
     
     output_path_plus_name = outdir+output_name
     print(output_path_plus_name)
@@ -876,49 +876,35 @@ def get_WSR_from_AWS(start, end, radar_id, download_directory):
     return radar_files
 
 # * * *
-def fix_NOXP(radar,sweep,field):
-    radar.fields[field]['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1,:]=radar.extract_sweeps([sweep]).fields[field]['data'][np.argsort(radar.get_azimuth(sweep)),:]
-    radar.azimuth['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1] = radar.get_azimuth(sweep)[np.argsort(radar.get_azimuth(sweep))]
-#
-    g=np.gradient(np.cos(np.deg2rad(radar.get_azimuth(sweep))))
-    if np.abs(np.amin(g))>0.015 or np.abs(np.amax(g))>0.015:
-        if np.abs(np.amax(g))>np.abs(np.amin(g)):
-            radar.azimuth['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1] = np.roll(radar.get_azimuth(sweep), -np.argmax(g)-1)
-            radar.fields[field]['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1,:] = np.roll(
-                np.ma.getdata(radar.extract_sweeps([sweep]).fields[field]['data']), -np.argmax(g)-1,axis=0)
-
-        elif np.abs(np.amax(g))<np.abs(np.amin(g)):
-            radar.azimuth['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1] = np.roll(radar.get_azimuth(sweep), -np.argmin(g)-1)
-            radar.fields[field]['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1,:] = np.roll(
-                np.ma.getdata(radar.extract_sweeps([sweep]).fields[field]['data']), -np.argmin(g)-1,axis=0)
+def fix_NOXP(radar):
+    for sweep in range(radar.nsweeps):
+ 
+        g=np.gradient(np.cos(np.deg2rad(radar.get_azimuth(sweep))))
+ 
+        if np.abs(np.amin(g))>0.015 or np.abs(np.amax(g))>0.015:
+            if np.abs(np.amax(g))>np.abs(np.amin(g)):
+                radar.azimuth['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1] = np.roll(radar.get_azimuth(sweep), -np.argmax(g)-1)
+                for field in list(radar.fields):
+                    radar.fields[field]['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1,:] = np.roll(np.ma.getdata(radar.extract_sweeps([sweep]).fields[field]['data']), -np.argmax(g)-1,axis=0)
+ 
+            elif np.abs(np.amax(g))<np.abs(np.amin(g)):
+                radar.azimuth['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1] = np.roll(radar.get_azimuth(sweep), -np.argmin(g)-1)
+                for field in list(radar.fields):
+                    radar.fields[field]['data'][radar.get_start_end(sweep)[0]:radar.get_start_end(sweep)[1]+1,:] = np.roll(np.ma.getdata(radar.extract_sweeps([sweep]).fields[field]['data']), -np.argmin(g)-1,axis=0)
+ 
+ 
+######################################
 # * * *
-def read_from_nexrad_file(radar_file):
-    radar = pyart.io.read_nexrad_archive(radar_file)
+def read_from_radar_file(radar_file, Rtype):
+    if Rtype== 'WSR':  radar = pyart.io.read_nexrad_archive(radar_file)
+    elif Rtype== 'KA': radar = pyart.io.read(radar_file)
+    elif Rtype =='NOXP': radar = pyart.io.read(radar_file)
     return radar
-def read_from_KA_file(radar_file):
-    radar = pyart.io.read(radar_file)
-    return radar
-def read_from_NOXP_file(radar_file):
-    radar = pyart.io.read(radar_file)
-    return radar
-# Note: Cached version is cached on the file name, not the file contents.
-# If file contents change you need to invalidate the cache or pass in the file contents directly to this function
-# function_cache_memory = Memory(config.temploc, verbose=1)
 function_cache_memory = Memory(config.g_cache_directory,verbose=1)
-cached_read_from_nexrad_file = function_cache_memory.cache( read_from_nexrad_file )
-cached_read_from_KA_file = function_cache_memory.cache( read_from_KA_file )
-cached_read_from_NOXP_file = function_cache_memory.cache( read_from_NOXP_file )
+cached_read_from_radar_file = function_cache_memory.cache(read_from_radar_file)
 
 # * * *
 def plot_radar_file(r_file, Data, TVARS, subset_pnames):
-    def read_from_radar_file(radar_file, Rtype):
-        if Rtype== 'WSR':  radar = pyart.io.read_nexrad_archive(radar_file)
-        elif Rtype== 'KA': radar = pyart.io.read(radar_file)
-        elif Rtype =='NOXP': radar = pyart.io.read(radar_file)
-        return radar
-    function_cache_memory = Memory(config.g_cache_directory,verbose=1)
-    cached_read_from_radar_file = function_cache_memory.cache(read_from_radar_file)
-    
     def sweep_index(radar= None):
         swp_id = None
         if config.Radar_Plot_Type == 'WSR_Plotting':
@@ -934,11 +920,7 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames):
                 #  print("tilt: ", tilt_ang[0], ' p_tilt: ', config.p_tilt)
                 #  print(np.around(tilt_ang[0], decimals=1))
                 ## Check to see if the radarfile matches the elevation tilt we are interested in
-                if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
-                    swp_id = i 
-                    if config.Radar_Plot_Type == 'NOXP_Plotting':
-                        fix_NOXP(radar, i, 'DBZ')
-                        fix_NOXP(radar, i, 'VEL')
+                if np.around(tilt_ang[0], decimals=1) == config.p_tilt: swp_id = i 
         return swp_id
     
     #####
@@ -972,6 +954,7 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames):
         if valid_time == True:
             ## Read the radar file
             radar = cached_read_from_radar_file(r_file, 'NOXP')
+            fix_NOXP(radar)
             swp_id = sweep_index(radar)      
     #####
     if (valid_time == False) or (swp_id == None):
