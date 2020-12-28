@@ -168,7 +168,7 @@ def pform_attr(pname):
 ################################################################################################
 #  * * * * *
 def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
-    if Platform.Print_long == True: print('Made it into Add_to_DATA')
+    if config.print_long == True: print('Made it into Add_to_DATA')
 
     if DType == 'TInsitu':
         #for these pforms mainly interested if we have any valid data for the day not worried about spatial/temporal subset yet
@@ -193,11 +193,11 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
                     subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load data for the pform (aka initialize an object of the appropriate class); place in dict with key of pname
                     Data.update({pname: Torus_Insitu(pname)})
-                    if Platform.Print_long == True: print("Data can be read in for platform %s" %(pname))
+                    if config.print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
-                    if Platform.Print_long == True: print("No data available to be read in for platform %s" %(pname))
+                    if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
             elif read_in_data == False:
-                    if Platform.Print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
+                    if config.print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
 
     # * * *
     elif DType == 'STN_I':
@@ -223,11 +223,11 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
                     else: subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load loc data for the sites in plotting domain
                     Data.update({pname: Stationary_Insitu(pname, marker_label)})
-                    if Platform.Print_long == True: print("Data can be read in for platform %s" %(pname))
+                    if config.print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
-                    if Platform.Print_long == True: print("No data available to be read in for platform %s" %(pname))
+                    if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
             elif read_in_data == False:
-                    if Platform.Print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
+                    if config.print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
 
     # * * *
     elif DType == 'RADAR':
@@ -270,11 +270,11 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
                     else: subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load loc data (and in this case rhi angles if applicable)
                     Data.update({pname: Radar(pname,Data)})
-                    if Platform.Print_long == True: print("Data can be read in for platform %s" %(pname))
+                    if config.print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
-                    if Platform.Print_long == True: print("No data available to be read in for platform %s" %(pname))
+                    if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
             elif read_in_data == False:
-                    if Platform.Print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
+                    if config.print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
 
     # * * *
     ##Uncomment to check yourself
@@ -294,7 +294,7 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
     #  hasattr(object, attribute): like getattr but returns a true/false bool
     #  isinstance, issubclass
     #  there are more: check google for built in class functionalitly
-    if Platform.Print_long == True: print('Made it through Add_to_DATA')
+    if config.print_long == True: print('Made it through Add_to_DATA')
     return Data, subset_pnames
 
 
@@ -454,7 +454,7 @@ def read_TInsitu(pname, d_testing=False):
 
     # * * *
     elif pname == 'UAS':
-        if Platform.Print_long == True: print("no code for reading UAS yet")
+        if config.print_long == True: print("no code for reading UAS yet")
         if d_testing == True: return False
         return 'UAS'
 
@@ -656,7 +656,7 @@ class Platform:
         #  self.var can be retreived latter via typing obj.day etc
         #  vars without self. can be used within Platform or Platform subclasses methods but not for external retrieval
     Day = config.day #Class variables
-    Print_long, E_test = config.print_long, config.e_test
+    E_test = config.e_test
 
     #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
     try:  Tstart = config.tstart
@@ -672,6 +672,8 @@ class Platform:
         self.name = Name #Instance variables
         #get style info for the platforms marker
         self.m_style, self.m_color, self.m_size, self.l_color, self.leg_str, self.leg_entry = pform_attr(self.name)
+
+        self.config = config
 
     # * * *
     @classmethod
@@ -769,7 +771,7 @@ class Platform:
             else:
                 lower_tbound, upper_tbound = (Data['P_Radar'].Scan_time-dt.timedelta(minutes=time_offset)), (Data['P_Radar'].Scan_time+dt.timedelta(minutes=time_offset))
                 df_sub = pform.df.loc[(pform.df['datetime'] >= lower_tbound) & (pform.df['datetime'] <= upper_tbound)]
-                if self.Print_long == True: print('Dataset has been temporally subset')
+                if self.config.print_long == True: print('Dataset has been temporally subset')
         # + + + + + + + + + + + + ++ + +
 
         #Spatial Subset
@@ -788,7 +790,7 @@ class Platform:
                 #conduct the spatial subset
                 df_sub = df_sub.loc[(df_sub['lat'] >= bounding.ymin) & (df_sub['lat'] <= bounding.ymax) &
                                     (df_sub['lon'] >= bounding.xmin) & (df_sub['lon'] <= bounding.xmax)]
-            if self.Print_long == True: print('Dataset has been spatially subset')
+            if self.config.print_long == True: print('Dataset has been spatially subset')
         # + + + + + + + + + + + + ++ + +
 
         #Determine what to return
