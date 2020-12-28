@@ -387,7 +387,7 @@ class Master_Plt:
         ts: ........fill in
         Data: dict as described in plotting defn
         print_long & e_test: bool str as described in the ppi defn '''
-        if Platform.Print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
+        if config.print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
         #  t_TS.T_Plt_settings(ts,ax_n)
         TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
         ## MAKE THE TIMESERIES
@@ -396,7 +396,7 @@ class Master_Plt:
             TVARS.det_TS_Tvar(ts)
             for p in Data.values():
                 if isinstance(p, Torus_Insitu):
-                    if Platform.Print_long == True: print('Plotting '+str(p.name)+' on time series')
+                    if config.print_long == True: print('Plotting '+str(p.name)+' on time series')
                     ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
                     if p.type in config.TS_masking[:]:
                         if ts == "Thetae":   plotting_data= p.Thetae_ts_mask_df
@@ -416,7 +416,7 @@ class Master_Plt:
         # * * *
         if ts == 'Wind':
             p = Data[config.Wind_Pform]
-            if Platform.Print_long == True: print('Plotting '+str(p.name)+' on time series')
+            if config.print_long == True: print('Plotting '+str(p.name)+' on time series')
 
             ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
             ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
@@ -470,7 +470,7 @@ class Master_Plt:
         #  box = ax_n.get_position()
         #  box2=ax_n.get_tightbbox(fig.canvas.get_renderer(), call_axes_locator = True)
         '''
-        if Platform.Print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
+        if config.print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
 
     # * * * * * *  *
@@ -483,7 +483,7 @@ class Master_Plt:
         leg: bool str whether or not you want a legend associated with this particular subplot
         print_long & e_test: bool str as described in the ppi defn
         '''
-        if Platform.Print_long == True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
+        if config.print_long == True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
 
         ## SET UP VARS FOR EACH RADAR MOMENTS
         if mom == 'refl':
@@ -565,12 +565,12 @@ class Master_Plt:
                 return C_Point.lon, C_Point.lat 
 
             elif p_deploy == False:
-                if Platform.Print_long == True: print('The platform was not deployed at this time')
+                if config.print_long == True: print('The platform was not deployed at this time')
                 return False, False
 
         # * * *
         for p in Data.values():
-            if Platform.Print_long == True: print(p.name)
+            if config.print_long == True: print(p.name)
             ######
             #Plot Inistu Torus Platforms (if desired and available)
             if isinstance(p, Torus_Insitu):
@@ -651,13 +651,13 @@ class Master_Plt:
           #  plt.subplots_adjust(right=0.7)
         ###################
         #  scale_bar(ax_n, 10) # 10 KM
-        if Platform.Print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
+        if config.print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 
     # * * *
     def rhi_spokes_rings(self, pform):
         ''' Plot the RHI spoke and ring for a radar
         '''
-        if Platform.Print_long == True: print('made it into rhi_spokes_rings')
+        if config.print_long == True: print('made it into rhi_spokes_rings')
 
         # if there is not actually rhi info then it will not plot a ring and not stop the code
         if np.isnan(pform.rhib) == True or np.isnan(pform.rhie)== True: print('Could not plot RHI spokes')
@@ -688,7 +688,7 @@ class Master_Plt:
                     if np.logical_and(C>ymin, np.logical_and(C<ymax, np.logical_and(D>xmin, D<xmax))):
                         plt.text(D, C, str(ang), horizontalalignment='center', transform=self.Proj, zorder=9,
                                  path_effects=([PE.withStroke(linewidth=4, foreground='xkcd:pale blue')]))
-            if Platform.Print_long == True: print('made it through rhi_spokes_rings')
+            if config.print_long == True: print('made it through rhi_spokes_rings')
 
 
 ##########################################################################
@@ -712,7 +712,7 @@ def plotting(Data, TVARS, start_comptime):
     start_comptime:
         Time at which you first begain plotting this particular image (will help to report out how long it took to create image)
     '''
-    if Platform.Print_long == True: print('~~~~~~~~~~~Made it into plotting~~~~~~~~~~~~~~~~~~~~~')
+    if config.print_long == True: print('~~~~~~~~~~~Made it into plotting~~~~~~~~~~~~~~~~~~~~~')
     #initilize the plot object(will have info about plotlayout and such now)
     PLT = Master_Plt(Data)
 
@@ -790,7 +790,7 @@ def plotting(Data, TVARS, start_comptime):
     plotting_time = plotting_start_time - time.time()
 
     print('\a') ## Makes a ding noise
-    if Platform.Print_long == True: print('~~~~~~~~~~~made it through plotting~~~~~~~~~~~~~~~~~~')
+    if config.print_long == True: print('~~~~~~~~~~~made it through plotting~~~~~~~~~~~~~~~~~~')
     print('*** Exiting Plotting() after ', plotting_time, 'sec \n \n***************************************************************************************************')
 
 ##############################################################################################
@@ -970,7 +970,7 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames):
         ##### + + + + + + + + + + + + + + + + + + +
         #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
         Data, subset_pnames = Add_to_DATA('RADAR', Data, subset_pnames, MR_file=radar, swp=swp_id)
-        if Platform.Print_long == True: print(str(Data)+'\n')
+        if config.print_long == True: print(str(Data)+'\n')
         if config.print_radar_info== True: print(radar.info(level='compact'))
 
         ## Proceed to plot the radar
@@ -1032,7 +1032,7 @@ if len(config.r_mom) != 0:
     if config.Radar_Plot_Type == 'WSR_Plotting':
         #Det the unique radar sites to be plotted
         unique_r_sites=det_nearest_WSR( Data[config.Centered_Pform].df)
-        if Platform.Print_long == True: print(unique_r_sites)
+        if config.print_long == True: print(unique_r_sites)
 
         #set up empty dataframe
         tranges_each_r = pd.DataFrame()
