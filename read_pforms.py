@@ -188,7 +188,7 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
             # if you do want to read in data
             if read_in_data == True:
                 #for each platform test to see if we have data for that day
-                data_avail = Platform.test_data(pname)
+                data_avail = Platform.test_data(pname, scan_time = Data['P_Radar'])
                 if data_avail == True:
                     subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load data for the pform (aka initialize an object of the appropriate class); place in dict with key of pname
@@ -216,7 +216,7 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
 
             # if you do want to read in data
             if read_in_data == True:
-                data_avail = Platform.test_data(pname)
+                data_avail = Platform.test_data(pname, scan_time = Data['P_Radar'])
                 if data_avail == True:
                     #  dont repeatedly append to the list if the platform is already included
                     if pname in subset_pnames: pass
@@ -263,7 +263,7 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
 
             # if you do want to read in data
             if read_in_data == True:
-                data_avail = Platform.test_data(pname)
+                data_avail = Platform.test_data(pname, scan_time = Data['P_Radar'])
                 if data_avail == True:
                     #  dont repeatedly append to the list if the platform is already included
                     if pname in subset_pnames: pass
@@ -500,7 +500,7 @@ def read_Stationary(pname, d_testing=False):
     else: return stnry_df, ptype
 
 #**************
-def read_Radar(pname, swp=None, rfile= None, d_testing=False):
+def read_Radar(pname, swp=None, rfile= None, d_testing=False, known_scan_time=None):
     print("read_Radar(pname=",pname," rfile=", rfile, ")")
 
     ''' Determine if a given radar is deployed and if so assign the correct location values to it.
@@ -561,7 +561,7 @@ def read_Radar(pname, swp=None, rfile= None, d_testing=False):
                 beginscan, endscan = datetime.strptime(kadep.time_begin[t], "%m/%d/%Y %H:%M"), datetime.strptime(kadep.time_end[t], "%m/%d/%Y %H:%M")
 
                 # det if any of the deps occured in the time frame we are interested in: if so record loc and RHI info for the dep
-                if Platform.Scan_time >= beginscan and Platform.Scan_time <= endscan:
+                if known_scan_time >= beginscan and known_scan_time <= endscan:
                     #If defn hasn't failed yet & we entered this if statement then we have dep data relavant to our plot for this radar
                     # If defn was called to det if we had data availability we will exit the defn here
                     if d_testing == True: return True
@@ -599,7 +599,7 @@ def read_Radar(pname, swp=None, rfile= None, d_testing=False):
                 head_tail= os.path.split(file)
                 str_time = datetime.strptime(head_tail[1][6:21], "%Y%m%d_%H%M%S")
                 end_time = datetime.strptime(head_tail[1][25:40], "%Y%m%d_%H%M%S")
-                valid_time = time_in_range(str_time, end_time, Platform.Scan_time)
+                valid_time = time_in_range(str_time, end_time, known_scan_time)
 
                 if valid_time == True:
                     if d_testing == True: return True
@@ -657,7 +657,6 @@ class Platform:
         #  vars without self. can be used within Platform or Platform subclasses methods but not for external retrieval
     Day = config.day #Class variables
     Print_long, E_test = config.print_long, config.e_test
-    Scan_time = 'Place holder' #Time at which scanning began for the radar file being plotted
 
     #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
     try:  Tstart = config.tstart
@@ -676,7 +675,7 @@ class Platform:
 
     # * * *
     @classmethod
-    def test_data(self, pname):
+    def test_data(self, pname, scan_time=None):
         '''test if there is a datafile for the platform
         Inputs: pname= the name of the file being tested
         @classmethod allows you to call the defn without creating an object yet via Platforms.test_data
@@ -687,7 +686,7 @@ class Platform:
             elif pname in pform_names('STN_I'):
                 data_avail = read_Stationary(pname, d_testing=True)
             elif pname in pform_names('RADAR'):
-                data_avail = read_Radar(pname, d_testing=True)
+                data_avail = read_Radar(pname, d_testing=True, known_scan_time=None)
             return data_avail
         except:
             error_printing(Platform.E_test)
@@ -861,11 +860,13 @@ class Stationary_Insitu(Platform):
 ####
 class Radar(Platform):
     def __init__(self, Name, Data=None, Rfile= None, Swp=None, Plotting_Radar= False):
+        self.Scan_time = None
+
         ## If you are initializing the Plotting Radar object
         if Plotting_Radar == True:
             ## Det the key attr of the main plotting radar and define the class var Scan_time for all objects of Platform
             self.rfile, self.name, self.swp = Rfile, Name, Swp
-            Platform.Scan_time, self.lat, self.lon, self.type = read_Radar(self.name, self.swp, rfile=self.rfile)
+            self.Scan_time, self.lat, self.lon, self.type = read_Radar(self.name, self.swp, rfile=self.rfile)
             # Convert time into fancy date string to use in overall plot title
             self.fancy_date_str = self.Scan_time.strftime('%Y-%m-%d %H:%M UTC')
 
@@ -875,7 +876,7 @@ class Radar(Platform):
 
         ## Otherwise you are initlizing info for radars that doent have to do with plotting actual radar data (aka loc of radars etc but not the data itself)
         elif Plotting_Radar == False:
-            Rloc, self.type = read_Radar(Name)
+            Rloc, self.type = read_Radar(Name, known_scan_time=Data['P_Radar'])
 
             if self.type == 'KA':
                 #store the loc info for a ka radar object

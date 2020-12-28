@@ -260,7 +260,7 @@ class Master_Plt:
             self.Proj = ccrs.PlateCarree()
 
     # * * * * * * *
-    def tick_grid_settings(self, ax, radar=None, ts=None, interval=None, twinax=False):
+    def tick_grid_settings(self, ax, radar=None, ts=None, interval=None, twinax=False, scan_time=None):
         ##Axis Limits
         # # # # # # # #
         #if you are calling this for a timeseries subplot set the limits for the plot
@@ -268,7 +268,7 @@ class Master_Plt:
             # Xaxis
             # if desired this subsets the timerange that is displayed in the timeseries
             if config.ts_extent != None:
-                ax.set_xlim(Platform.Scan_time - timedelta(minutes=config.ts_extent), Platform.Scan_time + timedelta(minutes=config.ts_extent))
+                ax.set_xlim(scan_time - timedelta(minutes=config.ts_extent), scan_time + timedelta(minutes=config.ts_extent))
 
             # Yaxis
             if ts in ['Thetav','Thetae']:
@@ -387,6 +387,8 @@ class Master_Plt:
         print_long & e_test: bool str as described in the ppi defn '''
         if Platform.Print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
 
+        scan_time = Data['P_Radar'].Scan_time
+
         #  t_TS.T_Plt_settings(ts,ax_n)
         TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
         ## MAKE THE TIMESERIES
@@ -408,7 +410,7 @@ class Master_Plt:
                     TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
                     TSleg_elements.append(TSleg_entry)
             ## Set up XY axes tick locations and Labels
-            self.tick_grid_settings(ax=ax_n, ts=ts)
+            self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=scan_time)
             ax_n.set_ylabel(TVARS.TS_Tvar_lab)
 
 
@@ -420,14 +422,14 @@ class Master_Plt:
             ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
             ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
             ax_n.set_ylabel('Wind Speed (kn)')
-            self.tick_grid_settings(ax=ax_n, ts=ts)
+            self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=scan_time)
             TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
             TSleg_elements.append(TSleg_entry)
 
             ax_2 = ax_n.twinx()
             ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05, label='Wind Dir')
             ax_2.set_ylabel('Wind Dir ($^{\circ}$)')
-            self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True)
+            self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True, scan_time=scan_time)
             TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
             TSleg_elements.append(TSleg_entry)
 
@@ -453,8 +455,8 @@ class Master_Plt:
         ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
         #  radar scan and the timerange ploted (via filled colorline) on the radar plots
         if len(config.r_mom) != 0:
-            ax_n.axvline(Platform.Scan_time, color='r', linewidth=4, alpha=.5)
-            ax_n.axvspan(Platform.Scan_time - timedelta(minutes=config.cline_extent), Platform.Scan_time + timedelta(minutes=config.cline_extent), facecolor='0.5', alpha=0.4)
+            ax_n.axvline(scan_time, color='r', linewidth=4, alpha=.5)
+            ax_n.axvspan(scan_time - timedelta(minutes=config.cline_extent), scan_time + timedelta(minutes=config.cline_extent), facecolor='0.5', alpha=0.4)
 
         ##Label Formatter
         # # # # # # # # #
@@ -772,11 +774,11 @@ def plotting(Data, TVARS, start_comptime):
         
         #add the file name
         if Data['P_Radar'].name in pform_names('KA'):
-            output_name= Data['P_Radar'].site_name+'_'+Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
+            output_name= Data['P_Radar'].site_name+'_'+Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
         if Data['P_Radar'].name == 'NOXP':
-            output_name = Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
+            output_name = Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
         if Data['P_Radar'].name == 'WSR88D':
-            output_name = Platform.Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
+            output_name = Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
     
     output_path_plus_name = outdir+output_name
     print(output_path_plus_name)
