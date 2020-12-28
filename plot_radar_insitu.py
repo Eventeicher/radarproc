@@ -920,6 +920,7 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames):
     cached_read_from_radar_file = function_cache_memory.cache(read_from_radar_file)
     
     def sweep_index(radar= None):
+        swp_id = None
         if config.Radar_Plot_Type == 'WSR_Plotting':
             #Hard code the swp numbers that will be associated with a given tilt angle
             if config.p_tilt == .5: swp_id=[0 , 1]
@@ -929,15 +930,15 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames):
 
         else: 
             for i in range(radar.nsweeps):
-                print('Hey')
                 tilt_ang = radar.get_elevation(i) ## Det the actual tilt angle of a given sweep (returns an array)
+                #  print("tilt: ", tilt_ang[0], ' p_tilt: ', config.p_tilt)
+                #  print(np.around(tilt_ang[0], decimals=1))
                 ## Check to see if the radarfile matches the elevation tilt we are interested in
                 if np.around(tilt_ang[0], decimals=1) == config.p_tilt:
                     swp_id = i 
                     if config.Radar_Plot_Type == 'NOXP_Plotting':
                         fix_NOXP(radar, i, 'DBZ')
                         fix_NOXP(radar, i, 'VEL')
-
         return swp_id
     
     #####
@@ -972,12 +973,15 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames):
             ## Read the radar file
             radar = cached_read_from_radar_file(r_file, 'NOXP')
             swp_id = sweep_index(radar)      
-     
     #####
-    if valid_time == False:        
-        print(r_file+' was not in the timerange being plotted')
+    if (valid_time == False) or (swp_id == None):
+        if valid_time == False:        
+            print(r_file+' was not in the timerange being plotted')
+        if swp_id == None:
+            print(r_file+' did not have a sweep that matched our tilt angle of intrest')
         #end evaluation for this file (do not make a plot)
         return
+
     else:
         ## Read in radar data and add to Data dict
         ##### + + + + + + + + + + + + + + + + + + +
