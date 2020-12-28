@@ -21,15 +21,14 @@ Time_Series = ['Wind', 'Thetav']
 
 ## File paths
 # ************
-Radar_Plot_Type = 'NOXP_Plotting'
-#  Radar_Plot_Type = 'KA_Plotting'
+#  Radar_Plot_Type = 'NOXP_Plotting'
+Radar_Plot_Type = 'KA_Plotting'
 #  Radar_Plot_Type = 'WSR_Plotting'
-print_radar_info= False
 
 nCPU=1
 
 if Radar_Plot_Type == 'KA_Plotting':
-    day = '20190517' #'YYYYMMDD'
+    day = '20190524' #'YYYYMMDD'
     R_Tvar = "Thetav" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 21 #21 is the best for KA
     Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
@@ -41,7 +40,7 @@ if Radar_Plot_Type == 'NOXP_Plotting':
     day = '20190517' #'YYYYMMDD'
     R_Tvar = "Thetav" #which var to plot (current options; Thetae, Thetav)
     #  offsetkm = 37 #21 is the best for KA
-    offsetkm = 20 #21 is the best for KA
+    offsetkm = 37 #21 is the best for KA
     Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'Prb1'
     p_tilt = 0.5 #what radar elevation tilt (deg) do you want to plot
@@ -58,17 +57,14 @@ if Radar_Plot_Type == 'WSR_Plotting':
 ## Timeframe
 # ***********
 #crop the start or end time to a time you specify (set to None to do the whole day)
-#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 50, 0)
+#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 2, 0)
 #  tend = dt.datetime(int(day[0:4]),int(day[4:6]),18,2,0,0)
-tstart, tend = None, None
-#  tend = None
 man_ylim= False
 
 
-g_home = expanduser("~")
-
 #g_root = g_home + '/radar_data'   # Chris
 #g_root = g_home + '/Research'     # Ellie Macbook
+g_home = expanduser("~")
 g_root = '/Volumes/Samsung_T5/Research' # Ellie External SSD
 
 g_mesonet_directory = g_root + '/TORUS_Data/'   # Our Data
@@ -86,9 +82,7 @@ if not os.path.exists(g_cache_directory): Path(g_cache_directory).mkdir(parents=
 
 ## Plot layout controls
 # ***********************
-#  (some of these options will need to be expanded upon to work.... but hypothetically the code is set up to allow these options(with some modifications))
 #would you like to plot radar images? (set to False to only plot timeseries)
-#would you like to plot the timeseries? (set to False to only plot radar)
 #  r_mom = ['refl', 'vel'] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
 #  r_mom = []#list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
 
@@ -114,7 +108,7 @@ cline_extent = 5 #how long would you like the colorlines for each platforms to c
 
 # would you like to restrict the time series to display only a timespan +/- x time from the scantime (functionalitly not coded yet)
 ts_extent = 30 #so actually 60 min
-#  ts_extent = None #so actually 60 min
+#  ts_extent = None
 
 
 TS_masking = ['NSSL']
@@ -129,5 +123,5 @@ print_long = False
 #  Set to False to not print out the errors that tripped 'try' statements: set to True only while troubleshooting
     ## there will be 'valid' errors caused by looping through platforms etc.... hence needlessly confusing unless troubleshooting
 e_test = False
-#  nCPU=-2
-#  nCPU=1l
+print_radar_info= False 
+#  nCPU=-2 #1
