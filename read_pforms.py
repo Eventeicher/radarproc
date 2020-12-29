@@ -561,7 +561,7 @@ def read_Radar(pname, swp=None, rfile= None, d_testing=False, known_scan_time=No
                 beginscan, endscan = datetime.strptime(kadep.time_begin[t], "%m/%d/%Y %H:%M"), datetime.strptime(kadep.time_end[t], "%m/%d/%Y %H:%M")
 
                 # det if any of the deps occured in the time frame we are interested in: if so record loc and RHI info for the dep
-                if known_scan_time >= beginscan and Platform.known_scan_time <= endscan:
+                if known_scan_time >= beginscan and known_scan_time <= endscan:
                     #If defn hasn't failed yet & we entered this if statement then we have dep data relavant to our plot for this radar
                     # If defn was called to det if we had data availability we will exit the defn here
                     if d_testing == True: return True
