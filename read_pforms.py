@@ -655,7 +655,6 @@ class Platform:
     #vars defined in this block (until ######) reamain constant for any object initilized via calling Platform or any Platform subclass
         #  self.var can be retreived latter via typing obj.day etc
         #  vars without self. can be used within Platform or Platform subclasses methods but not for external retrieval
-    E_test = config.e_test
 
     #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
     try:  Tstart = config.tstart
@@ -690,7 +689,7 @@ class Platform:
                 data_avail = read_Radar(pname, d_testing=True, known_scan_time=None)
             return data_avail
         except:
-            error_printing(Platform.E_test)
+            error_printing(config.e_test)
             return False
 
     # * * *
@@ -802,7 +801,7 @@ class Platform:
                 p_deploy = True
             except:
                 p_deploy = False
-                error_printing(Platform.E_test)
+                error_printing(self.config.e_test)
         return df_sub, p_deploy
 
     # * * *
