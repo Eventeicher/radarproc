@@ -263,7 +263,7 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
 
             # if you do want to read in data
             if read_in_data == True:
-                data_avail = Platform.test_data(pname, scan_time=Data['P_Radar'])
+                data_avail = Platform.test_data(pname, scan_time=Data['P_Radar'].Scan_time)
                 if data_avail == True:
                     #  dont repeatedly append to the list if the platform is already included
                     if pname in subset_pnames: pass
@@ -501,7 +501,7 @@ def read_Stationary(pname, d_testing=False):
 
 #**************
 def read_Radar(pname, swp=None, rfile= None, d_testing=False, known_scan_time=None):
-    print("read_Radar(pname=",pname," rfile=", rfile, ")")
+    #  print("read_Radar(pname=",pname," rfile=", rfile, ")")
 
     ''' Determine if a given radar is deployed and if so assign the correct location values to it.
     '''
@@ -561,7 +561,7 @@ def read_Radar(pname, swp=None, rfile= None, d_testing=False, known_scan_time=No
                 beginscan, endscan = datetime.strptime(kadep.time_begin[t], "%m/%d/%Y %H:%M"), datetime.strptime(kadep.time_end[t], "%m/%d/%Y %H:%M")
 
                 # det if any of the deps occured in the time frame we are interested in: if so record loc and RHI info for the dep
-                if known_scan_time >= beginscan and Platform.known_scan_time <= endscan:
+                if known_scan_time >= beginscan and known_scan_time <= endscan:
                     #If defn hasn't failed yet & we entered this if statement then we have dep data relavant to our plot for this radar
                     # If defn was called to det if we had data availability we will exit the defn here
                     if d_testing == True: return True
@@ -686,7 +686,7 @@ class Platform:
             elif pname in pform_names('STN_I'):
                 data_avail = read_Stationary(pname, d_testing=True)
             elif pname in pform_names('RADAR'):
-                data_avail = read_Radar(pname, d_testing=True, known_scan_time=None)
+                data_avail = read_Radar(pname, d_testing=True, known_scan_time=scan_time)
             return data_avail
         except:
             error_printing(Platform.E_test)
@@ -874,7 +874,7 @@ class Radar(Platform):
 
         ## Otherwise you are initlizing info for radars that doent have to do with plotting actual radar data (aka loc of radars etc but not the data itself)
         elif Plotting_Radar == False:
-            Rloc, self.type = read_Radar(Name, known_scan_time=Data['P_Radar'])
+            Rloc, self.type = read_Radar(Name, known_scan_time=Data['P_Radar'].Scan_time)
 
             if self.type == 'KA':
                 #store the loc info for a ka radar object

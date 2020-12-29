@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as PE 
+from matplotlib.collections import PatchCollection
 from matplotlib import ticker
 from matplotlib.ticker import (LinearLocator, FixedLocator, MaxNLocator, MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 from matplotlib.ticker import FuncFormatter
@@ -268,8 +269,6 @@ class Master_Plt:
             # Xaxis
             # if desired this subsets the timerange that is displayed in the timeseries
             if config.ts_extent != None:
-
-                print(scan_time)
                 ax.set_xlim(scan_time - timedelta(minutes=config.ts_extent), scan_time + timedelta(minutes=config.ts_extent))
 
             # Yaxis
@@ -524,13 +523,13 @@ class Master_Plt:
         ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
         #  iterate over each object contained in dict Data (returns the actual objects not their keys)
         def plot_markers(p, lon, lat, lab_offset=(0,0), lab_c='xkcd:pale blue', zipper_lab=None):
-            ax_n.plot(lon, lat, transform=self.Proj, marker=p.m_style, mfc=p.m_color, 
+            ax_n.plot(lon, lat, transform=self.Proj, marker=p.m_style, mfc=p.m_color, linestyle=None, 
                       mew=2, ms=p.m_size, mec='k',label=p.leg_str, zorder=10)
             
             ## Optional textlabel on plot
             if p.marker_label == True:
                 if zipper_lab == None:
-                    ax_n.text(p.lon+lab_offset[0], p.lat-lab_offset[1], p.name, transform=Proj,
+                    ax_n.text(p.lon+lab_offset[0], p.lat-lab_offset[1], p.name, transform=self.Proj,
                               path_effects=[PE.withStroke(linewidth=4, foreground=lab_c)])
                 else:
                     for x, y, lab in zip(p.lon, p.lat, zipper_lab):
@@ -603,7 +602,7 @@ class Master_Plt:
 
                             ## Plot RHI spokes
                             if p.type == 'KA':
-                                if config.rhi_ring == True: self.rhi_spokes_rings(p)
+                                if config.rhi_ring == True: self.rhi_spokes_rings(p, ax_n)
 
                         if p.type == 'WSR':
                             ## Plot the marker
@@ -654,7 +653,7 @@ class Master_Plt:
         if Platform.Print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 
     # * * *
-    def rhi_spokes_rings(self, pform):
+    def rhi_spokes_rings(self, pform, ax_n):
         ''' Plot the RHI spoke and ring for a radar
         '''
         if Platform.Print_long == True: print('made it into rhi_spokes_rings')
@@ -664,6 +663,20 @@ class Master_Plt:
 
         #produce spoke and ring
         else:
+            #this plots a circle that connects the spokes
+            patches=[]
+            deg=[]
+            if pform.type == 'KA': radius= 20.905
+            for a in [pform.rhib, pform.rhie]:
+                ang= a + pform.head
+                if ang > 360.: ang= int(ang - 360)
+                deg.append(ang)
+            print('RHIB: ',pform.rhib)
+            wedge = mpatches.Wedge((pform.lon, pform.lat), radius, deg[0], deg[1], width=5, linewidth=10, fc='red', transform=self.Proj)
+            patches.append(wedge)
+            p = PatchCollection(patches)
+            ax_n.add_collection(p)
+            '''
             for j in range(int(pform.rhib), int(pform.rhie)+1, 10):
                 ang = pform.head + j
                 if ang > 360.: ang= int(ang - 360.)
@@ -688,6 +701,7 @@ class Master_Plt:
                     if np.logical_and(C>ymin, np.logical_and(C<ymax, np.logical_and(D>xmin, D<xmax))):
                         plt.text(D, C, str(ang), horizontalalignment='center', transform=self.Proj, zorder=9,
                                  path_effects=([PE.withStroke(linewidth=4, foreground='xkcd:pale blue')]))
+            '''
             if Platform.Print_long == True: print('made it through rhi_spokes_rings')
 
 
@@ -696,7 +710,6 @@ class Master_Plt:
 ## PLOTTING DEFINTIONS  ###
 ###########################
 def plotting(Data, TVARS, start_comptime):
-    print
     print("*** Entering plotting() ")
 
     plotting_start_time = time.time()
