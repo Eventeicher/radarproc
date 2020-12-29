@@ -567,6 +567,29 @@ class Master_Plt:
                 if Platform.Print_long == True: print('The platform was not deployed at this time')
                 return False, False
 
+        def rhi_spokes_rings(pform):
+            ''' Plot the RHI spoke and ring for a radar
+            '''
+            if Platform.Print_long == True: print('made it into rhi_spokes_rings')
+
+            # if there is not actually rhi info then it will not plot a ring and not stop the code
+            if np.isnan(pform.rhib) == True or np.isnan(pform.rhie)== True: print('Could not plot RHI spokes')
+
+            #produce spoke and ring
+            else:
+                #this plots a circle that connects the spokes
+                patches=[]
+                deg=[]
+                if pform.type == 'KA': radius= 20.905
+                for a in [pform.rhib, pform.rhie]:
+                    ang= a + pform.head
+                    if ang > 360.: ang= int(ang - 360)
+                    deg.append(ang)
+                print('RHIB: ',pform.rhib)
+                wedge = mpatches.Wedge((pform.lon, pform.lat), radius, deg[0], deg[1], width=5, linewidth=10, fc='red', transform=self.Proj)
+                patches.append(wedge)
+                p = PatchCollection(patches)
+                ax_n.add_collection(p)
         # * * *
         for p in Data.values():
             if Platform.Print_long == True: print(p.name)
@@ -602,7 +625,7 @@ class Master_Plt:
 
                             ## Plot RHI spokes
                             if p.type == 'KA':
-                                if config.rhi_ring == True: self.rhi_spokes_rings(p, ax_n)
+                                if config.rhi_ring == True: rhi_spokes_rings(p)
 
                         if p.type == 'WSR':
                             ## Plot the marker
@@ -653,9 +676,10 @@ class Master_Plt:
         if Platform.Print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 
     # * * *
+    '''
     def rhi_spokes_rings(self, pform, ax_n):
-        ''' Plot the RHI spoke and ring for a radar
-        '''
+        #  Plot the RHI spoke and ring for a radar
+        #  
         if Platform.Print_long == True: print('made it into rhi_spokes_rings')
 
         # if there is not actually rhi info then it will not plot a ring and not stop the code
@@ -676,7 +700,6 @@ class Master_Plt:
             patches.append(wedge)
             p = PatchCollection(patches)
             ax_n.add_collection(p)
-            '''
             for j in range(int(pform.rhib), int(pform.rhie)+1, 10):
                 ang = pform.head + j
                 if ang > 360.: ang= int(ang - 360.)
@@ -701,9 +724,10 @@ class Master_Plt:
                     if np.logical_and(C>ymin, np.logical_and(C<ymax, np.logical_and(D>xmin, D<xmax))):
                         plt.text(D, C, str(ang), horizontalalignment='center', transform=self.Proj, zorder=9,
                                  path_effects=([PE.withStroke(linewidth=4, foreground='xkcd:pale blue')]))
-            '''
+            
             if Platform.Print_long == True: print('made it through rhi_spokes_rings')
 
+    '''
 
 ##########################################################################
 ###########################
