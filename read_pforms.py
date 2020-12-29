@@ -655,7 +655,6 @@ class Platform:
     #vars defined in this block (until ######) reamain constant for any object initilized via calling Platform or any Platform subclass
         #  self.var can be retreived latter via typing obj.day etc
         #  vars without self. can be used within Platform or Platform subclasses methods but not for external retrieval
-    Day = config.day #Class variables
     E_test = config.e_test
 
     #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
