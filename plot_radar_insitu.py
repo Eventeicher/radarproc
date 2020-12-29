@@ -80,6 +80,7 @@ if config.country_roads == True: import osmnx as ox
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
 from read_pforms import error_printing, timer, time_in_range
+from read_pforms import time_range
 
 totalcompT_start = time.time()
 ################################################################################################
@@ -937,7 +938,10 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames):
     elif config.Radar_Plot_Type == 'KA_Plotting':
         time_string= str(20)+str(os.path.split(r_file)[1][13:24])
         rtime = datetime.strptime(time_string, "%Y%m%d%H%M%S")
-        valid_time = time_in_range(Platform.Tstart, Platform.Tend, rtime)
+
+        time_start, time_end = time_range(config)
+
+        valid_time = time_in_range(time_start, time_end, rtime)
         
         if valid_time == True:
             ## Read the radar file
@@ -949,7 +953,10 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames):
     elif config.Radar_Plot_Type == 'NOXP_Plotting':
         head_tail= os.path.split(r_file)
         rtime = datetime.strptime(head_tail[1][6:21], "%Y%m%d_%H%M%S")
-        valid_time = time_in_range(Platform.Tstart, Platform.Tend, rtime)
+
+        time_start, time_end = time_range(config)
+
+        valid_time = time_in_range(time_start, time_end, rtime)
         
         if valid_time == True:
             ## Read the radar file

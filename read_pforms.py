@@ -88,6 +88,17 @@ def timer(start, end, total_runtime=False):
 ###########
 # Data Prep
 ###########
+def time_range(config):
+    #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
+    try:  Tstart = config.tstart
+    except: Tstart = None
+
+    try: Tend = config.tend
+    except: Tend = None
+
+    return Tstart, Tend
+
+
 def time_in_range(start, end, x):
     """Return true if x is in the range [start, end]"""
     #  if end == None: end=datetime.utcnow()
@@ -360,10 +371,11 @@ def read_TInsitu(pname, d_testing=False):
             pd_unl.reset_index(inplace=True)
 
             # Subset the dataset to the desired 22:43
-            if Platform.Tstart is None: hstart = pd_unl['datetime'].iloc[0]
-            else: hstart = Platform.Tstart
-            if Platform.Tend is None: hend = pd_unl['datetime'].iloc[-1]
-            else: hend = Platform.Tend
+            time_start, time_end = time_range(config)
+            if time_start is None: hstart = pd_unl['datetime'].iloc[0]
+            else: hstart = time_start.start
+            if time_end is None: hend = pd_unl['datetime'].iloc[-1]
+            else: hend = time_end
             # Save only desired iop data
             data_u = pd_unl.loc[(pd_unl['datetime'] >= hstart) & (pd_unl['datetime'] <= hend)]
             data_hold.append(data_u)
@@ -400,19 +412,21 @@ def read_TInsitu(pname, d_testing=False):
         # Find timedelta of hours since start of iop (IOP date taken from filename!)
         tiop = dt.datetime(2019, np.int(mmfile[-15:-13]), np.int(mmfile[-13:-11]), 0, 0, 0)
 
-        if Platform.Tstart is None:
+        time_start, time_end = time_range(config)
+
+        if time_start is None:
             hstart = tiop
             hstart_dec = hstart.hour + (hstart.minute/60) + (hstart.second/3600) #convert to decimal hours HH.HHH
         else:
-            hstart = float((Platform.Tstart - tiop).seconds)/3600
+            hstart = float((time_start - tiop).seconds)/3600
             hstart_dec = hstart
 
-        if Platform.Tend is None:
+        if time_end is None:
             hend = data['time'].iloc[-1]
         else:
-            hend = (Platform.Tend - tiop)
-            if hend >= dt.timedelta(days=1): hend = float((Platform.Tend-tiop).seconds)/3600 + 24.
-            else: hend = float((Platform.Tend-tiop)).seconds/3600
+            hend = (time_end - tiop)
+            if hend >= dt.timedelta(days=1): hend = float((time_end-tiop).seconds)/3600 + 24.
+            else: hend = float((time_end-tiop)).seconds/3600
 
         # Save only desired iop data
         data_nssl_sub = data.loc[(data['time'] >= hstart_dec)]
@@ -647,6 +661,7 @@ def read_Radar(pname, swp=None, rfile= None, d_testing=False, known_scan_time=No
             else: return WSR_df, 'WSR'
 
 
+
 ##########
 # Classes
 ##########
@@ -655,12 +670,6 @@ class Platform:
     #vars defined in this block (until ######) reamain constant for any object initilized via calling Platform or any Platform subclass
         #  self.var can be retreived latter via typing obj.day etc
         #  vars without self. can be used within Platform or Platform subclasses methods but not for external retrieval
-
-    #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
-    try:  Tstart = config.tstart
-    except: Tstart = None
-    try: Tend = config.tend
-    except: Tend = None
 
     ######
 
