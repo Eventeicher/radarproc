@@ -57,6 +57,8 @@ import gc
 #  mplstyle.use('fast')
 #  mpl.rcParams['path.simplify_threshold'] = 1.0
 
+import config #this is the file with the plotting controls to access any of the vars in that file use config.var
+
 import copy
 
 import tracemalloc
@@ -73,7 +75,6 @@ log = logging.getLogger(__name__)
 
 ## Imports form other files
 ############################
-import config #this is the file with the plotting controls to access any of the vars in that file use config.var
 if config.country_roads == True: import osmnx as ox
 
 
@@ -131,7 +132,7 @@ def scale_bar(ax, length=None, location=(.96, -0.05), linewidth=3):
 # Classes
 ##########
 class Thermo_Plt_Vars:
-    def __init__ (self, Data):
+    def __init__ (self, Data, config):
         self.Te_lab, self.Tv_lab, self.Tf_lab = "Equi. Pot. Temp [K]", "Vir. Pot. Temp [K]", "Temp (fast) [K]"
         self.Tv_GMin, self.Tv_GMax = self.find_global_max_min('Thetav', Data)
         self.Te_GMin, self.Te_GMax = self.find_global_max_min('Thetae', Data)
@@ -198,8 +199,9 @@ class Master_Plt:
     #  Domain = 'place holder' # The extent of the area to be plotted
     #  display = 'place holder' # Define pyart display object for plotting radarfile
 
-    def __init__(self, Data):
+    def __init__(self, Data, config):
         self.Data = Data #(the data dict)
+        self.config = config
 
         ## Set some parameters for the plot such as fontsize etc
         #### * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -268,14 +270,14 @@ class Master_Plt:
         if ts != None:
             # Xaxis
             # if desired this subsets the timerange that is displayed in the timeseries
-            if config.ts_extent != None:
+            if self.config.ts_extent != None:
 
                 print(scan_time)
-                ax.set_xlim(scan_time - timedelta(minutes=config.ts_extent), scan_time + timedelta(minutes=config.ts_extent))
+                ax.set_xlim(scan_time - timedelta(minutes=self.config.ts_extent), scan_time + timedelta(minutes=self.config.ts_extent))
 
             # Yaxis
             if ts in ['Thetav','Thetae']:
-                if config.man_ylim == True:
+                if self.config.man_ylim == True:
                     ax.set_ylim(335,350)
                 else:     
                     ax.set_ylim(TVARS.TS_Tvar_GMin, TVARS.TS_Tvar_GMax)
@@ -388,7 +390,7 @@ class Master_Plt:
         ts: ........fill in
         Data: dict as described in plotting defn
         print_long & e_test: bool str as described in the ppi defn '''
-        if config.print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
+        if self.config.print_long == True: print('~~~~~~~~~~~Made it into time_series~~~~~~~~~~~~~~~~~')
         #  t_TS.T_Plt_settings(ts,ax_n)
         TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
         ## MAKE THE TIMESERIES
@@ -397,9 +399,9 @@ class Master_Plt:
             TVARS.det_TS_Tvar(ts)
             for p in Data.values():
                 if isinstance(p, Torus_Insitu):
-                    if config.print_long == True: print('Plotting '+str(p.name)+' on time series')
+                    if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
                     ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
-                    if p.type in config.TS_masking[:]:
+                    if p.type in self.config.TS_masking[:]:
                         if ts == "Thetae":   plotting_data= p.Thetae_ts_mask_df
                         elif ts == "Thetav":   plotting_data= p.Thetav_ts_mask_df
                     else: plotting_data= p.df[ts].values
@@ -416,8 +418,8 @@ class Master_Plt:
 
         # * * *
         if ts == 'Wind':
-            p = Data[config.Wind_Pform]
-            if config.print_long == True: print('Plotting '+str(p.name)+' on time series')
+            p = Data[self.config.Wind_Pform]
+            if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
 
             ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
             ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
@@ -437,7 +439,7 @@ class Master_Plt:
         #  leg = ax_n.legend(handles= TSleg_elements, loc='center left')
         leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center left')
         if ts == 'Wind':
-            leg.set_title(config.Wind_Pform, prop=self.leg_title_font)
+            leg.set_title(self.config.Wind_Pform, prop=self.leg_title_font)
             leg.remove()
             ax_2.add_artist(leg)
 
@@ -446,17 +448,17 @@ class Master_Plt:
         ax_n.label_outer()
        
         #if you are not making the bottom timeseries
-        if ax_n.get_subplotspec().rowspan.stop != len(config.Time_Series):
+        if ax_n.get_subplotspec().rowspan.stop != len(self.config.Time_Series):
             ax_n.spines['bottom'].set_linewidth(5)
             # if you are doing two thermo plots while also plotting radar remove one of the legends (for space)
-            if (len(config.r_mom) != 0) & (ts in ['Thetav', 'Thetae']): leg.remove()
+            if (len(self.config.r_mom) != 0) & (ts in ['Thetav', 'Thetae']): leg.remove()
 
 
         ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
         #  radar scan and the timerange ploted (via filled colorline) on the radar plots
-        if len(config.r_mom) != 0:
+        if len(self.config.r_mom) != 0:
             ax_n.axvline(Data['P_Radar'].Scan_time, color='r', linewidth=4, alpha=.5)
-            ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=config.cline_extent), Data['P_Radar'].Scan_time + timedelta(minutes=config.cline_extent), facecolor='0.5', alpha=0.4)
+            ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.cline_extent), Data['P_Radar'].Scan_time + timedelta(minutes=self.config.cline_extent), facecolor='0.5', alpha=0.4)
         ##Label Formatter
         # # # # # # # # #
         ax_n.set_xlabel('Time (UTC)')
@@ -471,7 +473,7 @@ class Master_Plt:
         #  box = ax_n.get_position()
         #  box2=ax_n.get_tightbbox(fig.canvas.get_renderer(), call_axes_locator = True)
         '''
-        if config.print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
+        if self.config.print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
 
     # * * * * * *  *
@@ -484,7 +486,7 @@ class Master_Plt:
         leg: bool str whether or not you want a legend associated with this particular subplot
         print_long & e_test: bool str as described in the ppi defn
         '''
-        if config.print_long == True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
+        if self.config.print_long == True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
 
         ## SET UP VARS FOR EACH RADAR MOMENTS
         if mom == 'refl':
@@ -509,7 +511,7 @@ class Master_Plt:
 
         ## Plot the radar
         ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
-        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=config.offsetkm*2000, height=config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
+        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=self.config.offsetkm*2000, height=self.config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
 
         # Has to be here or it doesn't work
         ax_n.set_extent(self.Domain)
@@ -540,12 +542,12 @@ class Master_Plt:
 
         def plot_TORUSpform(Data, p, border_c='xkcd:light grey', labelbias=(0,0)):
             #grab the subset of data of +- interval around radar scan
-            p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=config.cline_extent)
+            p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=self.config.cline_extent)
 
             #if there is data for the platform that falls within the time and location of interest
             if p_deploy == True:
                 ##READ in data from p_sub 
-                x, y, C = p_sub['lon'].values, p_sub['lat'].values, p_sub[config.R_Tvar].values
+                x, y, C = p_sub['lon'].values, p_sub['lat'].values, p_sub[self.config.R_Tvar].values
 
                 ##PLOT the line that extends +/- min from the platform location; 
                 #  The colorfill indicates values of the specifiec p_var (ie Thetae etc)
@@ -566,12 +568,12 @@ class Master_Plt:
                 return C_Point.lon, C_Point.lat 
 
             elif p_deploy == False:
-                if config.print_long == True: print('The platform was not deployed at this time')
+                if self.config.print_long == True: print('The platform was not deployed at this time')
                 return False, False
 
         # * * *
         for p in Data.values():
-            if config.print_long == True: print(p.name)
+            if self.config.print_long == True: print(p.name)
             ######
             #Plot Inistu Torus Platforms (if desired and available)
             if isinstance(p, Torus_Insitu):
@@ -604,7 +606,7 @@ class Master_Plt:
 
                             ## Plot RHI spokes
                             if p.type == 'KA':
-                                if config.rhi_ring == True: self.rhi_spokes_rings(p)
+                                if self.config.rhi_ring == True: self.rhi_spokes_rings(p)
 
                         if p.type == 'WSR':
                             ## Plot the marker
@@ -652,13 +654,13 @@ class Master_Plt:
           #  plt.subplots_adjust(right=0.7)
         ###################
         #  scale_bar(ax_n, 10) # 10 KM
-        if config.print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
+        if self.config.print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 
     # * * *
     def rhi_spokes_rings(self, pform):
         ''' Plot the RHI spoke and ring for a radar
         '''
-        if config.print_long == True: print('made it into rhi_spokes_rings')
+        if self.config.print_long == True: print('made it into rhi_spokes_rings')
 
         # if there is not actually rhi info then it will not plot a ring and not stop the code
         if np.isnan(pform.rhib) == True or np.isnan(pform.rhie)== True: print('Could not plot RHI spokes')
@@ -685,18 +687,18 @@ class Master_Plt:
                 self.display.plot_line_geo([pform.lon, D], [pform.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
 
                 ## optional labels
-                if config.RHI_lab == True:
+                if self.config.RHI_lab == True:
                     if np.logical_and(C>ymin, np.logical_and(C<ymax, np.logical_and(D>xmin, D<xmax))):
                         plt.text(D, C, str(ang), horizontalalignment='center', transform=self.Proj, zorder=9,
                                  path_effects=([PE.withStroke(linewidth=4, foreground='xkcd:pale blue')]))
-            if config.print_long == True: print('made it through rhi_spokes_rings')
+            if self.config.print_long == True: print('made it through rhi_spokes_rings')
 
 
 ##########################################################################
 ###########################
 ## PLOTTING DEFINTIONS  ###
 ###########################
-def plotting(Data, TVARS, start_comptime):
+def plotting(config, Data, TVARS, start_comptime):
     print
     print("*** Entering plotting() ")
 
@@ -715,7 +717,7 @@ def plotting(Data, TVARS, start_comptime):
     '''
     if config.print_long == True: print('~~~~~~~~~~~Made it into plotting~~~~~~~~~~~~~~~~~~~~~')
     #initilize the plot object(will have info about plotlayout and such now)
-    PLT = Master_Plt(Data)
+    PLT = Master_Plt(Data, config)
 
     ## Make the Radar Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
@@ -820,7 +822,7 @@ def det_nearest_WSR(p_df):
     return r_ofintrest
 
 # * * *
-def get_WSR_from_AWS(start, end, radar_id, download_directory):
+def get_WSR_from_AWS(config, start, end, radar_id, download_directory):
     ''' Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
     ----------
     INPUTS
@@ -901,11 +903,12 @@ def read_from_radar_file(radar_file, Rtype):
     elif Rtype== 'KA': radar = pyart.io.read(radar_file)
     elif Rtype =='NOXP': radar = pyart.io.read(radar_file)
     return radar
+
 function_cache_memory = Memory(config.g_cache_directory,verbose=1)
 cached_read_from_radar_file = function_cache_memory.cache(read_from_radar_file)
 
 # * * *
-def plot_radar_file(r_file, Data, TVARS, subset_pnames):
+def plot_radar_file(config, r_file, Data, TVARS, subset_pnames):
     def sweep_index(radar= None):
         swp_id = None
         if config.Radar_Plot_Type == 'WSR_Plotting':
@@ -976,14 +979,14 @@ def plot_radar_file(r_file, Data, TVARS, subset_pnames):
         ## Read in radar data and add to Data dict
         ##### + + + + + + + + + + + + + + + + + + +
         #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
-        Data, subset_pnames = Add_to_DATA('RADAR', Data, subset_pnames, MR_file=radar, swp=swp_id)
+        Data, subset_pnames = Add_to_DATA(config, 'RADAR', Data, subset_pnames, MR_file=radar, swp=swp_id)
         if config.print_long == True: print(str(Data)+'\n')
         if config.print_radar_info== True: print(radar.info(level='compact'))
 
         ## Proceed to plot the radar
         ##### + + + + + + + + + + + +
         print("\nProducing Radar Plot:")
-        plotting(Data, TVARS, start_comptime)
+        plotting(config, Data, TVARS, start_comptime)
         print("done in plot_radar_file")
 
 ##############################################################################################
@@ -996,13 +999,13 @@ subset_pnames = [] #array of platforms that actually have data for the time rang
 Data = {} #dictionary in which all the class objects will be stored (will contain platform data, locations, plotting variables etc)
 
 ## Read in the data for the TORUS Insitu platforms (if available)
-Data, subset_pnames = Add_to_DATA('TInsitu', Data, subset_pnames)
+Data, subset_pnames = Add_to_DATA(config, 'TInsitu', Data, subset_pnames)
 ## Establish info for the plotting variable (aka max min etc)
-TVARS=Thermo_Plt_Vars(Data)
+TVARS=Thermo_Plt_Vars(Data, config)
 
 print('\nRead in Stationary Platforms Arrays')
 ## Read in the data for the Stationary Array platforms (if available)
-Data, subset_pnames = Add_to_DATA('STN_I', Data, subset_pnames)
+Data, subset_pnames = Add_to_DATA(config, 'STN_I', Data, subset_pnames)
 
 
 ###################################
@@ -1032,7 +1035,7 @@ if len(config.r_mom) != 0:
         pass
     ## Proceed to plot the radar
     ##### + + + + + + + + + + + +
-    Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames) for r_file in radar_files)
+    Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(config, r_file, Data, TVARS, subset_pnames) for r_file in radar_files)
 
     '''
     # * * *
@@ -1053,13 +1056,13 @@ if len(config.r_mom) != 0:
             #  print(tranges_each_r)
 
             print("start "+str(trange_r_start[Rad_site])+ "\nend "+str(trange_r_end[Rad_site])+ "\n ***")
-            radar_files = get_WSR_from_AWS(trange_r_start[Rad_site], trange_r_end[Rad_site], Rad_site, config.g_download_directory)
+            radar_files = get_WSR_from_AWS(config, trange_r_start[Rad_site], trange_r_end[Rad_site], Rad_site, config.g_download_directory)
             print('********\n Radar files to process:')
             pp.pprint(radar_files)
 
             ## Proceed to plot the radar
             ##### + + + + + + + + + + + +
-            #Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(r_file, Data, TVARS, subset_pnames, config.print_long, config.e_test, swp_id= swp_id) for r_file in radar_files)
+            #Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(config, r_file, Data, TVARS, subset_pnames, config.print_long, config.e_test, swp_id= swp_id) for r_file in radar_files)
 
             for r_file in radar_files:
 
@@ -1073,7 +1076,7 @@ if len(config.r_mom) != 0:
                 #TVARS_C = list(TVARS)
                 TVARS_C = TVARS  # Can't make a copy for some reason.  Need to fix
 
-                plot_radar_file(r_file, Data_C, TVARS_C, subset_pnames_C)
+                plot_radar_file(config, r_file, Data_C, TVARS_C, subset_pnames_C)
 
                 current, peak = tracemalloc.get_traced_memory()
                 pp.pprint(current/ 10**6)

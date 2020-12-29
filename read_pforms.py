@@ -61,7 +61,6 @@ log = logging.getLogger(__name__)
 
 ## Imports form other files
 ############################
-import config #this is the file with the plotting controls to access any of the vars in that file use config.var
 
 
 ################################################################################################
@@ -178,7 +177,7 @@ def pform_attr(pname):
 
 ################################################################################################
 #  * * * * *
-def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
+def Add_to_DATA(config, DType, Data, subset_pnames, MR_file=None, swp=None):
     if config.print_long == True: print('Made it into Add_to_DATA')
 
     if DType == 'TInsitu':
@@ -199,11 +198,11 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
             # if you do want to read in data
             if read_in_data == True:
                 #for each platform test to see if we have data for that day
-                data_avail = Platform.test_data(pname, scan_time= None)
+                data_avail = Platform.test_data(config, pname, scan_time= None)
                 if data_avail == True:
                     subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load data for the pform (aka initialize an object of the appropriate class); place in dict with key of pname
-                    Data.update({pname: Torus_Insitu(pname)})
+                    Data.update({pname: Torus_Insitu(config, pname)})
                     if config.print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
                     if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
@@ -227,13 +226,13 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
 
             # if you do want to read in data
             if read_in_data == True:
-                data_avail = Platform.test_data(pname, scan_time=None)
+                data_avail = Platform.test_data(config, pname, scan_time=None)
                 if data_avail == True:
                     #  dont repeatedly append to the list if the platform is already included
                     if pname in subset_pnames: pass
                     else: subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load loc data for the sites in plotting domain
-                    Data.update({pname: Stationary_Insitu(pname, marker_label)})
+                    Data.update({pname: Stationary_Insitu(config, pname, marker_label)})
                     if config.print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
                     if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
@@ -256,7 +255,7 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
             else: print('What radar are you trying to plot? MR_name = %' %(MR_file.metadata['instrument_name']))
 
             print("Reading in radar data for plotting from %s" %(MR_name))
-            Data.update({'P_Radar': Radar(MR_name, Rfile=MR_file, Swp=swp, Plotting_Radar=True)})
+            Data.update({'P_Radar': Radar(config, MR_name, Rfile=MR_file, Swp=swp, Plotting_Radar=True)})
 
         # * * *
         ## Initilize the other radar objects that do not contain radar data to be plotted
@@ -274,13 +273,13 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
 
             # if you do want to read in data
             if read_in_data == True:
-                data_avail = Platform.test_data(pname, scan_time=Data['P_Radar'])
+                data_avail = Platform.test_data(config, pname, scan_time=Data['P_Radar'])
                 if data_avail == True:
                     #  dont repeatedly append to the list if the platform is already included
                     if pname in subset_pnames: pass
                     else: subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load loc data (and in this case rhi angles if applicable)
-                    Data.update({pname: Radar(pname,Data)})
+                    Data.update({pname: Radar(config, pname,Data)})
                     if config.print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
                     if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
@@ -313,7 +312,7 @@ def Add_to_DATA(DType, Data, subset_pnames, MR_file=None, swp=None):
 
 ################################################################################################
 #**************
-def read_TInsitu(pname, d_testing=False):
+def read_TInsitu(config, pname, d_testing=False):
     ''' Reads data files provided on TORUS19 EOL site (Important that datafiles and filenames follow TORUS19 readme)
         ---
         INPUT: filename string (following readme conventions for each platform)
@@ -473,7 +472,7 @@ def read_TInsitu(pname, d_testing=False):
         return 'UAS'
 
 #**************
-def read_Stationary(pname, d_testing=False):
+def read_Stationary(config, pname, d_testing=False):
     ''' Determine if a there are any sites from the stationary arrays that fall within the plot domain
         if so record locations and names of the sites
     '''
@@ -514,7 +513,7 @@ def read_Stationary(pname, d_testing=False):
     else: return stnry_df, ptype
 
 #**************
-def read_Radar(pname, swp=None, rfile= None, d_testing=False, known_scan_time=None):
+def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan_time=None):
     print("read_Radar(pname=",pname," rfile=", rfile, ")")
 
     ''' Determine if a given radar is deployed and if so assign the correct location values to it.
@@ -673,7 +672,7 @@ class Platform:
 
     ######
 
-    def __init__(self, Name):
+    def __init__(self, config, Name):
         '''setting the ojects attr, __init__ defns will only be run once per object (and will be unique for each object)
         '''
         self.name = Name #Instance variables
@@ -684,18 +683,18 @@ class Platform:
 
     # * * *
     @classmethod
-    def test_data(self, pname, scan_time=None):
+    def test_data(self, config, pname, scan_time=None):
         '''test if there is a datafile for the platform
         Inputs: pname= the name of the file being tested
         @classmethod allows you to call the defn without creating an object yet via Platforms.test_data
         '''
         try:
             if pname in pform_names('TInsitu'):
-                data_avail = read_TInsitu(pname, d_testing=True)
+                data_avail = read_TInsitu(config, pname, d_testing=True)
             elif pname in pform_names('STN_I'):
-                data_avail = read_Stationary(pname, d_testing=True)
+                data_avail = read_Stationary(config, pname, d_testing=True)
             elif pname in pform_names('RADAR'):
-                data_avail = read_Radar(pname, d_testing=True, known_scan_time=None)
+                data_avail = read_Radar(config, pname, d_testing=True, known_scan_time=None)
             return data_avail
         except:
             error_printing(config.e_test)
@@ -816,9 +815,9 @@ class Platform:
     # * * *
 ####
 class Torus_Insitu(Platform):
-    def __init__(self, Name):
+    def __init__(self, config, Name):
         #read in and intilize the dataset; type is the platform type (aka NSSL, UNL, UAS)
-        self.df, self.type = read_TInsitu(Name)
+        self.df, self.type = read_TInsitu(config, Name)
         self.df.name ='{}_df'.format(Name) #assign a name to the pandas dataframe itself
         self.marker_label= config.TIn_lab
         #add a max/min value, if the object has type NSSL it will apply a mask (this can be easily changed/ mask applied to other platforms)
@@ -827,7 +826,7 @@ class Torus_Insitu(Platform):
         self.Tv_Min, self.Tv_Max= self.min_max('Thetav', mask)
         self.Te_Min, self.Te_Max= self.min_max('Thetae', mask)
         self.Tf_Min, self.Tf_Max= self.min_max('tfast', mask)
-        Platform.__init__(self, Name)
+        Platform.__init__(self, config, Name)
 
     # * * *
     def min_max(self, var, mask):
@@ -859,21 +858,22 @@ class Torus_Insitu(Platform):
 
 ####
 class Stationary_Insitu(Platform):
-    def __init__(self, Name, marker_label):
+    def __init__(self, config, Name, marker_label):
         #read in and intilize the dataset;
-        self.df, self.type = read_Stationary(Name)
+        self.df, self.type = read_Stationary(config, Name)
         self.df.name = '{}_df'.format(Name) #assign a name to the pandas dataframe itself
         self.marker_label = marker_label
-        Platform.__init__(self, Name)
+        Platform.__init__(self, config, Name)
 
 ####
 class Radar(Platform):
-    def __init__(self, Name, Data=None, Rfile= None, Swp=None, Plotting_Radar= False):
+    def __init__(self, config, Name, Data=None, Rfile= None, Swp=None, Plotting_Radar= False):
+        self.config = config
         ## If you are initializing the Plotting Radar object
         if Plotting_Radar == True:
             ## Det the key attr of the main plotting radar and define the class var Scan_time for all objects of Platform
             self.rfile, self.name, self.swp = Rfile, Name, Swp
-            self.Scan_time, self.lat, self.lon, self.type = read_Radar(self.name, self.swp, rfile=self.rfile)
+            self.Scan_time, self.lat, self.lon, self.type = read_Radar(config, self.name, self.swp, rfile=self.rfile)
             # Convert time into fancy date string to use in overall plot title
             self.fancy_date_str = self.Scan_time.strftime('%Y-%m-%d %H:%M UTC')
 
@@ -883,7 +883,7 @@ class Radar(Platform):
 
         ## Otherwise you are initlizing info for radars that doent have to do with plotting actual radar data (aka loc of radars etc but not the data itself)
         elif Plotting_Radar == False:
-            Rloc, self.type = read_Radar(Name, known_scan_time=Data['P_Radar'])
+            Rloc, self.type = read_Radar(config, Name, known_scan_time=Data['P_Radar'])
 
             if self.type == 'KA':
                 #store the loc info for a ka radar object
@@ -897,26 +897,26 @@ class Radar(Platform):
                 self.df = Rloc
                 self.df.name = '{}_df'.format(Name) #assign a name to the pandas dataframe itself
                 self.marker_label = config.WSR88D_lab
-        Platform.__init__(self, Name)
+        Platform.__init__(self, config, Name)
     
     def plot_topo(self, PLOT, ax):
-        if config.country_roads == True:
+        if self.config.country_roads == True:
             ox.config(log_file=True, log_console=True, use_cache=True) #the config in this line has nothing to do with config.py
             G = ox.graph_from_bbox(PLOT.Domain.ymax, PLOT.Domain.ymin, PLOT.Domain.xmax, PLOT.Domain.xmin)
-            ox.save_load.save_graph_shapefile(G, filename='tmp'+str(0), folder=config.g_roads_directory , encoding='utf-8')
-            fname = config.g_roads_directory + 'tmp'+str(0)+'/edges/edges.shp'
+            ox.save_load.save_graph_shapefile(G, filename='tmp'+str(0), folder=self.config.g_roads_directory , encoding='utf-8')
+            fname = self.config.g_roads_directory + 'tmp'+str(0)+'/edges/edges.shp'
             shape_feature = ShapelyFeature(Reader(fname).geometries(), PLOT.trans_Proj, edgecolor='gray', linewidth=0.5)
             ax.add_feature(shape_feature, facecolor='none')
-            shutil.rmtree(config.g_roads_directory+'tmp'+str(0)+'/')
-        if config.hwys == True:
-            fname = config.g_roads_directory+'GPhighways.shp'
+            shutil.rmtree(self.config.g_roads_directory+'tmp'+str(0)+'/')
+        if self.config.hwys == True:
+            fname = self.config.g_roads_directory+'GPhighways.shp'
             shape_feature = ShapelyFeature(Reader(fname).geometries(), PLOT.trans_Proj, edgecolor='grey')#edgecolor='black')
             ax.add_feature(shape_feature, facecolor='none')
-        if config.county_lines == True:
-            fname = config.g_roads_directory+'cb_2017_us_county_5m.shp'
+        if self.config.county_lines == True:
+            fname = self.config.g_roads_directory+'cb_2017_us_county_5m.shp'
             shape_feature = ShapelyFeature(Reader(fname).geometries(), PLOT.trans_Proj, edgecolor='gray')
             ax.add_feature(shape_feature, facecolor='none', linewidth=1.5, linestyle="--")
-        if config.state_lines == True:
+        if self.config.state_lines == True:
             states_provinces = cartopy.feature.NaturalEarthFeature(category='cultural', name='admin_1_states_provinces_lines', scale='10m', facecolor='none')
             ax.add_feature(states_provinces, edgecolor='black', linewidth=2)
 
