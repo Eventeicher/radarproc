@@ -50,7 +50,6 @@ from operator import attrgetter
 from collections import namedtuple
 import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
 import cftime # for num2pydate
-import config
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -61,7 +60,6 @@ log = logging.getLogger(__name__)
 
 ## Imports form other files
 ############################
-import config #this is the file with the plotting controls to access any of the vars in that file use config.var
 
 
 ################################################################################################
@@ -676,6 +674,8 @@ class Platform:
         #get style info for the platforms marker
         self.m_style, self.m_color, self.m_size, self.l_color, self.leg_str, self.leg_entry = pform_attr(self.name)
 
+        self.config = config
+
     # * * *
     @classmethod
     def test_data(self, config, pname, scan_time=None):
@@ -772,7 +772,7 @@ class Platform:
                 lower_tbound = (Data['P_Radar'].Scan_time-dt.timedelta(minutes=time_offset)) 
                 upper_tbound = (Data['P_Radar'].Scan_time+dt.timedelta(minutes=time_offset))
                 df_sub = pform.df.loc[(pform.df['datetime'] >= lower_tbound) & (pform.df['datetime'] <= upper_tbound)]
-                if config.print_long == True: print('Dataset has been temporally subset')
+                if self.config.print_long == True: print('Dataset has been temporally subset')
 
         # + + + + + + + + + + + + ++ + +
         #Spatial Subset
@@ -791,7 +791,7 @@ class Platform:
                 #conduct the spatial subset
                 df_sub = df_sub.loc[(df_sub['lat'] >= bounding.ymin) & (df_sub['lat'] <= bounding.ymax) &
                                     (df_sub['lon'] >= bounding.xmin) & (df_sub['lon'] <= bounding.xmax)]
-            if config.print_long == True: print('Dataset has been spatially subset')
+            if self.config.print_long == True: print('Dataset has been spatially subset')
 
         # + + + + + + + + + + + + ++ + +
         #Determine what to return
@@ -804,7 +804,7 @@ class Platform:
                 p_deploy = True
             except:
                 p_deploy = False
-                error_printing(config.e_test)
+                error_printing(self.config.e_test)
         return df_sub, p_deploy
     # * * *
 
@@ -863,6 +863,7 @@ class Stationary_Insitu(Platform):
 ####
 class Radar(Platform):
     def __init__(self, config, Name, Data=None, Rfile= None, Swp=None, Plotting_Radar= False):
+        self.config = config
         ## If you are initializing the Plotting Radar object
         if Plotting_Radar == True:
             ## Det the key attr of the main plotting radar and define the class var Scan_time for all objects of Platform
@@ -894,7 +895,7 @@ class Radar(Platform):
         Platform.__init__(self, config, Name)
     
     def plot_topo(self, PLOT, ax):
-        if config.country_roads == True:
+        if self.config.country_roads == True:
             ox.config(log_file=True, log_console=True, use_cache=True) #the config in this line has nothing to do with config.py
             G = ox.graph_from_bbox(PLOT.Domain.ymax, PLOT.Domain.ymin, PLOT.Domain.xmax, PLOT.Domain.xmin)
             ox.save_load.save_graph_shapefile(G, filename='tmp'+str(0), folder=self.config.g_roads_directory , encoding='utf-8')
@@ -902,15 +903,15 @@ class Radar(Platform):
             shape_feature = ShapelyFeature(Reader(fname).geometries(), PLOT.trans_Proj, edgecolor='gray', linewidth=0.5)
             ax.add_feature(shape_feature, facecolor='none')
             shutil.rmtree(self.config.g_roads_directory+'tmp'+str(0)+'/')
-        if config.hwys == True:
+        if self.config.hwys == True:
             fname = self.config.g_roads_directory+'GPhighways.shp'
             shape_feature = ShapelyFeature(Reader(fname).geometries(), PLOT.trans_Proj, edgecolor='grey')#edgecolor='black')
             ax.add_feature(shape_feature, facecolor='none')
-        if config.county_lines == True:
+        if self.config.county_lines == True:
             fname = self.config.g_roads_directory+'cb_2017_us_county_5m.shp'
             shape_feature = ShapelyFeature(Reader(fname).geometries(), PLOT.trans_Proj, edgecolor='gray')
             ax.add_feature(shape_feature, facecolor='none', linewidth=1.5, linestyle="--")
-        if config.state_lines == True:
+        if self.config.state_lines == True:
             states_provinces = cartopy.feature.NaturalEarthFeature(category='cultural', name='admin_1_states_provinces_lines', scale='10m', facecolor='none')
             ax.add_feature(states_provinces, edgecolor='black', linewidth=2)
 
