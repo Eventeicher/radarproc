@@ -74,7 +74,6 @@ log = logging.getLogger(__name__)
 
 ## Imports form other files
 ############################
-import config #this is the file with the plotting controls to access any of the vars in that file use config.var
 if config.country_roads == True: import osmnx as ox
 
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
@@ -440,7 +439,7 @@ class Master_Plt:
 
         ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
         #  radar scan and the timerange ploted (via filled colorline) on the radar plots
-        if len(config.r_mom) != 0:
+        if len(self.config.r_mom) != 0:
             ax_n.axvline(Data['P_Radar'].Scan_time, color='r', linewidth=4, alpha=.5)
             ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.cline_extent), 
                          Data['P_Radar'].Scan_time + timedelta(minutes=self.config.cline_extent), facecolor='0.5', alpha=0.4)
@@ -528,7 +527,7 @@ class Master_Plt:
 
         def plot_TORUSpform(Data, p, border_c='xkcd:light grey', labelbias=(0,0)):
             #grab the subset of data of +- interval around radar scan
-            p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=config.cline_extent)
+            p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=self.config.cline_extent)
 
             #if there is data for the platform that falls within the time and location of interest
             if p_deploy == True:
