@@ -82,49 +82,6 @@ from read_pforms import error_printing, timer, time_in_range, time_range
 
 totalcompT_start = time.time()
 ################################################################################################
-def scale_bar(ax, length=None, location=(.96, -0.05), linewidth=3):
-    """ ax is the axes to draw the scalebar on.
-    length is the length of the scalebar in km.
-    location is center of the scalebar in axis coordinates.
-    (ie. 0.5 is the middle of the plot)
-    linewidth is the thickness of the scalebar. """
-    #Get the limits of the axis in lat long
-    llx0, llx1, lly0, lly1 = ax.get_extent(ccrs.PlateCarree())
-
-    #Make tmc horizontally centred on the middle of the map,
-    #vertically at scale bar location
-    sbllx = (llx1 + llx0) / 2
-    sblly = lly0 + (lly1 - lly0) * location[1]
-    tmc = ccrs.TransverseMercator(sbllx, sblly)
-
-    #Get the extent of the plotted area in coordinates in metres
-    x0, x1, y0, y1 = ax.get_extent(tmc)
-
-    #Turn the specified scalebar location into coordinates in metres
-    sbx = x0 + (x1 - x0) * location[0]
-    sby = y0 + (y1 - y0) * location[1]
-
-    #Calculate a scale bar length if none has been given
-    #(Theres probably a more pythonic way of rounding the number but this works)
-    if not length:
-        length = (x1 - x0) / 5000 #in km
-        ndim = int(np.floor(np.log10(length))) #number of digits in number
-        length = round(length, -ndim) #round to 1sf
-        #Returns numbers starting with the list
-        def scale_number(x):
-            if str(x)[0] in ['1', '2', '5']: return int(x)
-            else: return scale_number(x - 10 ** ndim)
-        length = scale_number(length)
-
-    #Generate the x coordinate for the ends of the scalebar
-    bar_xs = [sbx - length * 500, sbx + length * 500]
-    #Plot the scalebar
-    ax.plot(bar_xs, [sby, sby], transform=tmc, color='black', linewidth=linewidth, zorder=7)
-    #Plot the scalebar label
-    ax.text(sbx, sby, str(length) + ' km', transform=tmc,
-            horizontalalignment='center', verticalalignment='bottom')
-
-################################################################################################
 ##########
 # Classes
 ##########
@@ -175,7 +132,6 @@ class Thermo_Plt_Vars:
         return global_min, global_max
 
 #### * * * * * * * * * * * * * * * * * * * * * * * * * *
-
 ### set up Master_Plt class (along with subclasses R_Plt (radar plots), and TS_Plt (timeseries plot))
 class Master_Plt:
     ##Class Variables
@@ -559,37 +515,22 @@ class Master_Plt:
         def rhi_spokes_rings(pform, ax= ax_n):
             ''' Plot the RHI spoke and ring for a radar
             '''
-            if self.config.print_long == True: print('made it into rhi_spokes_rings')
-
             # if there is not actually rhi info then it will not plot a ring and not stop the code
             if np.isnan(pform.rhib) == True or np.isnan(pform.rhie)== True: print('Could not plot RHI spokes')
-
             #produce spoke and ring
             else:
-                #this plots a circle that connects the spokes
-                patches=[]
-                deg=[]
+                latArray, lonArray = [], []
                 if pform.type == 'KA': radius= 20.905
-                for a in [pform.rhib, pform.rhie]:
-                    ang= a + pform.head
-                    if ang > 360.: ang= int(ang - 360)
-                    deg.append(ang)
-                print('RHIB: ',pform.rhib, 'Head: ', pform.head)
-                #  wedge = mpatches.Wedge((pform.lon, pform.lat), radius, deg[0], deg[1], width=5, linewidth=10, fc='red')
-                test= mpatches.Wedge((pform.lon, pform.lat), radius, deg[0], deg[1], width=5, linewidth=10, fc='red', transform=ccrs.PlateCarree())
-                print(type(test))
-                #  print(deg)
-                print('88888888')
-                for bearing in range(int(pform.head + pform.rhib), int(pform.head + pform.rhie+1)): #degrees of sector
-                    lat2, lon2 = Platform.getLocation(pform, radius,scan_time=Data['P_Radar'].Scan_time, given_bearing=bearing)
-                    #  print(bearing)
+                for bearing in range(int(pform.head + pform.rhib), int(pform.head + pform.rhie+1), 10): #degrees of sector
+                    lat2, lon2 = Platform.getLocation(pform, radius, scan_time=Data['P_Radar'].Scan_time, given_bearing=bearing)
+                    #plot spokes
+                    ax.plot([pform.lon, lon2], [pform.lat, lat2], color='k', linewidth=0.5, linestyle=":", transform=self.Proj)
+                    #append to array for connecting circle
+                    latArray.append(lat2)
+                    lonArray.append(lon2)
+                #plot the circle that connects the spokes
+                ax.plot(lonArray, latArray, c='k', lw=.5, transform=self.Proj)
 
-                print('9999999')
-                #  ax.add_artist(test)
-                #  ax.add_geometries(test, ccrs.PlateCarree())
-                #  patches.append(test)
-                #  p = PatchCollection(patches)
-                #  ax.add_collection(p)
         # * * *
         for p in Data.values():
             if self.config.print_long == True: print(p.name)
@@ -675,59 +616,6 @@ class Master_Plt:
         #  scale_bar(ax_n, 10) # 10 KM
         if self.config.print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 
-    # * * *
-    '''
-    def rhi_spokes_rings(self, pform, ax_n):
-        #  Plot the RHI spoke and ring for a radar
-        #  
-        if self.config.print_long == True: print('made it into rhi_spokes_rings')
-
-        # if there is not actually rhi info then it will not plot a ring and not stop the code
-        if np.isnan(pform.rhib) == True or np.isnan(pform.rhie)== True: print('Could not plot RHI spokes')
-
-        #produce spoke and ring
-        else:
-            #this plots a circle that connects the spokes
-            patches=[]
-            deg=[]
-            if pform.type == 'KA': radius= 20.905
-            for a in [pform.rhib, pform.rhie]:
-                ang= a + pform.head
-                if ang > 360.: ang= int(ang - 360)
-                deg.append(ang)
-            print('RHIB: ',pform.rhib)
-            wedge = mpatches.Wedge((pform.lon, pform.lat), radius, deg[0], deg[1], width=5, linewidth=10, fc='red', transform=self.Proj)
-            patches.append(wedge)
-            p = PatchCollection(patches)
-            ax_n.add_collection(p)
-            for j in range(int(pform.rhib), int(pform.rhie)+1, 10):
-                ang = pform.head + j
-                if ang > 360.: ang= int(ang - 360.)
-                #  radius = Data['P_Radar'].rfile.range['data'][-1]-500.)/1000.
-                if pform.type == 'KA': radius= 20.905
-                else: print('code not written for other radars yet')
-
-                #this plots a circle that connects the spokes
-                latArray, lonArray = [], []
-                for bearing in range(int(pform.head + pform.rhib), int(pform.head + pform.rhie+1)): #degrees of sector
-                    lat2, lon2 = Platform.getLocation(pform, radius,scan_time=Data['P_Radar'].Scan_time, given_bearing=bearing)
-                    latArray.append(lat2)
-                    lonArray.append(lon2)
-                self.display.plot_line_geo(lonArray, latArray, marker=None, color='grey', linewidth=.25) #this plots a circle that connects the spokes
-
-                #plt the spokes
-                C, D = Platform.getLocation(pform, radius,scan_time=Data['P_Radar'].Scan_time, given_bearing = ang)
-                self.display.plot_line_geo([pform.lon, D], [pform.lat, C], marker=None, color='k', linewidth=0.5, linestyle=":")
-
-                ## optional labels
-                if self.config.RHI_lab == True:
-                    if np.logical_and(C>ymin, np.logical_and(C<ymax, np.logical_and(D>xmin, D<xmax))):
-                        plt.text(D, C, str(ang), horizontalalignment='center', transform=self.Proj, zorder=9,
-                                 path_effects=([PE.withStroke(linewidth=4, foreground='xkcd:pale blue')]))
-            
-            if self.config.print_long == True: print('made it through rhi_spokes_rings')
-
-    '''
 
 ##########################################################################
 ###########################
@@ -1039,8 +927,6 @@ def find_radar_files(config, Data):
             #find the locations of all WSR88D sites 
             #(outputs dict in format {Site_ID:{lat:...,lon:...,elav:...], ...})
             all_WSR = pyart.io.nexrad_common.NEXRAD_LOCATIONS
-            #  print(json.dumps(all_WSR_locs, sort_keys=True, indent=4))
-
             #set up empty dataframe with site Ids as column names
             d_from_all_r = pd.DataFrame(columns = all_WSR.keys())
             #fill in said dataframe with the distance from all 88D sites from each probe measurement
@@ -1052,24 +938,27 @@ def find_radar_files(config, Data):
             p_df['Radar_ID'] = d_from_all_r.idxmin(axis = 1)
             #Determine the unique radar sites to be plotted
             r_ofintrest = p_df.Radar_ID.unique()
-            return r_ofintrest
+
+            #Set up dict with format{Rsite_ID : [start_oftimerange_for_given_rad : end_oftimerange_for_given_rad]}
+            WSR_dict=dict()
+            for rad_site in  r_ofintrest:
+                trange_r = p_df.loc[p_df.Radar_ID == rad_site, ['datetime']].rename(columns={'datetime': rad_site})
+                WSR_dict.update({rad_site:[trange_r.min().get(rad_site), trange_r.max().get(rad_site)]})
+            return WSR_dict 
+
+        WSR_dict =det_nearest_WSR(Data[config.Centered_Pform].df)
         
-        #Det the unique radar sites to be plotted
-        unique_r_sites=det_nearest_WSR( Data[config.Centered_Pform].df)
-        if self.config.print_long == True: print(unique_r_sites)
-        
-        #set up empty dataframe
-        tranges_each_r = pd.DataFrame()
-        for Rad_site in unique_r_sites:
-            print(Rad_site)
-            #  print(Data[config.Centered_Pform].df.iloc[-1])
-            #  print(Data[config.Centered_Pform].df[-1])
-            df= Data[config.Centered_Pform].df
-            trange_r = df.loc[df.Radar_ID == Rad_site, ['datetime']].rename(columns={'datetime': Rad_site})
-            trange_r_start, trange_r_end = trange_r.min(), trange_r.max()
-            tranges_each_r = pd.concat([tranges_each_r, trange_r], axis=1)
-            #  print(tranges_each_r)
-    return radar_files 
+        for rad, times in WSR_dict.items():
+            print("Radar_Site: {}\n Start: {}\n End: {} \n***".format(rad, times[0], times[1]))
+            radar_files = get_WSR_from_AWS(config, times[0], times[1], rad)
+            print('********\n Radar files to process:')
+            pp.pprint(radar_files)
+            print(type(radar_files[0]))
+        #  print("start "+str(trange_r_start[Rad_site])+ "\nend "+str(trange_r_end[Rad_site])+ "\n ***")
+        #  radar_files = get_WSR_from_AWS(config, trange_r_start[Rad_site], trange_r_end[Rad_site], Rad_site)
+        #  print('********\n Radar files to process:')
+        #  pp.pprint(radar_files)
+    #  return radar_files
 
 def plot_radar_files(config, Data, TVARS):
     print('\nYes Plot Radar \n')
