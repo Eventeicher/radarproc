@@ -51,6 +51,7 @@ from collections import namedtuple
 import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
 import cftime # for num2pydate
 import pprint
+import math
 pp = pprint.PrettyPrinter(indent=4)
 
 
@@ -718,15 +719,19 @@ class Platform:
         lat1, lon1 = start_lat * np.pi/180.0 , start_lon * np.pi/180.0
         R = 6378.1 #earth radius (R = ~ 3959 MilesR = 3959)
         # + + + + + + + + + + + + ++ + +
+        def calc(brng):
+            bearing = (brng/90.) * np.pi/2.
+            test= math.radians(brng)
+
+            new_lat = np.arcsin(np.sin(lat1) * np.cos(offsetkm/R) + np.cos(lat1) * np.sin(offsetkm/R) * np.cos(bearing))
+            new_lon = lon1 + np.arctan2(np.sin(bearing) * np.sin(offsetkm/R) * np.cos(lat1), np.cos(offsetkm/R) - np.sin(lat1) * np.sin(new_lat))
+            new_lat, new_lon = 180.0 * new_lat/np.pi , 180.0 * new_lon/np.pi
+            return new_lat, new_lon
 
         if given_bearing == False:
             for brng in [0, 90, 180, 270]:
-                bearing = (brng/90.) * np.pi/2.
-
-                new_lat = np.arcsin(np.sin(lat1) * np.cos(offsetkm/R) + np.cos(lat1) * np.sin(offsetkm/R) * np.cos(bearing))
-                new_lon = lon1 + np.arctan2(np.sin(bearing) * np.sin(offsetkm/R) * np.cos(lat1), np.cos(offsetkm/R) - np.sin(lat1) * np.sin(new_lat))
-                new_lat, new_lon = 180.0 * new_lat/np.pi , 180.0 * new_lon/np.pi
-
+                new_lat, new_lon = calc(brng)
+                
                 if brng == 0: max_lat= new_lat
                 elif brng == 90: max_lon= new_lon
                 elif brng == 180: min_lat= new_lat
@@ -737,13 +742,8 @@ class Platform:
             box = box_extent(xmin= min_lon, xmax= max_lon, ymin= min_lat, ymax= max_lat)
             return box
         # + + + + + + + + + + + + ++ + +
-
         else: #if a bearing is provided
-            bearing = (given_bearing/90.) * np.pi/2.
-
-            new_lat = np.arcsin(np.sin(lat1) * np.cos(offsetkm/R) + np.cos(lat1) * np.sin(offsetkm/R) * np.cos(bearing))
-            new_lon = lon1 + np.arctan2(np.sin(bearing) * np.sin(offsetkm/R) * np.cos(lat1), np.cos(offsetkm/R) - np.sin(lat1) * np.sin(new_lat))
-            end_lat, end_lon= 180.0 * new_lat/np.pi , 180.0 * new_lon/np.pi
+            end_lat, end_lon = calc(given_bearing)
             return end_lat, end_lon
 
     # * * *

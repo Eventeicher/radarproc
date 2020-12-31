@@ -556,7 +556,7 @@ class Master_Plt:
                 if self.config.print_long == True: print('The platform was not deployed at this time')
                 return False, False
 
-        def rhi_spokes_rings(pform):
+        def rhi_spokes_rings(pform, ax= ax_n):
             ''' Plot the RHI spoke and ring for a radar
             '''
             if self.config.print_long == True: print('made it into rhi_spokes_rings')
@@ -574,11 +574,22 @@ class Master_Plt:
                     ang= a + pform.head
                     if ang > 360.: ang= int(ang - 360)
                     deg.append(ang)
-                print('RHIB: ',pform.rhib)
-                wedge = mpatches.Wedge((pform.lon, pform.lat), radius, deg[0], deg[1], width=5, linewidth=10, fc='red', transform=self.Proj)
-                patches.append(wedge)
-                p = PatchCollection(patches)
-                ax_n.add_collection(p)
+                print('RHIB: ',pform.rhib, 'Head: ', pform.head)
+                #  wedge = mpatches.Wedge((pform.lon, pform.lat), radius, deg[0], deg[1], width=5, linewidth=10, fc='red')
+                test= mpatches.Wedge((pform.lon, pform.lat), radius, deg[0], deg[1], width=5, linewidth=10, fc='red', transform=ccrs.PlateCarree())
+                print(type(test))
+                #  print(deg)
+                print('88888888')
+                for bearing in range(int(pform.head + pform.rhib), int(pform.head + pform.rhie+1)): #degrees of sector
+                    lat2, lon2 = Platform.getLocation(pform, radius,scan_time=Data['P_Radar'].Scan_time, given_bearing=bearing)
+                    #  print(bearing)
+
+                print('9999999')
+                #  ax.add_artist(test)
+                #  ax.add_geometries(test, ccrs.PlateCarree())
+                #  patches.append(test)
+                #  p = PatchCollection(patches)
+                #  ax.add_collection(p)
         # * * *
         for p in Data.values():
             if self.config.print_long == True: print(p.name)
@@ -724,7 +735,6 @@ class Master_Plt:
 ###########################
 def plotting(config, Data, TVARS, start_comptime):
     print("*** Entering plotting() ")
-
     plotting_start_time = time.time()
 
     ''' Initial plotting defenition: sets up fig size, layout, font size etc and will call timeseries and radar subplots
@@ -824,29 +834,9 @@ def plotting(config, Data, TVARS, start_comptime):
 #######################
 ## RADAR DEFINITIONS ##
 #######################
-# * * *
-def det_nearest_WSR(p_df):
-    ''' locate the nearest WSR88D site to the specified insitu instruments
-    '''
-    #find the locations of all WSR88D sites (outputs dict in format {Site_ID:{lat:...,lon:...,elav:...], ...})
-    all_WSR = pyart.io.nexrad_common.NEXRAD_LOCATIONS
-    #  print(json.dumps(all_WSR_locs, sort_keys=True, indent=4))
-
-    #set up empty dataframe with site Ids as column names
-    d_from_all_r = pd.DataFrame(columns = all_WSR.keys())
-    #fill in said dataframe with the distance from all 88D sites from each probe measurement
-    for key in all_WSR:
-        d_from_r = np.square(p_df['lat']-all_WSR[key]['lat']) + np.square(p_df['lon']-all_WSR[key]['lon'])
-        d_from_all_r[key] = d_from_r
-    #Determine which WS88D site is closest to the probe and add to the original probe dataframe
-    p_df['Radar_ID'] = d_from_all_r.idxmin(axis = 1)
-
-    #Determine the unique radar sites to be plotted
-    r_ofintrest = p_df.Radar_ID.unique()
-    return r_ofintrest
 
 # * * *
-def get_WSR_from_AWS(config, start, end, radar_id, download_directory):
+def get_WSR_from_AWS(config, start, end, radar_id):
     ''' Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
     ----------
     INPUTS
@@ -865,7 +855,7 @@ def get_WSR_from_AWS(config, start, end, radar_id, download_directory):
     print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
 
     # Don't download files that you already have...
-    path =  download_directory + config.day +'/radar/Nexrad/Nexrad_files/'
+    path =  config.g_download_directory+ config.day +'/radar/Nexrad/Nexrad_files/'
     # If you dont have the path already make it and download the files
     if not os.path.exists(path): Path(path).mkdir(parents=True)
 
@@ -1009,31 +999,22 @@ def plot_radar_file(config, r_file, Data, TVARS, subset_pnames):
         print("done in plot_radar_file")
 
 ##############################################################################################
-#####################################################
-# Read in Data that does not change for each image ##
-#####################################################
-print('\nRead in Torus Platforms')
-#print(pform_names('ALL')) #list of ALL possible platforms
-subset_pnames = [] #array of platforms that actually have data for the time range we are plotting
-Data = {} #dictionary in which all the class objects will be stored (will contain platform data, locations, plotting variables etc)
+def process_instruments(config):
+    print('\nRead in Torus Platforms')
+    #print(pform_names('ALL')) #list of ALL possible platforms
+    subset_pnames = [] #array of platforms that actually have data for the time range we are plotting
+    Data = {} #dictionary in which all the class objects will be stored (will contain platform data, locations, plotting variables etc)
 
-## Read in the data for the TORUS Insitu platforms (if available)
-Data, subset_pnames = Add_to_DATA(config, 'TInsitu', Data, subset_pnames)
-## Establish info for the plotting variable (aka max min etc)
-TVARS=Thermo_Plt_Vars(config, Data)
+    ## Read in the data for the TORUS Insitu platforms (if available)
+    Data, subset_pnames = Add_to_DATA(config, 'TInsitu', Data, subset_pnames)
 
-print('\nRead in Stationary Platforms Arrays')
-## Read in the data for the Stationary Array platforms (if available)
-Data, subset_pnames = Add_to_DATA(config, 'STN_I', Data, subset_pnames)
+    print('\nRead in Stationary Platforms Arrays')
+    ## Read in the data for the Stationary Array platforms (if available)
+    Data, subset_pnames = Add_to_DATA(config, 'STN_I', Data, subset_pnames)
+    return Data, subset_pnames
 
-
-###################################
-# Create Plot for each radarfile ##
-###################################
-## If Radar will be plotted
-if len(config.r_mom) != 0:
-    print('\nYes Plot Radar \n')
-
+def find_radar_files(config, Data):
+    radar_files =[]
     # * * *
     if config.Radar_Plot_Type == 'KA_Plotting':
         ## Get radar files
@@ -1050,8 +1031,53 @@ if len(config.r_mom) != 0:
         path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
         radar_files = sorted(glob.glob(path))
 
+    # * * *
     elif config.Radar_Plot_Type == 'WSR_Plotting':
-        pass
+        def det_nearest_WSR(p_df):
+            ''' locate the nearest WSR88D site to the specified insitu instruments
+            '''
+            #find the locations of all WSR88D sites 
+            #(outputs dict in format {Site_ID:{lat:...,lon:...,elav:...], ...})
+            all_WSR = pyart.io.nexrad_common.NEXRAD_LOCATIONS
+            #  print(json.dumps(all_WSR_locs, sort_keys=True, indent=4))
+
+            #set up empty dataframe with site Ids as column names
+            d_from_all_r = pd.DataFrame(columns = all_WSR.keys())
+            #fill in said dataframe with the distance from all 88D sites from each probe measurement
+            for key in all_WSR:
+                d_from_r = np.square(p_df['lat']-all_WSR[key]['lat']) + np.square(p_df['lon']-all_WSR[key]['lon'])
+                d_from_all_r[key] = d_from_r
+            
+            #Determine which WS88D site is closest to the probe and add to the original probe dataframe
+            p_df['Radar_ID'] = d_from_all_r.idxmin(axis = 1)
+            #Determine the unique radar sites to be plotted
+            r_ofintrest = p_df.Radar_ID.unique()
+            return r_ofintrest
+        
+        #Det the unique radar sites to be plotted
+        unique_r_sites=det_nearest_WSR( Data[config.Centered_Pform].df)
+        if self.config.print_long == True: print(unique_r_sites)
+        
+        #set up empty dataframe
+        tranges_each_r = pd.DataFrame()
+        for Rad_site in unique_r_sites:
+            print(Rad_site)
+            #  print(Data[config.Centered_Pform].df.iloc[-1])
+            #  print(Data[config.Centered_Pform].df[-1])
+            df= Data[config.Centered_Pform].df
+            trange_r = df.loc[df.Radar_ID == Rad_site, ['datetime']].rename(columns={'datetime': Rad_site})
+            trange_r_start, trange_r_end = trange_r.min(), trange_r.max()
+            tranges_each_r = pd.concat([tranges_each_r, trange_r], axis=1)
+            #  print(tranges_each_r)
+    return radar_files 
+
+def plot_radar_files(config, Data, TVARS):
+    print('\nYes Plot Radar \n')
+    radar_files= find_radar_files(config, Data)
+
+    print('******\n Radar files to process:')
+    pp.pprint(radar_files)
+
     ## Proceed to plot the radar
     ##### + + + + + + + + + + + +
     Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(config, r_file, Data, TVARS, subset_pnames) for r_file in radar_files)
@@ -1075,7 +1101,7 @@ if len(config.r_mom) != 0:
             #  print(tranges_each_r)
 
             print("start "+str(trange_r_start[Rad_site])+ "\nend "+str(trange_r_end[Rad_site])+ "\n ***")
-            radar_files = get_WSR_from_AWS(config, trange_r_start[Rad_site], trange_r_end[Rad_site], Rad_site, config.g_download_directory)
+            radar_files = get_WSR_from_AWS(config, trange_r_start[Rad_site], trange_r_end[Rad_site], Rad_site)
             print('********\n Radar files to process:')
             pp.pprint(radar_files)
 
@@ -1104,18 +1130,33 @@ if len(config.r_mom) != 0:
         print(tranges_each_r)
 
     '''
+def plot_time_series(config, Data, TVARS):
+    print("\nPlot Timeseries\n")
+    #  + str(config.g_mesonet_directory+config.day+'/mesonets/NSSL/*.nc'))
+    start_comptime = time.time()
+    plotting(config, Data, TVARS, start_comptime)
 
+
+#####################################################
+# Read in Data that does not change for each image ##
+#####################################################
+Data, subset_pnames = process_instruments(config)
+## Establish info for the plotting variable (aka max min etc)
+TVARS=Thermo_Plt_Vars(config, Data)
+
+###################################
+# Create Plot for each radarfile ##
+###################################
+if len(config.r_mom) != 0:
+    plot_radar_files(config, Data, TVARS)
 
 ################################
 # Create Timeseries only plot ##
 ################################
-#Only plot timeseries (this code isn't fully fleshed out but in theroy this code is built in such a way to allow for this)
-if len(config.r_mom) == 0 and len(config.Time_Series) != 0:
-    print("\nPlot Timeseries only \n")
-           #  + str(config.g_mesonet_directory+config.day+'/mesonets/NSSL/*.nc'))
-    start_comptime = time.time()
-    plotting(Data, TVARS, start_comptime)
-
+elif len(config.Time_Series) != 0:
+    # Create Timeseries only plot ##
+    #Only plot timeseries (this code isn't fully fleshed out but in theroy this code is built in such a way to allow for this)
+    plot_time_series(config, Data, TVARS)
 ###########################
 plt.rcdefaults()
 timer(totalcompT_start, time.time(), total_runtime=True)
