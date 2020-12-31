@@ -312,6 +312,7 @@ def Add_to_DATA(config, DType, Data, subset_pnames, MR_file=None, swp=None):
 ################################################################################################
 #**************
 def read_TInsitu(config, pname, d_testing=False):
+    print("**** Enter read_TInsitu pname=",pname, " testing=",d_testing)
     ''' Reads data files provided on TORUS19 EOL site (Important that datafiles and filenames follow TORUS19 readme)
         ---
         INPUT: filename string (following readme conventions for each platform)
@@ -319,6 +320,7 @@ def read_TInsitu(config, pname, d_testing=False):
         OUTPUT: dataframe containing all data collected during desired times
     '''
     if pname in pform_names('UNL'):
+        print("-- pname in pform_names('UNL')")
         #  print(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
 
@@ -334,6 +336,8 @@ def read_TInsitu(config, pname, d_testing=False):
 
         data_hold = [] #empty list to append to
         for i in range(len(mmfile)):
+            t0 = time.time()
+            print("read_TInsitu ", mmfile[i], " start")
             ds = xr.open_dataset(mmfile[i])
 
             #convert form epoch time to utc datetime object
@@ -378,6 +382,9 @@ def read_TInsitu(config, pname, d_testing=False):
             data_u = pd_unl.loc[(pd_unl['datetime'] >= hstart) & (pd_unl['datetime'] <= hend)]
             data_hold.append(data_u)
 
+            t1 = time.time()
+            print("read_TInsitu ", mmfile[i], " stop took ", t1-t0)
+
         #convert the list holding the dataframes to one large dataframe
         data_unl = pd.concat(data_hold)
 
@@ -389,8 +396,11 @@ def read_TInsitu(config, pname, d_testing=False):
 
     # * * *
     elif pname in pform_names('NSSL'):
+        print("-- pname in pform_names('NSSL')")
         #  print(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
+
+        print("-- mmfile= ", mmfile)
 
         # Test Data availability
         if d_testing == True:
@@ -404,11 +414,17 @@ def read_TInsitu(config, pname, d_testing=False):
         mmfile=mmfile[0]
         # Read NSSL file using column names from readme
         column_names = ['id','time','lat','lon','alt','tfast','tslow','rh','p','dir','spd','qc1','qc2','qc3','qc4']
+
+        t0 = time.time()
+        print("A time:", t0)
         data = pd.read_csv(mmfile, header=0, delim_whitespace=True, names=column_names)
+        print("B time:", time.time() - t0)
         data = data.drop_duplicates()
+        print("C time:", time.time() - t0)
 
         # Find timedelta of hours since start of iop (IOP date taken from filename!)
         tiop = dt.datetime(2019, np.int(mmfile[-15:-13]), np.int(mmfile[-13:-11]), 0, 0, 0)
+        print("D time:", time.time() - t0)
 
         time_start, time_end= time_range(config)
         if time_start is None:
@@ -425,18 +441,42 @@ def read_TInsitu(config, pname, d_testing=False):
             if hend >= dt.timedelta(days=1): hend = float((time_end-tiop).seconds)/3600 + 24.
             else: hend = float((time_end-tiop)).seconds/3600
 
+        print("E time:", time.time() - t0)
         # Save only desired iop data
         data_nssl_sub = data.loc[(data['time'] >= hstart_dec)]
+        print("F time:", time.time() - t0)
         data_nssl = data_nssl_sub.loc[(data_nssl_sub['time'] <= hend)]
+        print("G time:", time.time() - t0)
         # Convert time into timedeltas
         date = dt.datetime.strptime('2019-'+mmfile[-15:-13]+'-'+mmfile[-13:-11],'%Y-%m-%d')
+        print("H time:", time.time() - t0)
+
+        # Convert deltas into actual times
+
+        data_nssl['datetime'] = pd.to_timedelta(data_nssl['time'], unit="h") + date
+        print("I time:", time.time() - t0)
+
+        print("datetime new calc")
+        pp.pprint(data_nssl['datetime'])
+
+        print("J time:", time.time() - t0)
 
         time_deltas = []
         for i in range(len(data_nssl)):
             j = data_nssl['time'].iloc[i]
-            time_deltas = np.append(time_deltas, date + dt.timedelta(hours=int(j), minutes=int((j*60) % 60), seconds=int((j*3600) % 60)))
+
+            time_deltas = np.append(
+                time_deltas,
+                date + dt.timedelta(hours=int(j), minutes=int((j*60) % 60), seconds=int((j*3600) % 60))
+            )
+
+        print("K time:", time.time() - t0)
 
         data_nssl.loc[:,'datetime'] = time_deltas
+        print("datetime old calc")
+        pp.pprint(data_nssl['datetime'])
+
+        print("L time:", time.time() - t0)
 
         ## Caclulate desired variables
         p, t = data_nssl['p'].values * units.hectopascal, data_nssl['tfast'].values * units.degC
@@ -461,16 +501,21 @@ def read_TInsitu(config, pname, d_testing=False):
         #drop all the columns that we will not use past this point (to save memory/computing time)
         data_nssl = data_nssl.drop(columns=['rh', 'p', 'time', 'alt', 'Theta', 'tslow'])
         #  print(data_nssl.memory_usage())
+
+        print("Z time:", time.time() - t0)
         return data_nssl, 'NSSL'
 
     # * * *
     elif pname == 'UAS':
+        print("-- pname in pform_names('UAS')")
         if config.print_long == True: print("no code for reading UAS yet")
         if d_testing == True: return False
         return 'UAS'
 
 #**************
 def read_Stationary(config, pname, d_testing=False):
+    print("**** Enter read_Stationary pname=",pname, " testing=",d_testing)
+
     ''' Determine if a there are any sites from the stationary arrays that fall within the plot domain
         if so record locations and names of the sites
     '''
@@ -512,6 +557,8 @@ def read_Stationary(config, pname, d_testing=False):
 
 #**************
 def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan_time=None):
+    print("**** Enter read_Radar pname=",pname, " testing=",d_testing)
+
     #  print("read_Radar(pname=",pname," rfile=", rfile, ")")
     ''' Determine if a given radar is deployed and if so assign the correct location values to it.
     '''
