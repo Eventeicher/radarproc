@@ -57,7 +57,7 @@ import gc
 #  import matplotlib.style as mplstyle
 #  mplstyle.use('fast')
 #  mpl.rcParams['path.simplify_threshold'] = 1.0
-import config #this is the file with the plotting controls to access any of the vars in that file use config.var
+import config as plot_config #this is the file with the plotting controls to access any of the vars in that file use config.var
 import copy
 
 import tracemalloc
@@ -74,7 +74,7 @@ log = logging.getLogger(__name__)
 
 ## Imports form other files
 ############################
-if config.country_roads == True: import osmnx as ox
+if plot_config.country_roads == True: import osmnx as ox
 
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
@@ -254,7 +254,7 @@ class Master_Plt:
             # Xaxis
             # if desired this subsets the timerange that is displayed in the timeseries
             if self.config.ts_extent != None:
-                ax.set_xlim(scan_time - timedelta(minutes=config.ts_extent), scan_time + timedelta(minutes=config.ts_extent))
+                ax.set_xlim(scan_time - timedelta(minutes=self.config.ts_extent), scan_time + timedelta(minutes=self.config.ts_extent))
 
             # Yaxis
             if ts in ['Thetav','Thetae']:
@@ -917,7 +917,7 @@ def read_from_radar_file(radar_file, Rtype):
     elif Rtype== 'KA': radar = pyart.io.read(radar_file)
     elif Rtype =='NOXP': radar = pyart.io.read(radar_file)
     return radar
-function_cache_memory = Memory(config.g_cache_directory,verbose=1)
+function_cache_memory = Memory(plot_config.g_cache_directory,verbose=1)
 cached_read_from_radar_file = function_cache_memory.cache(read_from_radar_file)
 
 # * * *
@@ -1140,23 +1140,23 @@ def plot_time_series(config, Data, TVARS):
 #####################################################
 # Read in Data that does not change for each image ##
 #####################################################
-Data, subset_pnames = process_instruments(config)
+Data, subset_pnames = process_instruments(plot_config)
 ## Establish info for the plotting variable (aka max min etc)
-TVARS=Thermo_Plt_Vars(config, Data)
+TVARS=Thermo_Plt_Vars(plot_config, Data)
 
 ###################################
 # Create Plot for each radarfile ##
 ###################################
-if len(config.r_mom) != 0:
-    plot_radar_files(config, Data, TVARS)
+if len(plot_config.r_mom) != 0:
+    plot_radar_files(plot_config, Data, TVARS)
 
 ################################
 # Create Timeseries only plot ##
 ################################
-elif len(config.Time_Series) != 0:
+elif len(plot_config.Time_Series) != 0:
     # Create Timeseries only plot ##
     #Only plot timeseries (this code isn't fully fleshed out but in theroy this code is built in such a way to allow for this)
-    plot_time_series(config, Data, TVARS)
+    plot_time_series(plot_config, Data, TVARS)
 ###########################
 plt.rcdefaults()
 timer(totalcompT_start, time.time(), total_runtime=True)
