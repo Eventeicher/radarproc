@@ -312,6 +312,7 @@ def Add_to_DATA(config, DType, Data, subset_pnames, MR_file=None, swp=None):
 ################################################################################################
 #**************
 def read_TInsitu(config, pname, d_testing=False):
+    print('**** Enter read_TInsitu pname= ',pname,' testing=',d_testing)
     ''' Reads data files provided on TORUS19 EOL site (Important that datafiles and filenames follow TORUS19 readme)
         ---
         INPUT: filename string (following readme conventions for each platform)
@@ -319,6 +320,7 @@ def read_TInsitu(config, pname, d_testing=False):
         OUTPUT: dataframe containing all data collected during desired times
     '''
     if pname in pform_names('UNL'):
+        print("-- pname in pform_names('UNL')")
         #  print(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
 
@@ -334,6 +336,8 @@ def read_TInsitu(config, pname, d_testing=False):
 
         data_hold = [] #empty list to append to
         for i in range(len(mmfile)):
+            t0 = time.time()
+            print("read_TInsitu ", mmfile[i], " start")
             ds = xr.open_dataset(mmfile[i])
 
             #convert form epoch time to utc datetime object
@@ -378,6 +382,8 @@ def read_TInsitu(config, pname, d_testing=False):
             data_u = pd_unl.loc[(pd_unl['datetime'] >= hstart) & (pd_unl['datetime'] <= hend)]
             data_hold.append(data_u)
 
+            t1 = time.time()
+            print("read_TInsitu", mmfile[i], ' stop took ', t1-t0)
         #convert the list holding the dataframes to one large dataframe
         data_unl = pd.concat(data_hold)
 
@@ -389,9 +395,12 @@ def read_TInsitu(config, pname, d_testing=False):
 
     # * * *
     elif pname in pform_names('NSSL'):
+        print("-- pname in pform_names('NSSL')")
         #  print(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
 
+        print("-- mmfile= ", mmfile)
+        
         # Test Data availability
         if d_testing == True:
             try:
@@ -404,11 +413,17 @@ def read_TInsitu(config, pname, d_testing=False):
         mmfile=mmfile[0]
         # Read NSSL file using column names from readme
         column_names = ['id','time','lat','lon','alt','tfast','tslow','rh','p','dir','spd','qc1','qc2','qc3','qc4']
+        
+        t0 = time.time()
+        print("A time:", t0)
         data = pd.read_csv(mmfile, header=0, delim_whitespace=True, names=column_names)
+        print("B time:", time.time() -t0)
         data = data.drop_duplicates()
+        print("C time:", time.time() -t0)
 
         # Find timedelta of hours since start of iop (IOP date taken from filename!)
         tiop = dt.datetime(2019, np.int(mmfile[-15:-13]), np.int(mmfile[-13:-11]), 0, 0, 0)
+        print("D time:", time.time() -t0)
 
         time_start, time_end= time_range(config)
         if time_start is None:
@@ -425,18 +440,38 @@ def read_TInsitu(config, pname, d_testing=False):
             if hend >= dt.timedelta(days=1): hend = float((time_end-tiop).seconds)/3600 + 24.
             else: hend = float((time_end-tiop)).seconds/3600
 
+        print("E time:", time.time() -t0)
         # Save only desired iop data
         data_nssl_sub = data.loc[(data['time'] >= hstart_dec)]
+        print("F time:", time.time() -t0)
         data_nssl = data_nssl_sub.loc[(data_nssl_sub['time'] <= hend)]
+        print("G time:", time.time() -t0)
         # Convert time into timedeltas
         date = dt.datetime.strptime('2019-'+mmfile[-15:-13]+'-'+mmfile[-13:-11],'%Y-%m-%d')
+        print("H time:", time.time() -t0)
+
+        # Convert deltas into actual times
+
+        data_nssl['datetime'] = pd.to_timedelta(data_nssl['time'], unit="h") + date
+        print("I time:", time.time() -t0)
+
+        print("datetime new calc")
+        pp.pprint(data_nssl['datetime'])
+
+        print("J time:", time.time() -t0)
 
         time_deltas = []
         for i in range(len(data_nssl)):
             j = data_nssl['time'].iloc[i]
-            time_deltas = np.append(time_deltas, date + dt.timedelta(hours=int(j), minutes=int((j*60) % 60), seconds=int((j*3600) % 60)))
+            time_deltas = np.append(time_deltas, date + dt.timedelta(hours=int(j), 
+                                        minutes=int((j*60) % 60), seconds=int((j*3600) % 60)))
 
+        print("K time:", time.time() -t0)
         data_nssl.loc[:,'datetime'] = time_deltas
+        print("datetime old calc")
+        pp.pprint(data_nssl['datetime'])
+
+        print("L time:", time.time() - t0)
 
         ## Caclulate desired variables
         p, t = data_nssl['p'].values * units.hectopascal, data_nssl['tfast'].values * units.degC
@@ -461,10 +496,12 @@ def read_TInsitu(config, pname, d_testing=False):
         #drop all the columns that we will not use past this point (to save memory/computing time)
         data_nssl = data_nssl.drop(columns=['rh', 'p', 'time', 'alt', 'Theta', 'tslow'])
         #  print(data_nssl.memory_usage())
+        print("Z time:", time.time()-t0)
         return data_nssl, 'NSSL'
 
     # * * *
     elif pname == 'UAS':
+        print("-- pname in pform_names('UAS')")
         if config.print_long == True: print("no code for reading UAS yet")
         if d_testing == True: return False
         return 'UAS'
@@ -515,6 +552,7 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
     #  print("read_Radar(pname=",pname," rfile=", rfile, ")")
     ''' Determine if a given radar is deployed and if so assign the correct location values to it.
     '''
+    print('***** Enter read_Radar p_name=', pname, " testing=", d_testing)
     if pname in pform_names('KA'):
         #  rfile will only be provided if the object being initilized is the main plotting radar
         if rfile != None:
@@ -592,6 +630,21 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
     elif pname == 'NOXP':
         # if the main plotting radar is the NOXP radar
         if rfile != None:
+            #fix NOXP sweeps 
+            for sweep in range(rfile.nsweeps):
+                g=np.gradient(np.cos(np.deg2rad(rfile.get_azimuth(sweep))))
+         
+                if np.abs(np.amin(g))>0.015 or np.abs(np.amax(g))>0.015:
+                    if np.abs(np.amax(g))>np.abs(np.amin(g)):
+                        rfile.azimuth['data'][rfile.get_start_end(sweep)[0]:rfile.get_start_end(sweep)[1]+1] = np.roll(rfile.get_azimuth(sweep), -np.argmax(g)-1)
+                        for field in list(rfile.fields):
+                            rfile.fields[field]['data'][rfile.get_start_end(sweep)[0]:rfile.get_start_end(sweep)[1]+1,:] = np.roll(np.ma.getdata(rfile.extract_sweeps([sweep]).fields[field]['data']), -np.argmax(g)-1,axis=0)
+         
+                    elif np.abs(np.amax(g))<np.abs(np.amin(g)):
+                        rfile.azimuth['data'][rfile.get_start_end(sweep)[0]:rfile.get_start_end(sweep)[1]+1] = np.roll(rfile.get_azimuth(sweep), -np.argmin(g)-1)
+                        for field in list(rfile.fields):
+                            rfile.fields[field]['data'][rfile.get_start_end(sweep)[0]:rfile.get_start_end(sweep)[1]+1,:] = np.roll(np.ma.getdata(rfile.extract_sweeps([sweep]).fields[field]['data']), -np.argmin(g)-1,axis=0)
+
             #det the scantime
             MR_time = datetime.strptime(rfile.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S")
             #det the location info
@@ -708,6 +761,13 @@ class Platform:
         INPUTS: offsetkm: distance traveled from the starting point to the new locations
                 given_bearing: True/False, are you given a specified direction of "travel"
         '''
+        def calc(bearing, offsetkm, R, lat1, lon1):
+            rad_brng = math.radians(bearing)
+            new_lat = np.arcsin(np.sin(lat1) * np.cos(offsetkm/R) + np.cos(lat1) * np.sin(offsetkm/R) * np.cos(rad_brng))
+            new_lon = lon1 + np.arctan2(np.sin(rad_brng) * np.sin(offsetkm/R) * np.cos(lat1), np.cos(offsetkm/R) - np.sin(lat1) * np.sin(new_lat))
+            return math.degrees(new_lat), math.degrees(new_lon)
+
+        # + + + + + + + + + + + + ++ + +
         #  determine starting point lat and lon
         if isinstance(pform, Radar):
             start_lat, start_lon = pform.lat, pform.lon
@@ -718,32 +778,25 @@ class Platform:
 
         lat1, lon1 = start_lat * np.pi/180.0 , start_lon * np.pi/180.0
         R = 6378.1 #earth radius (R = ~ 3959 MilesR = 3959)
+
         # + + + + + + + + + + + + ++ + +
-        def calc(brng):
-            bearing = (brng/90.) * np.pi/2.
-            test= math.radians(brng)
-
-            new_lat = np.arcsin(np.sin(lat1) * np.cos(offsetkm/R) + np.cos(lat1) * np.sin(offsetkm/R) * np.cos(bearing))
-            new_lon = lon1 + np.arctan2(np.sin(bearing) * np.sin(offsetkm/R) * np.cos(lat1), np.cos(offsetkm/R) - np.sin(lat1) * np.sin(new_lat))
-            new_lat, new_lon = 180.0 * new_lat/np.pi , 180.0 * new_lon/np.pi
-            return new_lat, new_lon
-
+        #  Calc end point(s) lat and lons
         if given_bearing == False:
-            for brng in [0, 90, 180, 270]:
-                new_lat, new_lon = calc(brng)
+            for card_dir in [0, 90, 180, 270]:
+                new_lat, new_lon = calc(card_dir, offsetkm, R, lat1, lon1)
                 
-                if brng == 0: max_lat= new_lat
-                elif brng == 90: max_lon= new_lon
-                elif brng == 180: min_lat= new_lat
-                elif brng == 270: min_lon= new_lon
+                if card_dir == 0: max_lat= new_lat
+                elif card_dir == 90: max_lon= new_lon
+                elif card_dir == 180: min_lat= new_lat
+                elif card_dir == 270: min_lon= new_lon
 
             #set up a namedtuple object to hold the new info
             box_extent = namedtuple('box_extent', ['xmin', 'xmax','ymin','ymax'])
             box = box_extent(xmin= min_lon, xmax= max_lon, ymin= min_lat, ymax= max_lat)
             return box
-        # + + + + + + + + + + + + ++ + +
+
         else: #if a bearing is provided
-            end_lat, end_lon = calc(given_bearing)
+            end_lat, end_lon = calc(given_bearing, offsetkm, R, lat1, lon1)
             return end_lat, end_lon
 
     # * * *
