@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-#hellos this is new
 #import needed modules
 ######################
 import matplotlib
@@ -54,14 +52,9 @@ import pprint
 import math
 pp = pprint.PrettyPrinter(indent=4)
 
-
 register_matplotlib_converters()
 logging.basicConfig(filename='this_is.log')
 log = logging.getLogger(__name__)
-
-## Imports form other files
-############################
-
 
 ################################################################################################
 ##################
@@ -242,7 +235,6 @@ def Add_to_DATA(config, DType, Data, subset_pnames, MR_file=None, swp=None):
     elif DType == 'RADAR':
         #this can change for each image (aka from diff scans of the plotting radar) so will be updated for every plot
         #  ie. are the radars deployed at a given time which (if any) WSR88D fall within plotting domain etc
-
         # * * *
         ## Initilize the Main plotting radar object (which will establish scantime and contain the radar data file etc)
         # Det Main plotting radar (aka which radar is associated with MR_file)
@@ -284,7 +276,6 @@ def Add_to_DATA(config, DType, Data, subset_pnames, MR_file=None, swp=None):
                     if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
             elif read_in_data == False:
                     if config.print_long == True: print("Did not attempt to read in data for platform %s" %(pname))
-
     # * * *
     ##Uncomment to check yourself
     # ***************************
@@ -305,8 +296,6 @@ def Add_to_DATA(config, DType, Data, subset_pnames, MR_file=None, swp=None):
     #  there are more: check google for built in class functionalitly
     if config.print_long == True: print('Made it through Add_to_DATA')
     return Data, subset_pnames
-
-
 
 
 ################################################################################################
@@ -398,7 +387,6 @@ def read_TInsitu(config, pname, d_testing=False):
         print("-- pname in pform_names('NSSL')")
         #  print(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
         mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
-
         print("-- mmfile= ", mmfile)
         
         # Test Data availability
@@ -409,7 +397,6 @@ def read_TInsitu(config, pname, d_testing=False):
                 return True
             except: return False
         # + + + + + + + + + + + + ++ + +
-
         mmfile=mmfile[0]
         # Read NSSL file using column names from readme
         column_names = ['id','time','lat','lon','alt','tfast','tslow','rh','p','dir','spd','qc1','qc2','qc3','qc4']
@@ -451,7 +438,6 @@ def read_TInsitu(config, pname, d_testing=False):
         print("H time:", time.time() -t0)
 
         # Convert deltas into actual times
-
         data_nssl['datetime'] = pd.to_timedelta(data_nssl['time'], unit="h") + date
         print("I time:", time.time() -t0)
 
@@ -580,7 +566,6 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
             rfile.add_field('sw_fix', sw_dict, replace_existing=True) # Is this ok?  Sometimes it already exists
             rfile.add_field('vel_fix', vel_dict, replace_existing=True) # Is this ok?  Sometimes it already exists
 
-
             ## Det the attribute of the Main Radar (MR)
             #det the scantime
             MR_time = datetime.strptime(rfile.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S")
@@ -630,6 +615,7 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
     elif pname == 'NOXP':
         # if the main plotting radar is the NOXP radar
         if rfile != None:
+            print('!!!!!!!!!!!!!!', rfile.azimuth)
             #fix NOXP sweeps 
             for sweep in range(rfile.nsweeps):
                 g=np.gradient(np.cos(np.deg2rad(rfile.get_azimuth(sweep))))
@@ -713,12 +699,10 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
 ##########
 # Classes
 ##########
-
 class Platform:
     #vars defined in this block (until ######) reamain constant for any object initilized via calling Platform or any Platform subclass
         #  self.var can be retreived latter via typing obj.day etc
         #  vars without self. can be used within Platform or Platform subclasses methods but not for external retrieval
-
     ######
 
     def __init__(self, config, Name):
