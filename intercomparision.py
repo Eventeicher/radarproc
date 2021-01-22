@@ -77,6 +77,7 @@ full_df= pd.concat(df_holder)
 new_cols=['dist_Prb1', 'dist_Prb2', 'dist_FFld', 'dist_Wins', 'dist_LiDR', 'dist_CoMeT1', 'dist_CoMeT2']
 for c in new_cols:
     full_df.insert(2, c, np.nan)
+full_df.set_index(['pname', 'datetime'], inplace=True)
 print(full_df)
 
 
