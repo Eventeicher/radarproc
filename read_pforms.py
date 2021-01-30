@@ -50,6 +50,7 @@ import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
 import cftime # for num2pydate
 import pprint
 import math
+import copy
 pp = pprint.PrettyPrinter(indent=4)
 
 register_matplotlib_converters()
@@ -61,8 +62,7 @@ log = logging.getLogger(__name__)
 # TROUBLE SHOOTING
 ##################
 def error_printing(e_test):
-    ''' Basically I got sick of removing/replacing the try statements while troubleshooting
-    '''
+    ''' Basically I got sick of removing/replacing the try statements while troubleshooting '''
     if e_test == True:
         e = sys.exc_info()
         traceback.print_tb(e[-1])
@@ -124,6 +124,7 @@ def pform_attr(pname):
     '''
     ##assign the atributes for each platform
     if pname in pform_names('TInsitu'):
+        #  marker_style, marker_size = '$\U0001F766$', 20 #u20B9 u03F0 u03A8 u273D 204E 0359 002A 20BA 2723
         marker_style, marker_size = '$\u2724$', 20 #u20B9 u03F0 u03A8 u273D 204E 0359 002A 20BA 2723
         if pname == "Prb1": marker_color, line_color, legend_str= 'xkcd:lightblue', 'steelblue', 'Prb1'
         elif pname == "Prb2": marker_color, line_color, legend_str= 'xkcd:watermelon', 'xkcd:dusty red', 'Prb2'
@@ -139,7 +140,7 @@ def pform_attr(pname):
         if pname in pform_names('MESO'):
             marker_size = 23 #U+1278, #u20a9
             if pname == "WTx_M": marker_style,  legend_str= '$\u0166$', 'WTxM'
-            elif pname == "OK_M": marker_style, legend_str= '$\uA648$', 'OKM' ##00F0 2644 26B7  26A8 0516 2114
+            elif pname == "OK_M": marker_style, legend_str= '$\u00C5$', 'OKM' ##00F0 2644 26B7  26A8 0516 2114
             elif pname == "IA_M": marker_style, legend_str= '$\uABA0$', 'IAM'
             elif pname == "KS_M": marker_style, legend_str= '$\u0199$', 'KSM'#0199 A741 0198 01E9 03CF ##0198 0199
         else:
@@ -148,14 +149,19 @@ def pform_attr(pname):
 
     if pname in pform_names('RADAR'):
         if pname in pform_names('KA'): ##2643
-            marker_style, marker_size = '$\u14C7$', 35
+            marker_style, marker_size = '$\u264E$', 35
+            #  marker_style, marker_size = '$\u14C7$', 35
             if pname == 'Ka2': marker_color, line_color, legend_str= 'xkcd:crimson', 'xkcd:crimson', 'Ka2'
             elif pname == 'Ka1': marker_color, line_color, legend_str= 'mediumseagreen', 'mediumseagreen', 'Ka1'
         else:
             line_color, marker_size = 'black', 35
-            if pname == 'NOXP': marker_style, marker_color, legend_str= '$\u306E$', 'green', "NOXP"
-            elif pname == 'WSR88D': marker_style, marker_color, legend_str= '$\Omega$', 'white', "WSR88D"
-
+            if pname == 'NOXP': marker_style, marker_color, legend_str= '$\u2116$', 'yellow', "NOXP"
+            #  if pname == 'NOXP': marker_style, marker_color, legend_str= '$\u306E$', 'green', "NOXP"
+            elif pname == 'WSR88D':  
+                marker_style, legend_str= '$\U0001D6C0$', "WSR88D"
+                #  marker_color = (cycler(color=['r', 'g', 'b', 'y']))
+                marker_color = 'white' 
+                  
        ##create the legend elements that will be appended to the legend array
     if pname in pform_names('KA'): #the legend entries for the KA radars
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor='black', markeredgewidth=3, label=legend_str, markerfacecolor=marker_color, markersize=26)
@@ -301,7 +307,6 @@ def Add_to_DATA(config, DType, Data, subset_pnames, MR_file=None, swp=None):
 ################################################################################################
 #**************
 def read_TInsitu(config, pname, d_testing=False):
-    print('**** Enter read_TInsitu pname= ',pname,' testing=',d_testing)
     ''' Reads data files provided on TORUS19 EOL site (Important that datafiles and filenames follow TORUS19 readme)
         ---
         INPUT: filename string (following readme conventions for each platform)
@@ -309,9 +314,7 @@ def read_TInsitu(config, pname, d_testing=False):
         OUTPUT: dataframe containing all data collected during desired times
     '''
     if pname in pform_names('UNL'):
-        print("-- pname in pform_names('UNL')")
-        #  print(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
-        mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/UNL/UNL.'+pname+'.*')
+        mmfile = glob.glob(config.g_TORUS_directory+config.day+'/data/mesonets/UNL/UNL.'+pname+'.*')
 
         # Test Data availability
         if d_testing == True:
@@ -325,8 +328,6 @@ def read_TInsitu(config, pname, d_testing=False):
 
         data_hold = [] #empty list to append to
         for i in range(len(mmfile)):
-            t0 = time.time()
-            print("read_TInsitu ", mmfile[i], " start")
             ds = xr.open_dataset(mmfile[i])
 
             #convert form epoch time to utc datetime object
@@ -334,7 +335,7 @@ def read_TInsitu(config, pname, d_testing=False):
             U,V = mpcalc.wind_components(ds.wind_speed, ds.wind_dir)
             lats = np.array([40]) * units.degrees
 
-            #create new xarray dataset to make plotting easier cause original is trash
+            #create new xarray dataset to make plotting easier 
             dims = ['datetime']
             coords = { 'datetime': timearray }
             data_vars = {
@@ -371,8 +372,6 @@ def read_TInsitu(config, pname, d_testing=False):
             data_u = pd_unl.loc[(pd_unl['datetime'] >= hstart) & (pd_unl['datetime'] <= hend)]
             data_hold.append(data_u)
 
-            t1 = time.time()
-            print("read_TInsitu", mmfile[i], ' stop took ', t1-t0)
         #convert the list holding the dataframes to one large dataframe
         data_unl = pd.concat(data_hold)
 
@@ -384,10 +383,7 @@ def read_TInsitu(config, pname, d_testing=False):
 
     # * * *
     elif pname in pform_names('NSSL'):
-        print("-- pname in pform_names('NSSL')")
-        #  print(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
-        mmfile = glob.glob(config.g_mesonet_directory+config.day+'/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
-        print("-- mmfile= ", mmfile)
+        mmfile = glob.glob(config.g_TORUS_directory+config.day+'/data/mesonets/NSSL/'+pname+'_'+config.day[2:]+'_QC_met.dat')
         
         # Test Data availability
         if d_testing == True:
@@ -401,16 +397,11 @@ def read_TInsitu(config, pname, d_testing=False):
         # Read NSSL file using column names from readme
         column_names = ['id','time','lat','lon','alt','tfast','tslow','rh','p','dir','spd','qc1','qc2','qc3','qc4']
         
-        t0 = time.time()
-        print("A time:", t0)
         data = pd.read_csv(mmfile, header=0, delim_whitespace=True, names=column_names)
-        print("B time:", time.time() -t0)
         data = data.drop_duplicates()
-        print("C time:", time.time() -t0)
 
         # Find timedelta of hours since start of iop (IOP date taken from filename!)
         tiop = dt.datetime(2019, np.int(mmfile[-15:-13]), np.int(mmfile[-13:-11]), 0, 0, 0)
-        print("D time:", time.time() -t0)
 
         time_start, time_end= time_range(config)
         if time_start is None:
@@ -425,39 +416,15 @@ def read_TInsitu(config, pname, d_testing=False):
         else:
             hend = (time_end - tiop)
             if hend >= dt.timedelta(days=1): hend = float((time_end-tiop).seconds)/3600 + 24.
-            else: hend = float((time_end-tiop)).seconds/3600
+            else:  hend = float((time_end-tiop).seconds)/3600
 
-        print("E time:", time.time() -t0)
         # Save only desired iop data
-        data_nssl_sub = data.loc[(data['time'] >= hstart_dec)]
-        print("F time:", time.time() -t0)
-        data_nssl = data_nssl_sub.loc[(data_nssl_sub['time'] <= hend)]
-        print("G time:", time.time() -t0)
+        data_nssl_sub = data.loc[(data.loc[:,'time'] >= hstart_dec)]
+        data_nssl = data_nssl_sub.loc[(data_nssl_sub.loc[:,'time'] <= hend)]
         # Convert time into timedeltas
         date = dt.datetime.strptime('2019-'+mmfile[-15:-13]+'-'+mmfile[-13:-11],'%Y-%m-%d')
-        print("H time:", time.time() -t0)
-
         # Convert deltas into actual times
-        data_nssl['datetime'] = pd.to_timedelta(data_nssl['time'], unit="h") + date
-        print("I time:", time.time() -t0)
-
-        print("datetime new calc")
-        pp.pprint(data_nssl['datetime'])
-
-        print("J time:", time.time() -t0)
-
-        time_deltas = []
-        for i in range(len(data_nssl)):
-            j = data_nssl['time'].iloc[i]
-            time_deltas = np.append(time_deltas, date + dt.timedelta(hours=int(j), 
-                                        minutes=int((j*60) % 60), seconds=int((j*3600) % 60)))
-
-        print("K time:", time.time() -t0)
-        data_nssl.loc[:,'datetime'] = time_deltas
-        print("datetime old calc")
-        pp.pprint(data_nssl['datetime'])
-
-        print("L time:", time.time() - t0)
+        data_nssl.loc[:,'datetime'] = pd.to_timedelta(data_nssl.loc[:,'time'], unit="h") + date
 
         ## Caclulate desired variables
         p, t = data_nssl['p'].values * units.hectopascal, data_nssl['tfast'].values * units.degC
@@ -482,12 +449,10 @@ def read_TInsitu(config, pname, d_testing=False):
         #drop all the columns that we will not use past this point (to save memory/computing time)
         data_nssl = data_nssl.drop(columns=['rh', 'p', 'time', 'alt', 'Theta', 'tslow'])
         #  print(data_nssl.memory_usage())
-        print("Z time:", time.time()-t0)
         return data_nssl, 'NSSL'
 
     # * * *
     elif pname == 'UAS':
-        print("-- pname in pform_names('UAS')")
         if config.print_long == True: print("no code for reading UAS yet")
         if d_testing == True: return False
         return 'UAS'
@@ -498,22 +463,22 @@ def read_Stationary(config, pname, d_testing=False):
         if so record locations and names of the sites
     '''
     if pname == 'WTx_M':
-        file_name= '/West_TX_mesonets.csv'
+        file_name= 'West_TX_mesonets.csv'
         ptype = 'WTM'
     elif pname == 'OK_M':
-        file_name= '/OKmeso.csv'
+        file_name= 'OKmeso.csv'
         ptype = 'OK_M'
     elif pname == 'KS_M':
-        file_name= '/KS_Meso.csv'
+        file_name= 'KS_Meso.csv'
         ptype = 'KSM'
     elif pname == 'IA_M':
-        file_name= '/IA_meso.csv'
+        file_name= 'IA_meso.csv'
         ptype = 'IAM'
     elif pname == 'ASOS':
-        file_name= '/ASOS_stations.csv'
+        file_name= 'ASOS_stations.csv'
         ptype = 'ASOS'
 
-    stnry_df = pd.read_csv(config.g_root+file_name)
+    stnry_df = pd.read_csv(config.g_csv_directory+file_name)
 
     if pname == 'OK_M':
         stnry_df.rename(columns = {'nlat':'lat', 'elon':'lon'}, inplace = True)
@@ -538,7 +503,6 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
     #  print("read_Radar(pname=",pname," rfile=", rfile, ")")
     ''' Determine if a given radar is deployed and if so assign the correct location values to it.
     '''
-    print('***** Enter read_Radar p_name=', pname, " testing=", d_testing)
     if pname in pform_names('KA'):
         #  rfile will only be provided if the object being initilized is the main plotting radar
         if rfile != None:
@@ -550,12 +514,10 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
             total_power = rfile.fields['total_power']['data']
             normal = rfile.fields['normalized_coherent_power']['data']
             normal_mask = (normal.flatten() < 0.4)
-            range_mask = np.zeros(np.shape(reflectivity))
-
-            for i in range(0, len(range_mask[:,0])): range_mask[i,:] = rfile.range['data'] > (rfile.range['data'][-1]-1000.)
-
-            range_mask = range_mask.astype(bool)
-            total_mask = [any(t) for t in zip(range_mask.flatten(), normal_mask.flatten())]
+            #  range_mask = np.zeros(np.shape(reflectivity))
+            #  for i in range(0, len(range_mask[:,0])): range_mask[i,:] = rfile.range['data'] > (rfile.range['data'][-1]-1000.)
+            #  range_mask = range_mask.astype(bool)
+            #  total_mask = [any(t) for t in zip(range_mask.flatten(), normal_mask.flatten())]
             refl_mask = np.ma.MaskedArray(reflectivity, mask=normal_mask)
             sw_mask = np.ma.MaskedArray(spectrum_width, mask=normal_mask)
             vel_mask = np.ma.MaskedArray(velocity, mask=normal_mask)
@@ -579,7 +541,7 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
             if pname == 'Ka1': r_testing='ka1' # r_testing is the name of the radar you are testing to see if deployed
             elif pname == 'Ka2': r_testing='ka2'
 
-            filename = config.g_mesonet_directory+config.day+'/radar/TTUKa/csv/'+config.day+'_deployments_'+r_testing+'.csv'
+            filename = config.g_TORUS_directory+config.day+'/data/radar/TTUKa/csv/'+config.day+'_deployments_'+r_testing+'.csv'
 
             kadep = []
             if os.path.exists(filename):
@@ -616,21 +578,176 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
         # if the main plotting radar is the NOXP radar
         if rfile != None:
             print('!!!!!!!!!!!!!!', rfile.azimuth)
-            #fix NOXP sweeps 
+            if config.print_long == True: print('  read_Radar ACA at ', time.time()-t0, ' sec\n')
+            
+            # Use angles >= 360 when sweep passes from 359.x to 0.x degrees
+            #
+            # Do not use offset on other segments
+            #
+            # input:  azimuth_angles = [..., 358, 359,   0,   1,   2, ...,  39,  40, 200, 201, ...]
+            # output: azimuth_angles = [..., 358, 359, 360, 361, 362, ..., 399, 400, 200, 201, ...]
+            #
+            # Note the 359->0 transition and the 40->200 transition
+            #
+            def remove_zero_crossing(azimuth_angles):
+                previous_angle = 0
+                zero_crossed = False
+
+                for index, angle in enumerate(azimuth_angles):
+
+                    if previous_angle > 350 and angle < 1:
+                        zero_crossed = True
+
+                    discontinuity = (angle - previous_angle) > 10
+
+                    if zero_crossed and discontinuity:
+                        zero_crossed = False
+
+                    previous_angle = angle
+
+                    if zero_crossed:
+                        a = angle + 360.0
+                    else:
+                        a = angle
+
+                    azimuth_angles[index] = a
+                return azimuth_angles
+            # Generate array of indexes into original array that can be used to generate new sorted array
+            #
+            # input: azimuth_angles = [..., 358, 359, 360, 361, 362, ..., 399, 400, 200, 201, ...]
+            # output: sorte_index_list = [ 41, 42, ..., 0, 1, 2, ...]
+            #
+            # Generate array of indexes into original array that can be used to generate new sorted array
+                 # Generate array of indexes into original array that can be used to generate new sorted array
+            #
+            # input: azimuth_angles = [..., 358, 359, 360, 361, 362, ..., 399, 400, 200, 201, ...]
+            # output: sorte_index_list = [ 41, 42, ..., 0, 1, 2, ...]
+            #
+            def sort_on_ascending_angles(azimuth_angles):
+
+                 #Output:{0: 0, 1: .5, 2: 1, ... n: 359.5}
+                index_angle_dict = dict(enumerate(azimuth_angles))
+
+                # Create list of tuples (index, angle) sorted by angle
+                sorted_index_angle_tuples = sorted(index_angle_dict.items(), key=lambda kv: kv[1])
+
+                # source index list - Used to reconstruct a list sorted by angles
+                sorted_index_list = [a_tuple[0] for a_tuple in sorted_index_angle_tuples]
+
+                # sorted list of all ray angles
+                #sorted_angle_list = [a_tuple[1] for a_tuple in sorted_index_angle_tuples]
+
+                return sorted_index_list
+
+            # Reorder array as directed by sorted_index_list
+            #
+            # input:  array = [4, 5, 6, 1, 2, 3]
+            #         sorted_index_list = [3, 4, 5, 0, 1, 2]
+            #
+            # output: array = [1, 2, 3, 4, 5, 6]
+            #
+            def reorder_array(array, sorted_index_list):
+
+                array_copy = copy.deepcopy(array)
+
+                for target_index, source_index in enumerate(sorted_index_list):
+                  array[target_index] = array_copy[source_index]
+
+                return array
+
+            # pyart requires rays in sweep to be ordered by angle
+            #
+            # Some radars sweeps cross the 360 degree threshold (359->0->1)
+            # Some radars sweeps contain segments that are out of order
+            # We need to fix both problems for pyart so all rays in sweep are ordered by ascending azimuth angle
+            #
+            # input:  azimuth_angles = [..., 358, 359,   0,   1,   2, ...,  39,  40, 200, 201, ...]
+            # output: azimuth_angles = [200, 201, ..., 358, 359, 360, 361, 362, ..., 399, 400, ...]
+            #
+            # both azimuth angle array and field arrays are reordered in rfile
+
+            def order_rays_by_angle(sweep_id, rfile):
+
+                azimuth_angles = rfile.get_azimuth(sweep_id)
+
+                azimuth_angles = remove_zero_crossing(azimuth_angles)
+
+                sorted_index_list = sort_on_ascending_angles(azimuth_angles)
+
+                # reorder azimuth angles so rays are in order of assending angles
+                azimuth_angles = reorder_array(azimuth_angles, sorted_index_list)
+
+                for field_name in list(rfile.fields):
+
+                    # Ray data array were overwriting
+                    field_sweep_data_reference = rfile.get_field(sweep_id, field_name, copy=False)
+
+                    # reorder field ray data so rays are in order of assending angles
+                    field_sweep_data_reference = reorder_array(field_sweep_data_reference, sorted_index_list)
+            
+            for sweep_id in range(rfile.nsweeps):
+                order_rays_by_angle(sweep_id, rfile)
+
+            #det the scantime
+            MR_time = datetime.strptime(rfile.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S")
+            #det the location info
+            MR_lat, MR_lon = rfile.latitude['data'][0], rfile.longitude['data'][0]
+            return MR_time, MR_lat, MR_lon , 'MAINR'
+
+
+            '''
+            #fix NOXP sweeps
+            for sweep_id in range(rfile.nsweeps):
+                azimuth_angles = rfile.get_azimuth(sweep_id)
+                gradient_angles = np.gradient(np.cos(np.deg2rad(azimuth_angles)))
+
+                index_after_max_gradient_angle = np.argmax(gradient_angles) + 1
+
+                gradient_min_angle = np.amin(gradient_angles)
+                gradient_max_angle = np.amax(gradient_angles)
+
+                #  gradient_min_angle = np.abs(gradient_min_angle)
+                #  gradient_max_angle = np.abs(gradient_max_angle)
+
+                #  print(gradient_angles)
+                #  print(azimuth_angles)
+                #  print('..............')
+
+                if (gradient_min_angle <= 0.015 and gradient_max_angle <= 0.015):
+                    continue
+
+                # This is the logic but I
+                # Don't understand what this if check is really trying to accomplish
+                if (gradient_max_angle > gradient_min_angle) or (gradient_max_angle < gradient_min_angle):
+                    # Replace azimuth angles for rays in sweep in rfile; array now starts with first angle after max angle
+                    azimuth_angles = np.roll(azimuth_angles, -1 * index_after_max_gradient_angle)
+
+                    for field_name in list(rfile.fields):
+                        field_sweep_data = rfile.get_field(sweep_id, field_name, copy=True)
+
+                        # Replace field data for all rays in sweep in rfile
+                        #  ray data now starts with ray after max angle
+
+                        # Note: I think the original implementtion had a bug.
+                        #       This is what I think it was trying to do based on contents of pyart rfile.
+                        field_sweep_data = np.roll(field_sweep_data, -1 * index_after_max_gradient_angle) 
+
+
             for sweep in range(rfile.nsweeps):
                 g=np.gradient(np.cos(np.deg2rad(rfile.get_azimuth(sweep))))
-         
+
                 if np.abs(np.amin(g))>0.015 or np.abs(np.amax(g))>0.015:
                     if np.abs(np.amax(g))>np.abs(np.amin(g)):
                         rfile.azimuth['data'][rfile.get_start_end(sweep)[0]:rfile.get_start_end(sweep)[1]+1] = np.roll(rfile.get_azimuth(sweep), -np.argmax(g)-1)
                         for field in list(rfile.fields):
                             rfile.fields[field]['data'][rfile.get_start_end(sweep)[0]:rfile.get_start_end(sweep)[1]+1,:] = np.roll(np.ma.getdata(rfile.extract_sweeps([sweep]).fields[field]['data']), -np.argmax(g)-1,axis=0)
-         
+
                     elif np.abs(np.amax(g))<np.abs(np.amin(g)):
                         rfile.azimuth['data'][rfile.get_start_end(sweep)[0]:rfile.get_start_end(sweep)[1]+1] = np.roll(rfile.get_azimuth(sweep), -np.argmin(g)-1)
                         for field in list(rfile.fields):
                             rfile.fields[field]['data'][rfile.get_start_end(sweep)[0]:rfile.get_start_end(sweep)[1]+1,:] = np.roll(np.ma.getdata(rfile.extract_sweeps([sweep]).fields[field]['data']), -np.argmin(g)-1,axis=0)
-
+            #
+            '''
             #det the scantime
             MR_time = datetime.strptime(rfile.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S")
             #det the location info
@@ -639,7 +756,7 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
 
         # Determine whether the NOXP radar was in the plotting domain (if its not the radar being plotted)
         if rfile == None:
-            path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
+            path = config.g_TORUS_directory+ config.day+'/data/radar/NOXP/'+config.day+'/*/sec/*'
             NOXPfiles = sorted(glob.glob(path))
             file = NOXPfiles[0]
 
@@ -681,7 +798,8 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
             #  save the nexrad locations to an array from the PyART library
             wsr_locs = pyart.io.nexrad_common.NEXRAD_LOCATIONS
             WSR_df= pd.DataFrame.from_dict(wsr_locs, orient= 'index')
-            WSR_df.reset_index(self, level=None, drop=False, inplace=False, col_level=0, col_fill='')
+            #  WSR_df.reset_index(self, level=None, drop=False, inplace=False, col_level=0, col_fill='')
+            WSR_df.reset_index(level=None, drop=False, inplace=False, col_level=0, col_fill='')
             WSR_df.index.name = 'R_Name'
             WSR_df.reset_index(inplace= True, drop=False)
 
@@ -693,7 +811,7 @@ def read_Radar(config, pname, swp=None, rfile= None, d_testing=False, known_scan
                     return True
                 except:return False
 
-            else: return WSR_df, 'WSR'
+            else:  return WSR_df, 'WSR'
 
 
 ##########
@@ -859,7 +977,7 @@ class Torus_Insitu(Platform):
         self.Te_Min, self.Te_Max= self.min_max('Thetae', mask)
         self.Tf_Min, self.Tf_Max= self.min_max('tfast', mask)
         Platform.__init__(self, config, Name)
-
+ 
     # * * *
     def min_max(self, var, mask):
         #Mask the dataset(if applicable) and determine the max and min values of pvar:
@@ -911,7 +1029,7 @@ class Radar(Platform):
 
             if self.name in pform_names('KA'):  self.site_name, self.dir_name = self.name, 'KA'
             if self.name == 'WSR88D':  self.site_name, self.dir_name = self.rfile.metadata['instrument_name'], 'WSR'
-            if self.name == 'NOXP':  self.dir_name = 'NOXP'
+            if self.name == 'NOXP':  self.site_name, self.dir_name = 'NOXP', 'NOXP'
 
         ## Otherwise you are initlizing info for radars that doent have to do with plotting actual radar data (aka loc of radars etc but not the data itself)
         elif Plotting_Radar == False:
@@ -923,7 +1041,7 @@ class Radar(Platform):
                 self.marker_label = config.KA_lab
             elif self.type == 'NOXP':
                 self.lat, self.lon = Rloc.lat, Rloc.lon
-                self.marker_label = config.KA_lab
+                self.marker_label = config.NOXP_lab
             elif self.type == 'WSR':
                 #Rloc is a dataframe containing the lats and lons of each WSR88D that is within the plotting domain
                 self.df = Rloc

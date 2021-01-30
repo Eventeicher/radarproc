@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 #import needed modules
 ######################
 import datetime as dt
-
 import os
 from pathlib import Path
 from os.path import expanduser
@@ -17,38 +15,38 @@ from os.path import expanduser
 r_mom = ['refl', 'vel'] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
 #  r_mom = []
 #  Time_Series = ['Wind', R_Tvar]
-Time_Series = ['Wind', 'Thetav']
+Time_Series = ['Thetav']
 
 ## File paths
 # ************
 #  Radar_Plot_Type = 'NOXP_Plotting'
-Radar_Plot_Type = 'KA_Plotting'
-#  Radar_Plot_Type = 'WSR_Plotting'
+#  Radar_Plot_Type = 'KA_Plotting'
+Radar_Plot_Type = 'WSR_Plotting'
 
-nCPU=1
+nCPU = -2
 
 if Radar_Plot_Type == 'KA_Plotting':
     day = '20190524' #'YYYYMMDD'
     R_Tvar = "Thetav" #which var to plot (current options; Thetae, Thetav)
     offsetkm = 21 #21 is the best for KA
     Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
-    Wind_Pform = 'Prb1'
+    Wind_Pform = 'P_Radar'
     #  p_tilt = 1  #what radar elevation tilt (deg) do you want to plot
-    p_tilt = .5  #what radar elevation tilt (deg) do you want to plot
+    p_tilt = 1.0  #what radar elevation tilt (deg) do you want to plot
 
 if Radar_Plot_Type == 'NOXP_Plotting':
     day = '20190517' #'YYYYMMDD'
     R_Tvar = "Thetav" #which var to plot (current options; Thetae, Thetav)
     #  offsetkm = 37 #21 is the best for KA
-    offsetkm = 37 #21 is the best for KA
-    Centered_Pform = 'Prb1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
-    Wind_Pform = 'Prb1'
-    p_tilt = 0.5 #what radar elevation tilt (deg) do you want to plot
+    offsetkm = 60 #21 is the best for KA
+    Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
+    Wind_Pform = 'P_Radar'
+    p_tilt = .5 #what radar elevation tilt (deg) do you want to plot
 
 if Radar_Plot_Type == 'WSR_Plotting':
-    day = '20190517' #'YYYYMMDD'
+    day = '20190520' #'YYYYMMDD'
     R_Tvar = "Thetav" #which var to plot (current options; Thetae, Thetav)
-    offsetkm = 30 #21 is the best for KA
+    offsetkm =100#70 #21 is the best for KA
     Centered_Pform = 'CoMeT1' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
     Wind_Pform = 'CoMeT1'
     p_tilt = 0.5 #what radar elevation tilt (deg) do you want to plot
@@ -57,8 +55,8 @@ if Radar_Plot_Type == 'WSR_Plotting':
 ## Timeframe
 # ***********
 #crop the start or end time to a time you specify (set to None to do the whole day)
-#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 2, 0)
-#  tend = dt.datetime(int(day[0:4]),int(day[4:6]),18,2,0,0)
+#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 21, 30, 0)
+#  tend = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 0, 0)
 man_ylim= False
 
 
@@ -67,15 +65,11 @@ man_ylim= False
 g_home = expanduser("~")
 g_root = '/Volumes/Samsung_T5/Research' # Ellie External SSD
 
-g_mesonet_directory = g_root + '/TORUS_Data/'   # Our Data
-g_download_directory = g_root + '/downloads/'    # Download Storage
-g_plots_directory = g_mesonet_directory # Plot Output
+g_TORUS_directory = g_root + '/TORUS_Data/'   # Our Data
+g_csv_directory = g_root+ '/csv_files/'
 g_cache_directory = g_root + '/cache/' # Cache
+g_download_directory = g_cache_directory + 'downloads/' # Download Storage
 g_roads_directory = g_root + '/roads/' # Roads data
-
-#
-# Remember to erase all plots for completely new versions as they are not regenerated if the file already exists
-# Plots are stored in g_root + /plots
 
 # Setup Function Cache for speedup
 if not os.path.exists(g_cache_directory): Path(g_cache_directory).mkdir(parents=True)
@@ -106,14 +100,12 @@ MESO_lab, WSR88D_lab, KA_lab, NOXP_lab, RHI_lab, TIn_lab, ASOS_lab = False, Fals
 country_roads, hwys, county_lines, state_lines = False, False, False, False #background plot features
 cline_extent = 5 #how long would you like the colorlines for each platforms to cover +-x min (also control width of greybox on tseries)
 
-# would you like to restrict the time series to display only a timespan +/- x time from the scantime (functionalitly not coded yet)
+# would you like to restrict the time series to display only a timespan +/- x time from the scantime 
 ts_extent = 30 #so actually 60 min
 #  ts_extent = None
 
-
 TS_masking = ['NSSL']
 NSSL_qcflags = ['qc1', 'qc2', 'qc3', 'qc4']
-
 
 ## Troubleshooting (True/False variable)
 # *****************

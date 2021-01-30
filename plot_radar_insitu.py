@@ -13,6 +13,8 @@ from matplotlib import ticker
 from matplotlib.ticker import (LinearLocator, FixedLocator, MaxNLocator, MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 from matplotlib.ticker import FuncFormatter
 from matplotlib.colors import ListedColormap, Normalize
+from cycler import cycler
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_area_auto_adjustable
 import matplotlib.cm as cmx
 from matplotlib.transforms import Bbox
 from matplotlib.lines import Line2D
@@ -86,23 +88,22 @@ class Thermo_Plt_Vars:
         self.Tv_GMin, self.Tv_GMax = self.find_global_max_min('Thetav', Data)
         self.Te_GMin, self.Te_GMax = self.find_global_max_min('Thetae', Data)
         self.Tf_GMin, self.Tf_GMax = self.find_global_max_min('tfast', Data)
+            
+        if config.R_Tvar == "Thetae":
+            lab, GMin, GMax = self.Te_lab, self.Te_GMin, self.Te_GMax
+        elif config.R_Tvar == "Thetav":
+            lab, GMin, GMax = self.Tv_lab, self.Tv_GMin, self.Tv_GMax
+        elif config.R_Tvar == "tfast":
+            lab, GMin, GMax = self.Tf_lab, self.Tf_GMin, self.Tf_GMax
+        self.Tvar_lab, self.Tvar_GMin, self.Tvar_GMax = lab, GMin, GMax
 
         #settings for the thermo var being plotted on radar subplots
         if len(config.r_mom) != 0:
-            if config.R_Tvar == "Thetae":
-                lab, GMin, GMax = self.Te_lab, self.Te_GMin, self.Te_GMax
-            elif config.R_Tvar == "Thetav":
-                lab, GMin, GMax = self.Tv_lab, self.Tv_GMin, self.Tv_GMax
-            elif config.R_Tvar == "tfast":
-                lab, GMin, GMax = self.Tf_lab, self.Tf_GMin, self.Tf_GMax
-            self.Tvar_lab, self.Tvar_GMin, self.Tvar_GMax = lab, GMin, GMax
-
             ## Make a dummy plot to allow for ploting of colorbar
             self.norm =plt.Normalize(GMin, GMax)
 
             Z = [[0,0],[0,0]]
             levels = np.arange(GMin, GMax+1, 1)
-
             self.CS3 = plt.contourf(Z, levels, cmap=cmocean.cm.thermal)
             plt.clf()
 
@@ -141,7 +142,6 @@ class Master_Plt:
         plt.rc('figure', titlesize= 50, facecolor='white')  # fontsize of the figure title
         self.leg_title_font={'size':25, 'weight':'bold'}
         self.Radar_title_font= {'fontsize':40}
-        #  plt.rc('path.effects', )
 
         ## Establish the Plot size and layout
         #### * * * * * * * * * * * * * * * * *
@@ -150,6 +150,7 @@ class Master_Plt:
             self.fig= plt.figure(figsize=(32,20))
             if len(config.Time_Series) == 1:
                 self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=[3,2], hspace=.1)
+                hratio=[1]
             if len(config.Time_Series) == 2:
                 self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=[4,3], hspace=.1)
                 if 'Wind' in config.Time_Series: hratio=[2,3]
@@ -195,7 +196,7 @@ class Master_Plt:
         if ts != None:
             # Xaxis
             # if desired this subsets the timerange that is displayed in the timeseries
-            if self.config.ts_extent != None:
+            if scan_time != None and self.config.ts_extent != None:
                 ax.set_xlim(scan_time - timedelta(minutes=self.config.ts_extent),
                             scan_time + timedelta(minutes=self.config.ts_extent))
 
@@ -289,7 +290,7 @@ class Master_Plt:
             # Add km to x-axis.
             def km(x, pos):
                 x = int(x/1000)
-                return '{} km'.format(x)
+                return ' {} km'.format(x)
             #since this is square grid both the x and y formatter will be the same
             ax.yaxis.set_major_formatter(FuncFormatter(km))
             ax.xaxis.set_major_formatter(FuncFormatter(km))
@@ -324,7 +325,9 @@ class Master_Plt:
                     TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
                     TSleg_elements.append(TSleg_entry)
             ## Set up XY axes tick locations and Labels
-            self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=Data['P_Radar'].Scan_time)
+            if len(self.config.r_mom) != 0: scan= Data['P_Radar'].Scan_time
+            else: scan= None 
+            self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=scan)
 
             if ts == "Thetae":   ylab = TVARS.Te_lab
             elif ts == "Thetav":   ylab = TVARS.Tv_lab
@@ -376,6 +379,8 @@ class Master_Plt:
         # # # # # # # # #
         ax_n.set_xlabel('Time (UTC)')
         ax_n.yaxis.set_label_coords(-.03, .5)
+        #  make_axes_area_auto_adjustable(ax_n)
+
         ###################
         if self.config.print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
 
@@ -395,15 +400,15 @@ class Master_Plt:
             if Data['P_Radar'].name in pform_names('KA'):
                 field, vminb, vmaxb, sweep = 'refl_fix', -30., 30., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'NOXP':
-                field, vminb, vmaxb, sweep = 'DBZ', -10., 60., 0# Data['P_Radar'].swp
+                field, vminb, vmaxb, sweep = 'DBZ',-10, 60 , Data['P_Radar'].swp#-10., 60., 0# Data['P_Radar'].swp
             if Data['P_Radar'].name == 'WSR88D':
                 field, vminb, vmaxb, sweep =  'reflectivity', -10., 75., Data['P_Radar'].swp[0]
         elif mom == 'vel':
-            p_title, c_label, c_scale = 'Radial Velocity', 'Velocity [m/s]', 'pyart_balance'
+            p_title, c_label, c_scale = 'Radial Velocity', 'Velocity [m/s]', cmocean.cm.balance#'pyart_balance'
             if Data['P_Radar'].name in pform_names('KA'):
                 field, vminb, vmaxb, sweep = 'vel_fix', -30., 30., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'NOXP':
-                field, vminb, vmaxb, sweep = 'VEL', -40., 40., 0  #Data['P_Radar'].swp
+                field, vminb, vmaxb, sweep = 'VEL', -30., 30., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'WSR88D':
                 field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
         else: print("Hey what just happened!\n Check the Radar moments for spelling")
@@ -419,13 +424,21 @@ class Master_Plt:
         ax_n.grid(True)
         # Do it again here to restore extent
         ax_n.set_extent(self.Domain)
+        
 
         # * * *
         ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
         def plot_markers(p, lon, lat, txt_label, lab_shift=(.009,.002), lab_c='xkcd:pale blue'):
             '''Plot a marker at the locations of the various platforms: Optional text labels on plot as well'''
-            ax_n.plot(lon, lat, transform=self.Proj, marker=p.m_style, mfc=p.m_color, linestyle=None,
-                      ms=p.m_size, mec='k', label=p.leg_str, zorder=10, path_effects=[PE.withStroke(linewidth=4, foreground='k')])
+            if isinstance(p, Stationary_Insitu):
+                i=0
+                for x, y in zip(lon, lat):
+                    ax_n.plot(x, y, transform=self.Proj, marker=p.m_style, mfc=p.m_color, linestyle=None,
+                              ms=p.m_size, mec='k', label=p.leg_str if i==0 else "", zorder=10) 
+                    i=i+1
+            else:    
+                ax_n.plot(lon, lat, transform=self.Proj, marker=p.m_style, mfc=p.m_color, linestyle=None,
+                          ms=p.m_size, mec='k', label=p.leg_str, zorder=10, path_effects=[PE.withStroke(linewidth=4, foreground='k')])
 
             ## Optional textlabel on plot
             if p.marker_label == True:
@@ -502,12 +515,15 @@ class Master_Plt:
                 # determine if any of the sites fall within the plotting domain
                 sites_subdf, valid_sites = p.grab_pform_subset(p, Data, bounding= self.Domain)
                 LON, LAT = sites_subdf.lon, sites_subdf.lat
-                if p.name == 'OK_M': txt_label = sites_subdf.stid
-                else: txt_label = sites_subdf.Stn_ID
+                if len(sites_subdf) !=0:
+                    if p.name == 'OK_M': txt_label = sites_subdf.stid
+                    else: txt_label = sites_subdf.Stn_ID
             
             #Plot Radar Platforms (if desired and available)
             elif isinstance(p, Radar):
-                if p.type != 'MAINR':
+                if p.type == 'MAINR':
+                    valid_sites=False
+                elif p.type != 'MAINR':
                     #det if radar(s) are loc within the plot domain at the time of the plot
                     sites_subdf, valid_sites = p.grab_pform_subset(p, Data, bounding= self.Domain)
                     #if these conditions are met then plot the radar marker(s)
@@ -540,7 +556,8 @@ class Master_Plt:
         ## SET UP LEGENDS
         if leg == True: #this means you are currently making the left subplot
             #add legend for platform markers
-            l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.07,.5), markerscale=1.2, labelspacing=.6, handlelength=.1)#, title="Platforms")
+            l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.07,.5),
+                            markerscale=1.2, labelspacing=.7, handletextpad=.9, handlelength=.1)#, title="Platforms")
             l.set_title("Platforms", prop=self.leg_title_font)
         if leg == False:  #this means you are currently making the right subplot
             ## Plot platform colorbar
@@ -593,48 +610,49 @@ def plotting(config, Data, TVARS, start_comptime):
 
     ## Finish plot
     #### * * * * *
-    #Add a title in the plot
     title_spacer=.93
+    ### Get outdir and outname (aka file path and file name) for the correct image setup
+    #if radar is included in the image
+    if len(config.r_mom) != 0: 
+        plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
 
-    if len(config.Time_Series) != 0:
-        #PLT TITLE STUFF
-        file_string = '_'.join(config.Time_Series)
-        if config.ts_extent !=None:
-            output_name= config.day+'_TS_'+file_string+'.png'
-        if config.ts_extent ==None:
-            output_name= config.day+'_TS_'+file_string+'_full.png'
-
-        # OUTDIR name stuff
-        if ('Thetae' in config.Time_Series) and ('Thetav' in config.Time_Series): Thermo_type='both'
-        else: Thermo_type= config.R_Tvar
-
-        if len(config.r_mom) != 0:
-            #PLT TITLE STUFF
-            plt.suptitle(config.day+' Time Series', y=title_spacer)
-            plt_dir=Data['P_Radar'].dir_name+'/'+Thermo_type+'/'+str(config.p_tilt)+'_deg/'
+        #if both radar and timeseries are included in the image
+        if len(config.Time_Series) != 0:
+            file_string = '_'.join(config.Time_Series)
+            if ('Thetae' in config.Time_Series) and ('Thetav' in config.Time_Series): plt_type = 'both_Thetas'
+            elif (len(config.Time_Series) != 1) and ('Wind' in config.Time_Series): plt_type = config.R_Tvar+'/Wind'
+            else: plt_type = config.R_Tvar
+        #if only radar is included in the image (aka no platform info overlayed)
         else:
-            plt_dir='TSeries/'+Thermo_type+'/'
-
-        #This is the directory path for the output file
-        outdir = config.g_plots_directory+config.day+'/plots/'+plt_dir+config.Wind_Pform+'/'
-        # Setup Function Cache for speedup, if path directory does not make the directory
-        if not os.path.exists(outdir): Path(outdir).mkdir(parents=True)
-
-    if len(config.r_mom) != 0:
-        if Data['P_Radar'].name in pform_names('KA') or Data['P_Radar'].name =='WSR88D':
-            plt.suptitle(Data['P_Radar'].site_name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
-        else:
-            plt.suptitle(Data['P_Radar'].name+' '+str(config.p_tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
-
+            file_string= 'r_only'
+            plt_type='Radar_only/ppi'
+        
         #add the file name
         if Data['P_Radar'].name in pform_names('KA'):
-            output_name= Data['P_Radar'].site_name+'_'+Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
-        if Data['P_Radar'].name == 'NOXP':
-            output_name = Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_NOXP.png'
-        if Data['P_Radar'].name == 'WSR88D':
+            output_name = Data['P_Radar'].site_name+'_'+Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
+        else: #aka WSR88D or NOXP    
             output_name = Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
+        #path to file 
+        plt_dir=Data['P_Radar'].dir_name+'/'+plt_type+'/'+str(config.p_tilt)+'_deg/'+config.Centered_Pform+'/'
 
-    output_path_plus_name = outdir+output_name
+    #if only timeseries are included in the image
+    elif len(config.Time_Series) != 0 and len(config.r_mom) == 0:
+        plt.suptitle(config.day+' Time Series', y=title_spacer)
+        
+        #add the file name
+        file_string = '_'.join(config.Time_Series)
+        if config.ts_extent ==None: file_ender='_full.png'
+        else: file_ender='.png'
+        output_name= config.day+'_TS_'+file_string+file_ender
+        #path to file 
+        plt_dir='TSeries/'
+    
+    ## * * *     
+    #This is the directory path for the output file
+    outdir = config.g_TORUS_directory+config.day+'/plots/'+plt_dir
+    # Setup Function Cache for speedup, if path directory does not make the directory
+    if not os.path.exists(outdir): Path(outdir).mkdir(parents=True)
+    output_path_plus_name = outdir + output_name
     print(output_path_plus_name)
 
     plt.savefig(output_path_plus_name, bbox_inches='tight', pad_inches=.3)
@@ -644,7 +662,6 @@ def plotting(config, Data, TVARS, start_comptime):
     gc.collect()       # get tf outta here
 
     plotting_time = plotting_start_time - time.time()
-
     print('\a') ## Makes a ding noise
     if config.print_long == True: print('~~~~~~~~~~~made it through plotting~~~~~~~~~~~~~~~~~~')
     print('*** Exiting Plotting() after ', plotting_time, 'sec \n \n***************************************************************************************************')
@@ -712,7 +729,7 @@ def plot_radar_file(config, r_file, Data, TVARS, subset_pnames):
     if (valid_time == False) or (swp_id == None):
         if valid_time == False:
             print(r_file+' was not in the timerange being plotted')
-        if swp_id == None:
+        elif swp_id == None:
             print(r_file+' did not have a sweep that matched our tilt angle of intrest')
         #end evaluation for this file (do not make a plot)
         return
@@ -751,13 +768,13 @@ def find_radar_files(config, Data):
     # * * *
     if config.Radar_Plot_Type == 'KA_Plotting':
         ## Get radar files
-        path = config.g_mesonet_directory + config.day+'/radar/TTUKa/netcdf/*/dealiased_*'
+        path = config.g_TORUS_directory + config.day+'/data/radar/TTUKa/netcdf/*/dealiased_*'
         r_files_path= sorted(glob.glob(path))
 
     # * * *
     elif config.Radar_Plot_Type == 'NOXP_Plotting':
         ## Get radar files
-        path = config.g_mesonet_directory + config.day+'/radar/NOXP/'+config.day+'/*/sec/*'
+        path = config.g_TORUS_directory + config.day+'/data/radar/NOXP/'+config.day+'/*/sec/*'
         r_files_path = sorted(glob.glob(path))
 
     # * * *
