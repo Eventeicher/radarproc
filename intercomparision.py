@@ -60,11 +60,12 @@ from read_pforms import read_TInsitu, pform_names
 pd.set_option('display.max_columns', None)
 
 ## Whether to calc the distance between pforms 
-make_dist_csv= False#True
+make_dist_csv= False
  #  True
 apply_dist_threshold = False
-plotting = True#False
-comp_plots, prox_plots = True, False
+apply_storm_threshold = True#False
+plotting = True
+comp_plots, prox_plots = True, True
 #True#False
 #  False
 # # # # # # #
@@ -77,7 +78,11 @@ bined_data_freq = '10S'
 valid_time_diff= 5 #Min
 valid_dist_diff= 10 #'10km'
 #directory path 
-day_list= ['20190517', '20190518','20190520', '20190523', '20190524','20190525','20190526', '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
+#  day_list= ['20190517', '20190518','20190520', '20190523', '20190524','20190525','20190526', '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
+day_list= ['20190517', '20190518', '20190523', '20190524','20190525','20190526', '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
+day_cuttoff= {'20190517':'23:00', '20190518':'22:30','20190520':'17:00', '20190523':'22:00', '20190524':'19:00','20190525':'19:00','20190526':'18:00',
+              '20190527':'20:00', '20190528':'22:15', '20190608':'20:30', '20190611':'22:50', '20190613':'00:00', '20190615':'22:00'}
+colors ={'Prb1': 'red', 'Prb2':'green', 'WinS':'blue', 'LIDR': 'black', 'FFld':'gray', 'CoMeT1':'purple', 'CoMeT2':'pink', 'CoMeT3':'orange'}
 #  day_list=['20190523']
 for day in day_list:
     outdir = plot_config.g_TORUS_directory+day+'/data/mesonets/'
@@ -93,17 +98,21 @@ for day in day_list:
         df_holder, p_holder =[], [] 
         #  pform_list=["CoMeT1", "Prb2" ]
         for p in pform_names('TInsitu'):
-            d_avail=read_TInsitu(plot_config, p, True)
+            d_avail=read_TInsitu(plot_config, day, p, True)
             if d_avail == True:
                 #read in data
                 df = pd.DataFrame.empty
-                df, ptype =read_TInsitu(plot_config, p)
+                df, ptype =read_TInsitu(plot_config, day, p)
                 
                 #remove unneeded data columns
                 df = df.drop(columns=['U','V', 'dir', 'spd' ])
                 if ptype =='NSSL':
                     #  mask_allqc_df = np.ma.masked_where(df['all_qc_flags'].values > 0, df[var].values) #add masked dataset to the object
-                    df = df[df['all_qc_flags']==0]
+                    #  mask_allqc_df = np.ma.masked_where(df['qc1'].values > 0, df[var].values) #add masked dataset to the object
+                    #  mask_allqc_df = np.ma.masked_where(df['qc4'].values > 0, df[var].values) #add masked dataset to the object
+                    #  df = df[df['all_qc_flags']==0]
+                    df = df[df['qc1']==0]
+                    df = df[df['qc4']==0]
                     df = df.drop(columns=['id', 'qc1', 'qc2', 'qc3', 'qc4', 'all_qc_flags'])
                 
                 #group the obs together in x second intervals 
@@ -166,12 +175,12 @@ for day in day_list:
         
         ##Save to a csv file
         #This is the directory path for the output file
-        full_df.to_csv(outdir+day+'_comparison.csv')
+        full_df.to_csv(outdir+day+'_comparison_full.csv')
 
 
     #############
     if apply_dist_threshold == True:
-        df = pd.read_csv(outdir+day+'_comparison.csv')
+        df = pd.read_csv(outdir+day+'_comparison_full.csv')
 
         col_str='pforms_within_'+str(valid_dist_diff)+'km'
         differences = df.drop(columns=['pname', 'datetime', 'lat', 'lon', 'tfast', 'Thetav', 'Thetae'])
@@ -185,61 +194,68 @@ for day in day_list:
 
         # need to subtract one since otherwise the pform will be counted as being close to itself
         df[col_str]=pforms_valid.subtract(1)
-        df.to_csv(outdir+day+'_comparison.csv', index=False)
+        df.to_csv(outdir+day+'_comparison_full.csv', index=False)
         ##########
 
     #############
+    if apply_storm_threshold == True:
+        for end_str in ['_full.', '.']:
+            df = pd.read_csv(outdir+day+'_comparison'+end_str+'csv')
+            df = df[df['datetime']<=day_cuttoff[day]]
+            df.to_csv(outdir+day+'_comparison_ps'+end_str+'csv', index=False)
+
+    #############
     if plotting == True:
-        df = pd.read_csv(outdir+day+'_comparison.csv')
-        df['datetime']=pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S')
-        colors ={'Prb1': 'red', 'Prb2':'green', 'WinS':'blue', 'LIDR': 'black', 'FFld':'gray', 'CoMeT1':'purple', 'CoMeT2':'pink', 'CoMeT3':'orange'}
+        for end_str in ['_ps_full.','_full.', '_ps.', '.']:
+            df = pd.read_csv(outdir+day+'_comparison'+end_str+'csv')
+            df['datetime']=pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S')
 
-        num_of_pforms=df['pname'].nunique()
-        ##########
-        if prox_plots == True:
-            col_str='pforms_within_'+str(valid_dist_diff)+'km'
-            fig, ax = plt.subplots(nrows=num_of_pforms, ncols=1, sharex=True, sharey=True, figsize=(15,10)) 
-            r=0
-            for label, grp in df.groupby('pname'):
-                ax[r].yaxis.set_major_locator(MultipleLocator(2))
-                ax[r].yaxis.set_minor_locator(MultipleLocator(1))
-                ax[r].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M')) #strip the date from the datetime object
-                ax[r].xaxis.set_major_locator(mdates.HourLocator())
-                ax[r].xaxis.set_minor_locator(mdates.HourLocator())
-                ax[r].grid('on', which='both', axis='both', alpha=.5)
-                ax[r].set_xlim(min(df['datetime']),max(df['datetime']))
-                grp.plot.scatter(x = 'datetime', y =col_str, color=colors[label], ax = ax[r], label = label)
-                #  grp.plot.area(x = 'datetime', y = 'pforms_within_10km', color=colors[label], ax = ax, label = label, alpha=.25, stacked=False)
-                #  grp.plot(x = 'datetime', y = 'pforms_within_10km', color=colors[label], ax = ax[r], label = label)
-                #  grp.plot(x = 'datetime', y = 'pforms_within_10km', ax = ax[r], label = label)
-                r=r+1
-
-            plt.xlabel('Time (HH:MM UTC)')
-            plt.ylabel('pforms within '+ str(valid_dist_diff))
-            fig.suptitle(day+' platform proximity '+str(valid_dist_diff))
-            fig.tight_layout()
-            plt.subplots_adjust(wspace=0, hspace=0)
-            
-            name= plot_config.g_TORUS_directory+'comparison/prox/'+day+'_'+str(valid_dist_diff)+'_proximity.png'
-            print(name)
-            plt.savefig(name, bbox_inches='tight')
-            plt.close('all')   # close it
-            fig.clf()          # no really... close it
-            gc.collect()       # get tf outta here
-
-        #########
-        if comp_plots == True:
-            comp_var_list =['Thetae','Thetav']
-            for col_str in comp_var_list:
-                subset= True
-                if subset == True:
-                    num_pform_thres = 4
-                    df=df[df.loc[:,'pforms_within_'+str(valid_dist_diff)+'km']>=num_pform_thres]
-                fig,ax = plt.subplots(figsize=(15,10)) 
+            num_of_pforms=df['pname'].nunique()
+            ##########
+            if prox_plots == True:
+                col_str='pforms_within_'+str(valid_dist_diff)+'km'
+                fig, ax = plt.subplots(nrows=num_of_pforms, ncols=1, sharex=True, sharey=True, figsize=(15,10)) 
+                r=0
                 for label, grp in df.groupby('pname'):
-                    ax.yaxis.set_major_locator(MultipleLocator(2))
-                    ax.yaxis.set_minor_locator(MultipleLocator(1))
-                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M')) #strip the date from the datetime object
+                    ax[r].yaxis.set_major_locator(MultipleLocator(2))
+                    ax[r].yaxis.set_minor_locator(MultipleLocator(1))
+                    ax[r].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M')) #strip the date from the datetime object
+                    ax[r].xaxis.set_major_locator(mdates.HourLocator())
+                    ax[r].xaxis.set_minor_locator(mdates.HourLocator())
+                    ax[r].grid('on', which='both', axis='both', alpha=.5)
+                    ax[r].set_xlim(min(df['datetime']),max(df['datetime']))
+                    grp.plot.scatter(x = 'datetime', y =col_str, color=colors[label], ax = ax[r], label = label)
+                    #  grp.plot.area(x = 'datetime', y = 'pforms_within_10km', color=colors[label], ax = ax, label = label, alpha=.25, stacked=False)
+                    #  grp.plot(x = 'datetime', y = 'pforms_within_10km', color=colors[label], ax = ax[r], label = label)
+                    #  grp.plot(x = 'datetime', y = 'pforms_within_10km', ax = ax[r], label = label)
+                    r=r+1
+
+                plt.xlabel('Time (HH:MM UTC)')
+                plt.ylabel('pforms within '+ str(valid_dist_diff))
+                fig.suptitle(day+' platform proximity '+str(valid_dist_diff)+ 'km '+end_str)
+                fig.tight_layout()
+                plt.subplots_adjust(wspace=0, hspace=0)
+                
+                name= plot_config.g_TORUS_directory+'comparison/prox/'+day+'_'+str(valid_dist_diff)+'_proximity'+end_str+'png'
+                print(name)
+                plt.savefig(name, bbox_inches='tight')
+                plt.close('all')   # close it
+                fig.clf()          # no really... close it
+                gc.collect()       # get tf outta here
+
+            #########
+            if comp_plots == True:
+                comp_var_list =['Thetae','Thetav']
+                for col_str in comp_var_list:
+                    subset= True
+                    if subset == True:
+                        num_pform_thres = 4
+                        df=df[df.loc[:,'pforms_within_'+str(valid_dist_diff)+'km']>=num_pform_thres]
+                    fig,ax = plt.subplots(figsize=(15,10)) 
+                    for label, grp in df.groupby('pname'):
+                        ax.yaxis.set_major_locator(MultipleLocator(2))
+                        ax.yaxis.set_minor_locator(MultipleLocator(1))
+                        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M')) #strip the date from the datetime object
                     ax.xaxis.set_major_locator(mdates.HourLocator())
                     ax.xaxis.set_minor_locator(mdates.HourLocator())
                     ax.grid('on', which='both', axis='both', alpha=.5)
@@ -249,15 +265,15 @@ for day in day_list:
                     grp.plot.scatter(x = 'datetime', y = col_str , color=colors[label],linestyle='-', ax = ax, label = label)
                     #  grp.plot(x = 'datetime', y = 'pforms_within_10km', ax = ax[r], label = label)
 
-                plt.xlabel('Time (HH:MM UTC)')
-                plt.ylabel(col_str)
-                fig.suptitle(day+' '+col_str)
-                fig.tight_layout()
-                
-                name= plot_config.g_TORUS_directory+'comparison/comps/'+day+'_'+col_str+'.png'
-                print(name)
-                plt.savefig(name, bbox_inches='tight')
-                plt.close('all')   # close it
-                fig.clf()          # no really... close it
-                gc.collect()       # get tf outta here
-        ########
+                    plt.xlabel('Time (HH:MM UTC)')
+                    plt.ylabel(col_str)
+                    fig.suptitle(day+' '+col_str+' '+ end_str)
+                    fig.tight_layout()
+                    
+                    name= plot_config.g_TORUS_directory+'comparison/comps/'+day+'_'+col_str+end_str+'png'
+                    print(name)
+                    plt.savefig(name, bbox_inches='tight')
+                    plt.close('all')   # close it
+                    fig.clf()          # no really... close it
+                    gc.collect()       # get tf outta here
+            ########
