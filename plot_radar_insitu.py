@@ -56,6 +56,7 @@ from pympler.asizeof import asizeof
 #this is the file with the plotting controls to access any of the vars in that file use config.var
 import config as plot_config
 import copy
+import singledop
 
 import tracemalloc
 tracemalloc.start()
@@ -90,6 +91,7 @@ class Thermo_Plt_Vars:
             self.Te_GMin, self.Te_GMax = self.find_global_max_min('Thetae', Data)
             self.Tf_GMin, self.Tf_GMax = self.find_global_max_min('tfast', Data)
                 
+            print(Data)
             if config.R_Tvar == "Thetae":
                 lab, GMin, GMax = self.Te_lab, self.Te_GMin, self.Te_GMax
             elif config.R_Tvar == "Thetav":
@@ -193,7 +195,10 @@ class Master_Plt:
             #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
 
             # Define pyart display object for plotting radarfile
-            self.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile)
+            if 'sim_vel' in config.r_mom:
+                self.display = singledop.AnalysisDisplay(Data['P_Radar'].rfile.fields[sd_test])
+            else:
+                self.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile)
 
             # Set the projection of the radar plot, and transformations
             self.R_Proj = self.display.grid_projection
@@ -425,6 +430,12 @@ class Master_Plt:
         elif mom == 'diff_dbz':
             p_title, c_label, c_scale = 'DBZ Difference', 'Difference', 'Greys'#'pyart_balance'
             field, vminb, vmaxb, sweep = 'difference', 0., 2., Data['P_Radar'].swp
+        elif mom == 'vel_grad':
+            p_title, c_label, c_scale = 'Vel Gradient', 'Gradient m/s', 'RdGy'#'pyart_balance'
+            field, vminb, vmaxb, sweep = 'vel_gradient', -5., 5, Data['P_Radar'].swp
+        elif mom == 'sim_vel': 
+            p_title, c_label, c_scale = 'Sim', 'Difference', 'Greys'#'pyart_balance'
+            field, vminb, vmaxb, sweep = 'difference', 0., 2., Data['P_Radar'].swp
         elif mom == 'vel_texture':
             p_title, c_label, c_scale = 'Radial Calc Velocity Texture ', 'Velocity Texture?', 'Greys'#'pyart_balance'
             field, vminb, vmaxb, sweep = 'vel_texture', 0., 2., Data['P_Radar'].swp
@@ -438,8 +449,12 @@ class Master_Plt:
 
         ## Plot the radar
         ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
-        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=self.config.offsetkm*2000,
-                                  height=self.config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
+        if mom == 'sim_vel': 
+            display.four_panel_plot(scale=400, legend=20, return_flag=False, thin=6,
+                        levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix')
+        else:
+            self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=self.config.offsetkm*2000,
+                                      height=self.config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
         #  , gatefilter=Data['P_Radar'].filter)
 
         # Has to be here or it doesn't work
@@ -621,18 +636,23 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
     ## Make the Radar Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
     if len(config.r_mom) != 0:
-        for (subcol,), mom in np.ndenumerate(config.r_mom):
-            if subcol==0: row, col =0,0
-            if subcol==1: row, col =0,1
-            if subcol==2: row, col =1,0
-            if subcol==3: row, col =1,1
-            if subcol==4: row, col =2,0
-            if subcol==5: row, col =2,1
-            print('Radar plot: '+ mom +', Outer GridSpec Pos: [0, :], SubGridSpec Pos: ['+str(row)+', '+str(col)+']')
-            ax_n= PLT.fig.add_subplot(PLT.r_gs[row, col], projection= PLT.R_Proj)
-            if col==0: leg = True
-            else: leg = False
-            PLT.radar_subplots(mom, ax_n, PLT.fig, TVARS, Data, leg)
+        if 'sim_vel' in config.r_mom:
+            display = singledop.AnalysisDisplay(Data['P_Radar'].rfile.fields[sd_test])
+            display.four_panel_plot(scale=400, legend=20, return_flag=False, thin=6,
+                        levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix')
+        else:
+            for (subcol,), mom in np.ndenumerate(config.r_mom):
+                if subcol==0: row, col =0,0
+                if subcol==1: row, col =0,1
+                if subcol==2: row, col =1,0
+                if subcol==3: row, col =1,1
+                if subcol==4: row, col =2,0
+                if subcol==5: row, col =2,1
+                print('Radar plot: '+ mom +', Outer GridSpec Pos: [0, :], SubGridSpec Pos: ['+str(row)+', '+str(col)+']')
+                ax_n= PLT.fig.add_subplot(PLT.r_gs[row, col], projection= PLT.R_Proj)
+                if col==0: leg = True
+                else: leg = False
+                PLT.radar_subplots(mom, ax_n, PLT.fig, TVARS, Data, leg)
 
     ## Make the Times Series Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
@@ -662,7 +682,9 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
         else:
             file_string= 'r_only'
             if 'vel_texture' in config.r_mom:
-                plt_type='Radar_only/ppi/texture_test'
+                plt_type='Radar_only/ppi/texture'
+            #  if 'vel_grad' in config.r_mom:
+                #  plt_type='Radar_only/ppi/gradient'
             elif 'sim_vel' in config.r_mom:
                 plt_type='Radar_only/ppi/sim'
             elif 'diff_dbz' in config.r_mom:

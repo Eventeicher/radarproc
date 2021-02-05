@@ -51,6 +51,8 @@ import cftime # for num2pydate
 import pprint
 import math
 import copy
+import pytda
+import singledop
 pp = pprint.PrettyPrinter(indent=4)
 
 
@@ -109,14 +111,26 @@ def radar_fields_prep(config, rfile, radar_type):
             texture_feild=textures(rfile, call)
             rfile=mask(rfile, gatefilter, texture_feild, m)
         if m == 'sim_vel':
-            sim_V= pyart.util.simulated_vel_from_profile(rfile, rfile.fields['vel_fix']['data'])
-            rfile=mask(rfile, gatefilter, sim_V, m)
+            sd_test = singledop.SingleDoppler2D(L=30.0, radar=rfile, range_limits=[0, 20],
+                                    sweep_number=0, name_vr='velocity', thin_factor=[4, 12])
+#
+            #  sim_V= pyart.util.simulated_vel_from_profile(rfile, rfile.fields['vel_fix']['data'])
+            #  rfile=mask(rfile, gatefilter, sd_test, m)
         if m == 'diff_dbz':
             differnce_feild_name= 'difference'
             tot_field = rfile.fields['DBZ_TOT']['data']
             dbz_field = rfile.fields['DBZ']['data']
             diff = tot_field - dbz_field 
             rfile=mask(rfile, gatefilter, diff, 'difference')
+        if m == 'vel_grad':
+            vel_field = rfile.fields['vel_fix']['data']
+            print(type(vel_field))
+            print(np.shape(vel_field))
+            vel_grad= np.gradient(vel_field, axis =1)
+            print(type(vel_grad))
+            rfile.add_field('vel_gradient', {'data': vel_grad}, replace_existing=True) 
+            #  rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient')
+
     return rfile
 
 
