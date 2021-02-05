@@ -108,6 +108,15 @@ def radar_fields_prep(config, rfile, radar_type):
                 call = 'aray_text'
             texture_feild=textures(rfile, call)
             rfile=mask(rfile, gatefilter, texture_feild, m)
+        if m == 'sim_vel':
+            sim_V= pyart.util.simulated_vel_from_profile(rfile, rfile.fields['vel_fix']['data'])
+            rfile=mask(rfile, gatefilter, sim_V, m)
+        if m == 'diff_dbz':
+            differnce_feild_name= 'difference'
+            tot_field = rfile.fields['DBZ_TOT']['data']
+            dbz_field = rfile.fields['DBZ']['data']
+            diff = tot_field - dbz_field 
+            rfile=mask(rfile, gatefilter, diff, 'difference')
     return rfile
 
 
@@ -182,3 +191,158 @@ def order_rays_by_angle(sweep_id, rfile):
         field_sweep_data_reference = rfile.get_field(sweep_id, field_name, copy=False)
         # reorder field ray data so rays are in order of assending angles
         field_sweep_data_reference = reorder_array(field_sweep_data_reference, sorted_index_list)
+
+def texture(radar, var):
+    """ Determine a texture field using an 11pt stdev
+    texarray=texture(pyradarobj, field). """
+    fld = radar.fields[var]['data']
+    print(fld.shape)
+    tex = np.ma.zeros(fld.shape)
+    for timestep in range(tex.shape[0]):
+        ray = np.ma.std(rolling_window(fld[timestep, :], 11), 1)
+        tex[timestep, 5:-5] = ray
+        tex[timestep, 0:4] = np.ones(4) * ray[0]
+        tex[timestep, -5:] = np.ones(5) * ray[-1]
+    return tex
+
+def texture_along_ray(radar, var, wind_size=7):
+    """
+    Compute field texture along ray using a user specified
+    window size.
+
+    Parameters
+    ----------
+    radar : radar object
+        The radar object where the field is.
+    var : str
+        Name of the field which texture has to be computed.
+    wind_size : int, optional
+        Optional. Size of the rolling window used.
+
+    Returns
+    -------
+    tex : radar field
+        The texture of the specified field.
+
+    """
+    half_wind = int((wind_size-1)/2)
+    fld = radar.fields[var]['data']
+    tex = np.ma.zeros(fld.shape)
+    for timestep in range(tex.shape[0]):
+        ray = np.ma.std(rolling_window(fld[timestep, :], wind_size), 1)
+        tex[timestep, half_wind:-half_wind] = ray
+        tex[timestep, 0:half_wind] = np.ones(half_wind) * ray[0]
+        tex[timestep, -half_wind:] = np.ones(half_wind) * ray[-1]
+    return tex
+def angular_texture_2d(image, N, interval):
+    """
+    Compute the angular texture of an image. Uses convolutions
+    in order to speed up texture calculation by a factor of ~50
+    compared to using ndimage.generic_filter.
+
+    Parameters
+    ----------
+    image : 2D array of floats
+        The array containing the velocities in which to calculate
+        texture from.
+    N : int
+        This is the window size for calculating texture. The texture will be
+        calculated from an N by N window centered around the gate.
+    interval : float
+        The absolute value of the maximum velocity. In conversion to
+        radial coordinates, pi will be defined to be interval
+        and -pi will be -interval. It is recommended that interval be
+        set to the Nyquist velocity.
+
+    Returns
+    -------
+    std_dev : float array
+        Texture of the radial velocity field.
+
+    """
+    # transform distribution from original interval to [-pi, pi]
+    interval_max = interval
+    interval_min = -interval
+    half_width = (interval_max - interval_min) / 2.
+    center = interval_min + half_width
+
+    # Calculate parameters needed for angular std. dev
+    im = (np.asarray(image) - center) / (half_width) * np.pi
+    x = np.cos(im)
+    y = np.sin(im)
+
+    # Calculate convolution
+    kernel = np.ones((N, N))
+    xs = signal.convolve2d(x, kernel, mode="same", boundary="symm")
+    ys = signal.convolve2d(y, kernel, mode="same", boundary="symm")
+    ns = N**2
+
+    # Calculate norm over specified window
+    xmean = xs/ns
+    ymean = ys/ns
+    norm = np.sqrt(xmean**2 + ymean**2)
+    std_dev = np.sqrt(-2 * np.log(norm)) * (half_width) / np.pi
+    return std_dev
+def calculate_velocity_texture(radar, vel_field=None, wind_size=4, nyq=None,
+                               check_nyq_uniform=True):
+    """
+    Derive the texture of the velocity field.
+
+    Parameters
+    ----------
+    radar: Radar
+        Radar object from which velocity texture field will be made.
+    vel_field : str, optional
+        Name of the velocity field. A value of None will force Py-ART to
+        automatically determine the name of the velocity field.
+    wind_size : int, optional
+        The size of the window to calculate texture from. The window is
+        defined to be a square of size wind_size by wind_size.
+    nyq : float, optional
+        The nyquist velocity of the radar. A value of None will force Py-ART
+        to try and determine this automatically.
+    check_nyquist_uniform : bool, optional
+        True to check if the Nyquist velocities are uniform for all rays
+        within a sweep, False will skip this check. This parameter is ignored
+        when the nyq parameter is not None.
+
+    Returns
+    -------
+    vel_dict: dict
+        A dictionary containing the field entries for the radial velocity
+        texture.
+
+    """
+    # Parse names of velocity field
+    if vel_field is None:
+        vel_field = get_field_name('velocity')
+
+    # Allocate memory for texture field
+    vel_texture = np.zeros(radar.fields[vel_field]['data'].shape)
+
+    # If an array of nyquist velocities is derived, use different
+    # nyquist velocites for each sweep in texture calculation according to
+    # the nyquist velocity in each sweep.
+
+    if nyq is None:
+        # Find nyquist velocity if not specified
+        nyq = [radar.get_nyquist_vel(i, check_nyq_uniform) for i in
+               range(radar.nsweeps)]
+        for i in range(0, radar.nsweeps):
+            start_ray, end_ray = radar.get_start_end(i)
+            inds = range(start_ray, end_ray)
+            vel_sweep = radar.fields[vel_field]['data'][inds]
+            vel_texture[inds] = angular_texture_2d(
+                vel_sweep, wind_size, nyq[i])
+    else:
+        vel_texture = angular_texture_2d(
+            radar.fields[vel_field]['data'], wind_size, nyq)
+    vel_texture_field = get_metadata('velocity')
+    vel_texture_field['long_name'] = 'Doppler velocity texture'
+    vel_texture_field['standard_name'] = (
+        'texture_of_radial_velocity' + '_of_scatters_away_from_instrument')
+    vel_texture_field['data'] = ndimage.filters.median_filter(vel_texture,
+                                                              size=(wind_size,
+                                                                    wind_size))
+    return vel_texture_field
+

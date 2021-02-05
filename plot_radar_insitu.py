@@ -422,6 +422,9 @@ class Master_Plt:
                 field, vminb, vmaxb, sweep = 'vel_fix', -30., 30., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'WSR88D':
                 field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
+        elif mom == 'diff_dbz':
+            p_title, c_label, c_scale = 'DBZ Difference', 'Difference', 'Greys'#'pyart_balance'
+            field, vminb, vmaxb, sweep = 'difference', 0., 2., Data['P_Radar'].swp
         elif mom == 'vel_texture':
             p_title, c_label, c_scale = 'Radial Calc Velocity Texture ', 'Velocity Texture?', 'Greys'#'pyart_balance'
             field, vminb, vmaxb, sweep = 'vel_texture', 0., 2., Data['P_Radar'].swp
@@ -660,6 +663,10 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
             file_string= 'r_only'
             if 'vel_texture' in config.r_mom:
                 plt_type='Radar_only/ppi/texture_test'
+            elif 'sim_vel' in config.r_mom:
+                plt_type='Radar_only/ppi/sim'
+            elif 'diff_dbz' in config.r_mom:
+                plt_type='Radar_only/ppi/diff'
             else:
                 plt_type='Radar_only/ppi'
         
@@ -687,7 +694,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
     #This is the directory path for the output file
     outdir = config.g_TORUS_directory+day+'/plots/'+plt_dir
     # Setup Function Cache for speedup, if path directory does not make the directory
-    if not os.path.exists(outdir): Path(outdir).mkdir(parents=True)
+    if not os.path.exists(outdir): Path(outdir).mkdir(parents=True, exist_ok=True)
     output_path_plus_name = outdir + output_name
     print(output_path_plus_name)
 
@@ -864,7 +871,7 @@ def plot_radar(config, day, Data, TVARS):
         # Don't download files that you already have...
         path =  config.g_download_directory+ day +'/radar/Nexrad/Nexrad_files/'
         # If you dont have the path already make it and download the files
-        if not os.path.exists(path): Path(path).mkdir(parents=True)
+        if not os.path.exists(path): Path(path).mkdir(parents=True, exist_ok=True)
         # Remove all files ending in _MDM
         scans = list(filter(lambda x: not fnmatch.fnmatch(x.create_filepath(path, False)[-1], '*_MDM') , scans))
         # missing_scans is a list of scans we don't have and need to download
@@ -946,3 +953,35 @@ timer(totalcompT_start, time.time(), total_runtime=True)
 print("ALL FINISHED")
 
 tracemalloc.stop()
+
+'''
+def texture_along_ray(radar, var, wind_size=7):
+    """
+    Compute field texture along ray using a user specified
+    window size.
+
+    Parameters
+    ----------
+    radar : radar object
+        The radar object where the field is.
+    var : str
+        Name of the field which texture has to be computed.
+    wind_size : int, optional
+        Optional. Size of the rolling window used.
+
+    Returns
+    -------
+    tex : radar field
+        The texture of the specified field.
+
+    """
+    half_wind = int((wind_size-1)/2)
+    fld = radar.fields[var]['data']
+    tex = np.ma.zeros(fld.shape)
+    for timestep in range(tex.shape[0]):
+        ray = np.ma.std(rolling_window(fld[timestep, :], wind_size), 1)
+        tex[timestep, half_wind:-half_wind] = ray
+        tex[timestep, 0:half_wind] = np.ones(half_wind) * ray[0]
+        tex[timestep, -half_wind:] = np.ones(half_wind) * ray[-1]
+    return tex
+'''

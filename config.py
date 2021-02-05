@@ -13,8 +13,8 @@ from os.path import expanduser
 ## Plot layout controls
 # ***********************
 #  r_mom = ['refl','vel'] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
-r_mom = ['vel', 'vel_texture', 'vel_text_texture', 'vel_aray_texture' ] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
-#  r_mom = []
+#  r_mom = ['vel', 'vel_texture', 'vel_text_texture', 'vel_aray_texture' ] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
+r_mom = ['vel', 'diff_dbz']
 #  Time_Series = ['Wind', R_Tvar]
 Time_Series = []
 
@@ -75,7 +75,7 @@ g_download_directory = g_cache_directory + 'downloads/' # Download Storage
 g_roads_directory = g_root + '/roads/' # Roads data
 
 # Setup Function Cache for speedup
-if not os.path.exists(g_cache_directory): Path(g_cache_directory).mkdir(parents=True)
+if not os.path.exists(g_cache_directory): Path(g_cache_directory).mkdir(parents=True, exist_ok=True)
 
 ## Plot layout controls
 # ***********************
