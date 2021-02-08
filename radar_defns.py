@@ -53,10 +53,11 @@ import math
 import copy
 import pytda
 import singledop
+import scipy
 pp = pprint.PrettyPrinter(indent=4)
 
 
-def radar_fields_prep(config, rfile, radar_type):
+def radar_fields_prep(config, rfile, radar_type, sweep_id):
     if radar_type == 'KA':
         vel_name, refl_name = 'corrected_velocity', 'reflectivity'
         ncp_name, ncp_thresh = 'normalized_coherent_power', .4
@@ -123,13 +124,12 @@ def radar_fields_prep(config, rfile, radar_type):
             diff = tot_field - dbz_field 
             rfile=mask(rfile, gatefilter, diff, 'difference')
         if m == 'vel_grad':
+            #  vel_field = rfile.get_field(sweep_id, 'vel_fix', copy=False)
             vel_field = rfile.fields['vel_fix']['data']
-            print(type(vel_field))
-            print(np.shape(vel_field))
-            vel_grad= np.gradient(vel_field, axis =1)
-            print(type(vel_grad))
-            rfile.add_field('vel_gradient', {'data': vel_grad}, replace_existing=True) 
-            #  rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient')
+            vel_smoothed = scipy.signal.savgol_filter(vel_field, 15, 1, axis=1)
+            vel_grad= np.gradient(vel_smoothed, 15, axis= 1)*100
+            #  rfile.add_field('vel_gradient', {'data': vel_grad}, replace_existing=True)
+            rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient')
 
     return rfile
 
