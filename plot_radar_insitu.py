@@ -57,12 +57,15 @@ from pympler.asizeof import asizeof
 import config as plot_config
 import copy
 import singledop
-
+import pynimbus as pyn 
 import tracemalloc
+import shapefile
+import pickle
 tracemalloc.start()
 
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
+
 
 register_matplotlib_converters()
 logging.basicConfig(filename='this_is.log')
@@ -77,6 +80,7 @@ if plot_config.overlays['GEO']['OX'] == True: import osmnx as ox
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
 from read_pforms import error_printing, timer, time_in_range, time_range
+from radar_defns import read_from_radar_file, det_nearest_WSR, sweep_index, get_WSR_from_AWS, info_radar_files
 
 totalcompT_start = time.time()
 ################################################################################################
@@ -195,10 +199,7 @@ class Master_Plt:
             #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
 
             # Define pyart display object for plotting radarfile
-            if 'sim_vel' in config.r_mom:
-                self.display = singledop.AnalysisDisplay(Data['P_Radar'].rfile.fields[sd_test])
-            else:
-                self.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile)
+            self.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile)
 
             # Set the projection of the radar plot, and transformations
             self.R_Proj = self.display.grid_projection
@@ -402,7 +403,7 @@ class Master_Plt:
 
 
     # * * * * * *  *
-    def radar_subplots(self, mom, ax_n, fig, TVARS, Data, leg):
+    def radar_subplots(self, mom, day, ax_n, fig, TVARS, Data, leg):
         ''' Plots each of the radar subplots including the marker overlays corresponding to the additional platforms
         ----
         INPUTS: mom: str, indicates which radar moment you would like to plot (ie Reflectivity, Velocity, Spectrum Width etc)
@@ -437,7 +438,7 @@ class Master_Plt:
             p_title, c_label, c_scale = 'Sim', 'Difference', 'Greys'#'pyart_balance'
             field, vminb, vmaxb, sweep = 'difference', 0., 2., Data['P_Radar'].swp
         elif mom == 'vel_texture':
-            p_title, c_label, c_scale = 'Radial Calc Velocity Texture ', 'Velocity Texture?', 'Greys'#'pyart_balance'
+            p_title, c_label, c_scale = 'Radial Calc Velocity Texture ', 'Vel Texture STD Dev', 'Greys'#'pyart_balance'
             field, vminb, vmaxb, sweep = 'vel_texture', 0., 2., Data['P_Radar'].swp
         elif mom == 'vel_text_texture':
             p_title, c_label, c_scale = 'Radial Velocity Texture (only)', 'Velocity Texture?', 'Greys'#'pyart_balance'
@@ -445,18 +446,35 @@ class Master_Plt:
         elif mom == 'vel_aray_texture':
             p_title, c_label, c_scale = 'Radial Velocity Texture (along ray)', 'Velocity Texture?', 'Greys'#'pyart_balance'
             field, vminb, vmaxb, sweep = 'vel_aray_texture', 0., 2., Data['P_Radar'].swp
+        elif mom == 'vel_grad0_0':
+            p_title, c_label, c_scale = 'Radial Velocity (savgol 0) A0', 'Velocity [m/s]', cmocean.cm.balance
+            field, vminb, vmaxb, sweep = 'vel_gradient0_0', -30., 30, Data['P_Radar'].swp
+        elif mom == 'vel_grad1_0':
+            p_title, c_label, c_scale = 'Radial Acceleration (savgol 1) A0', 'm/s^2', cmocean.cm.balance
+            field, vminb, vmaxb, sweep = 'vel_gradient1_0', -2., 2, Data['P_Radar'].swp
+        elif mom == 'vel_grad2_0':
+            p_title, c_label, c_scale = 'Radial 3rd Deriv (savgol 2) A0', 'm/s^3', cmocean.cm.balance
+            field, vminb, vmaxb, sweep = 'vel_gradient2_0', -0.2, 0.2, Data['P_Radar'].swp
+
+        elif mom == 'vel_grad0_1':
+            p_title, c_label, c_scale = 'Radial Velocity (savgol 0) A1', 'Velocity [m/s]', cmocean.cm.balance
+            field, vminb, vmaxb, sweep = 'vel_gradient0_1', -30., 30, Data['P_Radar'].swp
+        elif mom == 'vel_grad1_1':
+            p_title, c_label, c_scale = 'Radial Acceleration (savgol 1) A1', 'm/s^2', cmocean.cm.balance
+            field, vminb, vmaxb, sweep = 'vel_gradient1_1', -1., 1, Data['P_Radar'].swp
+            #  field, vminb, vmaxb, sweep = 'vel_gradient1_1', -30., 30, Data['P_Radar'].swp
+        elif mom == 'vel_grad2_1':
+            p_title, c_label, c_scale = 'Radial 3rd Deriv (savgol 2) A1', 'm/s^3', cmocean.cm.balance
+            field, vminb, vmaxb, sweep = 'vel_gradient2_1', -0.1,0.1, Data['P_Radar'].swp
+            #  field, vminb, vmaxb, sweep = 'vel_gradient2_1', -30, 30, Data['P_Radar'].swp
         else: print("Hey what just happened!\n Check the Radar moments for spelling")
 
         ## Plot the radar
         ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
-        if mom == 'sim_vel': 
-            display.four_panel_plot(scale=400, legend=20, return_flag=False, thin=6,
-                        levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix')
-        else:
-            self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=self.config.offsetkm*2000,
-                                      height=self.config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
-        #  , gatefilter=Data['P_Radar'].filter)
 
+        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=self.config.offsetkm*2000,
+                                  height=self.config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
+        
         # Has to be here or it doesn't work
         ax_n.set_extent(self.Domain)
         self.tick_grid_settings(ax=ax_n, radar=True, scan_time=None, interval=10*1000)
@@ -581,6 +599,78 @@ class Master_Plt:
             if self.config.overlays[p.type]['Marker'] == True and valid_sites == True: 
                 plot_markers(p, LON, LAT, txt_label)
 
+        if self.config.overlays['LSR']['Marker']== True:
+            link = "https://www.spc.noaa.gov/climo/reports/19"+day[4:6]+day[6:8]+"_rpts_filtered.csv"
+            hazard_colors={'tornado': 'red', 'hail':'green', 'wind': 'blue'}
+            for hazard in ['tornado', 'hail', 'wind']:
+                lsr_reports = pyn.get_spc_storm_reports(link, type_of_df= hazard)
+                lat, lon =lsr_reports.points.lat_lon_to_plot()
+                ax_n.scatter(lon, lat, color=hazard_colors[hazard], transform=self.Proj)
+
+
+        if self.config.overlays['Tracks']['Marker']== True:
+            # to Download Data -> https://apps.dat.noaa.gov/StormDamage/DamageViewer/
+            # enter dates, and zoom into wanted tracks
+            # click "extract toolbox" and follow instructions
+            # click shapefile
+            # download the created shapefile file
+
+            # once you download data, you should have 4 files with the same name but with endings .dbf, .prj, .shp, .shx
+            # include the name, but not any file ending in the directory path
+            track_data = self.config.g_TORUS_directory+day+'/data/reports/extractDamage/nws_dat_damage_paths'
+            #  track_data = self.config.g_TORUS_directory+day+'/data/reports/extractDamage/nws_dat_damage_pnts'
+            #directory='/Users/jessmcd/Document/MyPassport_backup/Meso18_19/tor_tracks/20190314/extractDamagePaths'
+
+            # pull the data out into ShapeRecs object
+            data  = shapefile.Reader(track_data)
+            shapeRecs = data.shapeRecords()
+
+            # to look at file, shapeRecs[x].record (x is any number you want) will print out info (date, tor rating, etc.)
+            # each shapeRecs record represents a single tornado track
+            # to get the actual data, shapeRecs[x].shape.points will give you an array filled with lon/lat tuples
+
+            # create a DataFrame with tornado date, rating, and track locations
+            # run shapeRecs[0].record to see if there is any other data you want to include in the DataFrame
+            tor_tracks = pd.DataFrame()
+            track_info= {}
+            for track in np.arange(0, len(shapeRecs)):
+                track_info['date'] = shapeRecs[track].record[0]
+                track_info['rating'] = shapeRecs[track].record[11]
+                track_info['lons'] = [shapeRecs[track].shape.points[i][0] for i in np.arange(0,len(shapeRecs[track].shape.points))]
+                track_info['lats'] = [shapeRecs[track].shape.points[i][1] for i in np.arange(0,len(shapeRecs[track].shape.points))]
+                tor_tracks = tor_tracks.append(track_info, ignore_index=True)
+            print(shapeRecs[0].record)
+            #  print(shapeRecs)
+            #  print(len(shapeRecs))
+            #  print(shapeRecs.record)
+            print('999999999')
+            # quick example plot to make sure data pulled correctly 
+            for tor in np.arange(0, len(tor_tracks)):
+                #  ax_n.scatter(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], label=tor_tracks.loc[tor]['rating'], transform=self.Proj)
+                ax_n.plot(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], label=tor_tracks.loc[tor]['rating'], transform=self.Proj)
+                #  ax_n.plot(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], transform=self.Proj)
+            ax_n.legend()
+            print(shapeRecs[4].record[2])
+            print(shapeRecs[4].record[2])
+            #shapeRecs[4]['lats']
+            #  tortrack = pickle.load(open('20190314.p', 'rb'))
+#
+            #  tor_num=4
+            #  lats, lons = tortrack.loc[tor_num]['lats'],tortrack.loc[tor_num]['lons']
+#
+            #  for tor_event in tor_dict:
+                #  tortrack = pickle.load(open('{}.p'.format(tor_event), 'rb'))
+                #  for SN, tor_num in zip(tor_dict[tor_event][0],tor_dict[tor_event][1]):
+                    #  lats, lons = tortrack.loc[tor_num]['lats'],tortrack.loc[tor_num]['lons']
+                    #  snlat, snlon = probe_locs[SN][0],probe_locs[SN][1]
+                    #  xs, ys = [],[]
+                    #  for i,val in enumerate(lats):
+                        #  temp = get_dist(lons[i], lats[i],snlon, snlat)
+                        #  xs.append(temp[0])
+                        #  ys.append(temp[1])
+                    #  plt.plot(np.asarray(xs)/1000, np.asarray(ys)/1000, color=colors[icol], label=tor_event)
+                #  icol+=1
+#
         # * * *
         ## PLOT BACKGROUND FEATURES
         if self.config.overlays['GEO']['OX'] == True:
@@ -637,9 +727,13 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
     #### * * * * * * * * * * * * * * * * * ** * * * *
     if len(config.r_mom) != 0:
         if 'sim_vel' in config.r_mom:
-            display = singledop.AnalysisDisplay(Data['P_Radar'].rfile.fields[sd_test])
+            sd_test = singledop.SingleDoppler2D( L=30.0, radar=Data['P_Radar'].rfile, range_limits=[1, 6], filter_data=True,
+                    filter_distance=5, thin_factor=[4, 12], sweep_number=Data['P_Radar'].swp, name_vr='velocity')
+
+            display = singledop.AnalysisDisplay(sd_test)
+            #  display = singledop.AnalysisDisplay(Data['P_Radar'].rfile.fields[sd_test])
             display.four_panel_plot(scale=400, legend=20, return_flag=False, thin=6,
-                        levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix')
+                        levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix', dz_cmap='pyart_HomeyerRainbow' , xlim=[-21,21], ylim=[-21,21])
         else:
             for (subcol,), mom in np.ndenumerate(config.r_mom):
                 if subcol==0: row, col =0,0
@@ -652,7 +746,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                 ax_n= PLT.fig.add_subplot(PLT.r_gs[row, col], projection= PLT.R_Proj)
                 if col==0: leg = True
                 else: leg = False
-                PLT.radar_subplots(mom, ax_n, PLT.fig, TVARS, Data, leg)
+                PLT.radar_subplots(mom, day, ax_n, PLT.fig, TVARS, Data, leg)
 
     ## Make the Times Series Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
@@ -733,90 +827,6 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
     print('*** Exiting Plotting() after ', plotting_time, 'sec \n \n***************************************************************************************************')
 
 ##############################################################################################
-#######################
-## RADAR DEFINITIONS ##
-#######################
-def read_from_radar_file(radar_file, Rtype):
-    if Rtype== 'WSR':  radar = pyart.io.read_nexrad_archive(radar_file)
-    elif Rtype== 'KA': radar = pyart.io.read(radar_file)
-    elif Rtype =='NOXP': radar = pyart.io.read(radar_file)
-    return radar
-#  function_cache_memory = Memory(plot_config.g_cache_directory,verbose=1)
-#  cached_read_from_radar_file = function_cache_memory.cache(read_from_radar_file)
-
-# * * *
-def plot_radar_file(config, r_file, day, Data, TVARS, subset_pnames):
-    def sweep_index(tilt, radar= None):
-        swp_id = None
-        if config.Radar_Plot_Type == 'WSR_Plotting':
-            #Hard code the swp numbers that will be associated with a given tilt angle
-            if tilt == .5: swp_id=[0 , 1]
-            elif tilt == 1: swp_id=[2 , 3]
-            elif tilt == 1.5: swp_id=[4 , 5]
-            else: print('The tilt angle {} is not hard coded yet for WSR'.format(tilt))
-
-        else:
-            for i in range(radar.nsweeps):
-                ## Det the actual tilt angle of a given sweep (returns an array)
-                tilt_ang = radar.get_elevation(i)
-                ## Check to see if the radarfile matches the elevation tilt we are interested in
-                if np.around(tilt_ang[0], decimals=1) == tilt: swp_id = i
-        return swp_id
-    #####
-    print("\n*******************************\n plot_radar_file: scan file_name = {}\n".format(r_file))
-    start_comptime = time.time()
-
-    #####
-    if config.Radar_Plot_Type == 'WSR_Plotting':
-        rad_type = 'WSR'
-        valid_time= True
-    elif config.Radar_Plot_Type == 'KA_Plotting':
-        rad_type = 'KA'
-        time_string= str(20)+str(os.path.split(r_file)[1][13:24])
-        rtime = datetime.strptime(time_string, "%Y%m%d%H%M%S")
-        time_start, time_end = time_range(config)
-        valid_time = time_in_range(time_start, time_end, rtime)
-    elif config.Radar_Plot_Type == 'NOXP_Plotting':
-        rad_type = 'NOXP'
-        head_tail= os.path.split(r_file)
-        rtime = datetime.strptime(head_tail[1][6:21], "%Y%m%d_%H%M%S")
-        time_start, time_end = time_range(config)
-        valid_time = time_in_range(time_start, time_end, rtime)
-
-    for tilt in config.p_tilt:
-        #####
-        if valid_time == True:
-            #open file using pyart
-            #  radar = cached_read_from_radar_file(r_file, rad_type)
-            radar = read_from_radar_file(r_file, rad_type)
-            swp_id = sweep_index(tilt, radar)
-            if rad_type == 'KA':
-                ## Only proceed if file is a ppi scan; we are currently not interested in plotting the RHI scans
-                if radar.scan_type != 'ppi': return
-        #####
-        if (valid_time == False) or (swp_id == None):
-            if valid_time == False:
-                print(r_file+' was not in the timerange being plotted')
-            elif swp_id == None:
-                print(r_file+' did not have a sweep that matched our tilt angle of intrest ('+str(tilt)+')')
-            #end evaluation for this file (do not make a plot)
-            #  return
-
-        else:
-            ## Read in radar data and add to Data dict
-            ##### + + + + + + + + + + + + + + + + + + +
-            #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
-            Data, subset_pnames = Add_to_DATA(config, day, 'RADAR', Data, subset_pnames, MR_file=radar, swp=swp_id)
-            if config.print_long == True: print(str(Data)+'\n')
-            if config.print_radar_info== True: print(radar.info(level='compact'))
-
-            ## Proceed to plot the radar
-            ##### + + + + + + + + + + + +
-            print("\nProducing Radar Plot:")
-            plotting(config, Data, TVARS, start_comptime, tilt)
-            print("done in plot_radar_file")
-
-##############################################################################################
 def process_instruments(config, day):
     print('\nRead in Torus Platforms')
     #print(pform_names('ALL')) #list of ALL possible platforms
@@ -831,122 +841,103 @@ def process_instruments(config, day):
     Data, subset_pnames = Add_to_DATA(config, day, 'STN_I', Data, subset_pnames)
     return Data, subset_pnames
 
-def find_radar_files(config, day, Data):
-    r_files_path =[]
-    # * * *
-    if config.Radar_Plot_Type == 'KA_Plotting':
-        ## Get radar files
-        path = config.g_TORUS_directory + day+'/data/radar/TTUKa/netcdf/*/dealiased_*'
-        r_files_path= sorted(glob.glob(path))
-
-    # * * *
-    elif config.Radar_Plot_Type == 'NOXP_Plotting':
-        ## Get radar files
-        path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/*'
-        r_files_path = sorted(glob.glob(path))
-
-    # * * *
-    elif config.Radar_Plot_Type == 'WSR_Plotting':
-        def det_nearest_WSR(p_df):
-            ''' locate the nearest WSR88D site to the specified insitu instruments
-            '''
-            #find the locations of all WSR88D sites
-            #(outputs dict in format {Site_ID:{lat:...,lon:...,elav:...], ...})
-            all_WSR = pyart.io.nexrad_common.NEXRAD_LOCATIONS
-            #set up empty dataframe with site Ids as column names
-            d_from_all_r = pd.DataFrame(columns = all_WSR.keys())
-            #fill in said dataframe with the distance from all 88D sites from each probe measurement
-            for key in all_WSR:
-                d_from_r = np.square(p_df['lat']-all_WSR[key]['lat']) + np.square(p_df['lon']-all_WSR[key]['lon'])
-                d_from_all_r[key] = d_from_r
-
-            #Determine which WS88D site is closest to the probe and add to the original probe dataframe
-            p_df['Radar_ID'] = d_from_all_r.idxmin(axis = 1)
-            #Determine the unique radar sites to be plotted
-            r_ofintrest = p_df.Radar_ID.unique()
-
-            #Set up dict with format{Rsite_ID : [start_oftimerange_for_given_rad : end_oftimerange_for_given_rad]}
-            WSR_dict=dict()
-            for rad_site in  r_ofintrest:
-                trange_r = p_df.loc[p_df.Radar_ID == rad_site, ['datetime']].rename(columns={'datetime': rad_site})
-                WSR_dict.update({rad_site:[trange_r.min().get(rad_site), trange_r.max().get(rad_site)]})
-            return WSR_dict
-        r_files_path = det_nearest_WSR(Data[config.Centered_Pform].df)
-    return r_files_path
 
 ##############################################################################################
+## Plot Radar ##
+################
 def plot_radar(config, day, Data, TVARS):
-    def get_WSR_from_AWS(config, day, start, end, radar_id):
-        ''' Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
-        ----------
-        INPUTS  radar_id : string,  four letter radar designation
-                start & end: datetime,  start & end of the desired timerange
-        -------
-        RETURN  radar_list : Py-ART Radar Objects
-        '''
-        # Create this at the point of use # Otherwise it saves everything and eventually crashes
-        conn = nexradaws.NexradAwsInterface()
-        #Determine the radar scans that fall within the time range for a given radar site
-        scans = conn.get_avail_scans_in_range(start, end, radar_id)
-        print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
-
-        # Don't download files that you already have...
-        path =  config.g_download_directory+ day +'/radar/Nexrad/Nexrad_files/'
-        # If you dont have the path already make it and download the files
-        if not os.path.exists(path): Path(path).mkdir(parents=True, exist_ok=True)
-        # Remove all files ending in _MDM
-        scans = list(filter(lambda x: not fnmatch.fnmatch(x.create_filepath(path, False)[-1], '*_MDM') , scans))
-        # missing_scans is a list of scans we don't have and need to download
-        # create_filepath returns tuple of (directory, directory+filename)
-        # [-1] returns the directory+filename
-        missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
-        # missing files is the list of filenames of files we need to download
-        missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
-        print("missing ", len(missing_files), "of ", len(scans), " files")
-        print(missing_files)
-
-        # Download the files
-        results = conn.download(missing_scans, path, keep_aws_folders=False)
-        print(results.success)
-        print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
-        #print("Results.iter_success : {}\n".format(results.iter_success()))
-
-        # missing_scans_after is a list of scans we don't have (download failed)
-        # create_filepath returns tuple of (directory, directory+filename)
-        # [-1] returns the directory+filename
-        missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
-
-        if len(missing_files_after) > 0:
-            print("ERROR: Some Radar Scans Missing \n ", missing_files_after)
-            exit()
-
-        # Return list of files
-        radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
-        return radar_files
-
     print('\nYes Plot Radar \n')
+    def find_radar_files(config, day, Data):
+        r_files_path =[]
+        if config.Radar_Plot_Type == 'KA_Plotting':
+            ## Get radar files
+            path = config.g_TORUS_directory + day+'/data/radar/TTUKa/netcdf/*/dealiased_*'
+            r_files_path= sorted(glob.glob(path))
+
+        elif config.Radar_Plot_Type == 'NOXP_Plotting':
+            ## Get radar files
+            path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/dealiased_ordered_*'
+            r_files_path = sorted(glob.glob(path))
+
+        elif config.Radar_Plot_Type == 'WSR_Plotting':
+            r_files_path = det_nearest_WSR(Data[config.Centered_Pform].df)
+        return r_files_path
+    
+    ####
+    def plot_radar_file(config, r_file, day, Data, TVARS, subset_pnames):
+        print("\n*******************************\n plot_radar_file: scan file_name = {}\n".format(r_file))
+        start_comptime = time.time()
+        if config.Radar_Plot_Type == 'WSR_Plotting':
+            is_WSR= True
+            valid_time= True
+        else:
+            is_WSR= False 
+            if config.Radar_Plot_Type == 'KA_Plotting':
+                time_string= str(20)+str(os.path.split(r_file)[1][13:24])
+                rtime = datetime.strptime(time_string, "%Y%m%d%H%M%S")
+            elif config.Radar_Plot_Type == 'NOXP_Plotting':
+                head_tail= os.path.split(r_file)
+                rtime = datetime.strptime(head_tail[1][24:39], "%Y%m%d_%H%M%S")
+            time_start, time_end = time_range(config)
+            valid_time = time_in_range(time_start, time_end, rtime)
+
+        # * * * 
+        for tilt in config.p_tilt:
+            if valid_time == True:
+                #open file using pyart
+                radar = read_from_radar_file(r_file, is_WSR)
+                swp_id = sweep_index(tilt, is_WSR, radar)
+                if config.Radar_Plot_Type == 'KA_Plotting':
+                    ## Only proceed if file is a ppi scan; we are currently not interested in plotting the RHI scans
+                    if radar.scan_type != 'ppi': return
+            # * * * 
+            if (valid_time == False) or (swp_id == None):
+                if valid_time == False:
+                    print(r_file+' was not in the timerange being plotted')
+                elif swp_id == None:
+                    print(r_file+' did not have a sweep that matched our tilt angle of intrest ('+str(tilt)+')')
+                #end evaluation for this file (do not make a plot)
+            else:
+                ## Read in radar data and add to Data dict
+                ##### + + + + + + + + + + + + + + + + + + +
+                #  Establish info for the main plotting radar (aka scantime etc) & and locations for other radars (if deployed)
+                Data, subset_pnames = Add_to_DATA(config, day, 'RADAR', Data, subset_pnames, MR_file=radar, swp=swp_id)
+                if config.print_long == True: print(str(Data)+'\n')
+
+                ## Proceed to plot the radar
+                ##### + + + + + + + + + + + +
+                print("\nProducing Radar Plot:")
+                plotting(config, Data, TVARS, start_comptime, tilt)
+                print("done in plot_radar_file")
+
+
+    #########
     if config.Radar_Plot_Type == 'WSR_Plotting':
         WSR_info = find_radar_files(config, day, Data)
+        radar_files_paths= []
         for rad, times in WSR_info.items():
             print("Radar_Site: {}\n Start: {}\n End: {} \n***".format(rad, times[0], times[1]))
             radar_files = get_WSR_from_AWS(config, day, times[0], times[1], rad)
-            ## Proceed to plot the radar
-            print('********\n Radar files to process:')
-            pp.pprint(radar_files)
-            Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(config, r_file, day, Data, TVARS, subset_pnames) for r_file in radar_files)
-
+            radar_files_paths.append(radar_files)
+            #radar_files_paths= radar_files_paths+radar_files
     else:
         radar_files_paths = find_radar_files(config, day, Data)
-        ## Proceed to plot the radar
-        print('******\n Radar files to process:')
-        pp.pprint(radar_files_paths)
-        Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(config, r_file, day, Data, TVARS, subset_pnames) for r_file in radar_files_paths)
 
+    ## Proceed to plot the radar
+    if config.print_radar_info== True: info_radar_files('compact', radar_files_paths )
+    print('******\n Radar files to process:')
+    pp.pprint(radar_files_paths)
+    Parallel(n_jobs=config.nCPU, verbose=10)(delayed(plot_radar_file)(config, r_file, day, Data, TVARS, subset_pnames) for r_file in radar_files_paths)
+
+
+## Plot Time Series##
+#####################
 def plot_time_series(config, day, Data, TVARS):
     print("\nPlot Timeseries\n")
     start_comptime = time.time()
     plotting(config, day, Data, TVARS, start_comptime)
 
+##############################################################################################
 for day in plot_config.day_list:
     #####################################################
     # Read in Data that does not change for each image ##
@@ -976,34 +967,3 @@ print("ALL FINISHED")
 
 tracemalloc.stop()
 
-'''
-def texture_along_ray(radar, var, wind_size=7):
-    """
-    Compute field texture along ray using a user specified
-    window size.
-
-    Parameters
-    ----------
-    radar : radar object
-        The radar object where the field is.
-    var : str
-        Name of the field which texture has to be computed.
-    wind_size : int, optional
-        Optional. Size of the rolling window used.
-
-    Returns
-    -------
-    tex : radar field
-        The texture of the specified field.
-
-    """
-    half_wind = int((wind_size-1)/2)
-    fld = radar.fields[var]['data']
-    tex = np.ma.zeros(fld.shape)
-    for timestep in range(tex.shape[0]):
-        ray = np.ma.std(rolling_window(fld[timestep, :], wind_size), 1)
-        tex[timestep, half_wind:-half_wind] = ray
-        tex[timestep, 0:half_wind] = np.ones(half_wind) * ray[0]
-        tex[timestep, -half_wind:] = np.ones(half_wind) * ray[-1]
-    return tex
-'''

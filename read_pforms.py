@@ -51,9 +51,10 @@ import cftime # for num2pydate
 import pprint
 import math
 import copy
+
 pp = pprint.PrettyPrinter(indent=4)
 
-from radar_defns import radar_fields_prep, order_rays_by_angle  
+from radar_defns import radar_fields_prep, fix_NOXP_order 
 register_matplotlib_converters()
 logging.basicConfig(filename='this_is.log')
 log = logging.getLogger(__name__)
@@ -474,13 +475,13 @@ def read_Radar(config, day, pname, swp=None, rfile= None, d_testing=False, known
         else:# if the main plotting radar is a KA or NOXP radar
             if pname == 'NOXP':
                 #fix the ordering of the NOXP rays 
-                for sweep_id in range(rfile.nsweeps):
-                    order_rays_by_angle(sweep_id, rfile)
+                #  for sweep_id in range(rfile.nsweeps):
+                    #  order_rays_by_angle(sweep_id, rfile)
                 #apply mask and make texture feilds
-                radar_fields_prep(config, rfile, 'NOXP')
+                radar_fields_prep(config, rfile, 'NOXP', swp)
             elif pname in pform_names('KA'):
                 #apply mask and make texture feilds
-                radar_fields_prep(config, rfile, 'KA')
+                radar_fields_prep(config, rfile, 'KA', swp)
             #det the scantime
             MR_time = datetime.strptime(rfile.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S")
 
@@ -536,8 +537,8 @@ def read_Radar(config, day, pname, swp=None, rfile= None, d_testing=False, known
                 checking=0
                 for file in NOXPfiles:
                     head_tail= os.path.split(file)
-                    str_time = datetime.strptime(head_tail[1][6:21], "%Y%m%d_%H%M%S")
-                    end_time = datetime.strptime(head_tail[1][25:40], "%Y%m%d_%H%M%S")
+                    str_time = datetime.strptime(head_tail[1][24:39], "%Y%m%d_%H%M%S")
+                    end_time = datetime.strptime(head_tail[1][43:58], "%Y%m%d_%H%M%S")
                     valid_time = time_in_range(str_time, end_time, known_scan_time)
 
                     if valid_time == True:

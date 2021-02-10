@@ -40,9 +40,12 @@ import numpy as np
 import xarray as xr
 #from netCDF4 import num2date
 import argparse, cProfile, logging, time, os, os.path
+import os
 from os.path import expanduser
+import pathlib
 from pathlib import Path
 from joblib import Memory, Parallel, delayed
+import scipy
 from scipy import ndimage, interpolate
 from operator import attrgetter
 from collections import namedtuple
@@ -53,7 +56,9 @@ import math
 import copy
 import pytda
 import singledop
-import scipy
+import pickle
+import fire
+
 pp = pprint.PrettyPrinter(indent=4)
 
 
@@ -64,8 +69,9 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
         rhv_name= 'None'
 
     if radar_type == 'NOXP':
-        vel_name , refl_name = 'VEL', 'DBZ'
-        ncp_name, ncp_thresh = 'SQI', .5 
+        vel_name , refl_name = 'corrected_velocity', 'DBZ'
+        #  vel_name , refl_name = 'VEL', 'DBZ'
+        ncp_name, ncp_thresh = 'SQI', .6 
         rhv_name = 'RHOHV'
 
     #creating the mask for attenuation
@@ -111,9 +117,9 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
                 call = 'aray_text'
             texture_feild=textures(rfile, call)
             rfile=mask(rfile, gatefilter, texture_feild, m)
-        if m == 'sim_vel':
-            sd_test = singledop.SingleDoppler2D(L=30.0, radar=rfile, range_limits=[0, 20],
-                                    sweep_number=0, name_vr='velocity', thin_factor=[4, 12])
+        #  if m == 'sim_vel':
+            #  sd_test = singledop.SingleDoppler2D(L=30.0, radar=rfile, range_limits=[0, 20],
+                                    #  sweep_number=0, name_vr='velocity', thin_factor=[4, 12])
 #
             #  sim_V= pyart.util.simulated_vel_from_profile(rfile, rfile.fields['vel_fix']['data'])
             #  rfile=mask(rfile, gatefilter, sd_test, m)
@@ -126,25 +132,248 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
         if m == 'vel_grad':
             #  vel_field = rfile.get_field(sweep_id, 'vel_fix', copy=False)
             vel_field = rfile.fields['vel_fix']['data']
-            vel_smoothed = scipy.signal.savgol_filter(vel_field, 15, 1, axis=1)
+            print(np.shape(rfile.get_field(sweep_id, 'corrected_velocity')))
+            #  vel_smoothed=aliasfix(rfile.get_field(sweep_id,'velocity'),13,rfile.get_nyquist_vel(0))
+            vel_smoothed=aliasfix(rfile.get_field(sweep_id,'corrected_velocity'),13,rfile.get_nyquist_vel(0))
+            #  vel_smoothed = scipy.signal.savgol_filter(vel_field, 15, 1, axis=1)
             vel_grad= np.gradient(vel_smoothed, 15, axis= 1)*100
             #  rfile.add_field('vel_gradient', {'data': vel_grad}, replace_existing=True)
             rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient')
+        if m == 'vel_grad0_0':
+            vel_field = rfile.fields['vel_fix']['data']
+            vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=0, axis=0)
+            rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient0_0')
 
+        if m == 'vel_grad1_0':
+            vel_field = rfile.fields['vel_fix']['data']
+            vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=1, axis=0)
+            rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient1_0')
+
+        if m == 'vel_grad2_0':
+            vel_field = rfile.fields['vel_fix']['data']
+            vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=2, axis=0)
+            rfile=mask(rfile, gatefiter, vel_grad, 'vel_gradient2_0')
+
+
+        if m == 'vel_grad0_1':
+            vel_field = rfile.fields['vel_fix']['data']
+            vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=0, axis=1)
+
+            rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient0_1')
+
+        if m == 'vel_grad1_1':
+            vel_field = rfile.fields['vel_fix']['data']
+            vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=1, axis=1)
+            rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient1_1')
+
+        if m == 'vel_grad2_1':
+            vel_field = rfile.fields['vel_fix']['data']
+            vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=2, axis=1)
+            rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient2_1')
     return rfile
 
+##########
+def read_from_radar_file(radar_file, is_WSR=False):
+    if is_WSR == False: 
+        radar = pyart.io.read(radar_file)
+    elif is_WSR == True: 
+        radar = pyart.io.read_nexrad_archive(radar_file)
+    return radar
+#  function_cache_memory = Memory(plot_config.g_cache_directory,verbose=1)
+#  cached_read_from_radar_file = function_cache_memory.cache(read_from_radar_file)
+##########
+def sweep_index(tilt, is_WSR, radar= None):
+    swp_id = None
+    if is_WSR == True:
+        #Hard code the swp numbers that will be associated with a given tilt angle
+        if tilt == 0.5: swp_id=[0 , 1]
+        elif tilt == 1.0: swp_id=[2 , 3]
+        elif tilt == 1.5: swp_id=[4 , 5]
+        else: print('The tilt angle {} is not hard coded yet for WSR'.format(tilt))
+
+    else:
+        for i in range(radar.nsweeps):
+            ## Det the actual tilt angle of a given sweep (returns an array)
+            tilt_ang = radar.get_elevation(i)
+            ## Check to see if the radarfile matches the elevation tilt we are interested in
+            if np.around(tilt_ang[0], decimals=1) == tilt: swp_id = i
+    return swp_id
+##########
+def det_nearest_WSR(p_df):
+    ''' locate the nearest WSR88D site to the specified insitu instruments
+    '''
+    #find the locations of all WSR88D sites
+    #(outputs dict in format {Site_ID:{lat:...,lon:...,elav:...], ...})
+    all_WSR = pyart.io.nexrad_common.NEXRAD_LOCATIONS
+    #set up empty dataframe with site Ids as column names
+    d_from_all_r = pd.DataFrame(columns = all_WSR.keys())
+    #fill in said dataframe with the distance from all 88D sites from each probe measurement
+    for key in all_WSR:
+        d_from_r = np.square(p_df['lat']-all_WSR[key]['lat']) + np.square(p_df['lon']-all_WSR[key]['lon'])
+        d_from_all_r[key] = d_from_r
+
+    #Determine which WS88D site is closest to the probe and add to the original probe dataframe
+    p_df['Radar_ID'] = d_from_all_r.idxmin(axis = 1)
+    #Determine the unique radar sites to be plotted
+    r_ofintrest = p_df.Radar_ID.unique()
+
+    #Set up dict with format{Rsite_ID : [start_oftimerange_for_given_rad : end_oftimerange_for_given_rad]}
+    WSR_dict=dict()
+    for rad_site in  r_ofintrest:
+        trange_r = p_df.loc[p_df.Radar_ID == rad_site, ['datetime']].rename(columns={'datetime': rad_site})
+        WSR_dict.update({rad_site:[trange_r.min().get(rad_site), trange_r.max().get(rad_site)]})
+    return WSR_dict
+##########
+def get_WSR_from_AWS(config, day, start, end, radar_id):
+    ''' Retrieve the NEXRAD files that fall within a timerange for a specified radar site from the AWS server
+    ----------
+    INPUTS  radar_id : string,  four letter radar designation
+            start & end: datetime,  start & end of the desired timerange
+    -------
+    RETURN  radar_list : Py-ART Radar Objects
+    '''
+    # Create this at the point of use # Otherwise it saves everything and eventually crashes
+    conn = nexradaws.NexradAwsInterface()
+    #Determine the radar scans that fall within the time range for a given radar site
+    scans = conn.get_avail_scans_in_range(start, end, radar_id)
+    print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
+
+    # Don't download files that you already have...
+    path =  config.g_download_directory+ day +'/radar/Nexrad/Nexrad_files/'
+    # If you dont have the path already make it and download the files
+    if not os.path.exists(path): Path(path).mkdir(parents=True, exist_ok=True)
+    # Remove all files ending in _MDM
+    scans = list(filter(lambda x: not fnmatch.fnmatch(x.create_filepath(path, False)[-1], '*_MDM') , scans))
+    # missing_scans is a list of scans we don't have and need to download
+    # create_filepath returns tuple of (directory, directory+filename)
+    # [-1] returns the directory+filename
+    missing_scans = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
+    # missing files is the list of filenames of files we need to download
+    missing_files = list(map(lambda x: x.create_filepath(path,False)[-1], missing_scans))
+    print("missing ", len(missing_files), "of ", len(scans), " files")
+    print(missing_files)
+
+    # Download the files
+    results = conn.download(missing_scans, path, keep_aws_folders=False)
+    print(results.success)
+    print("{} downloads failed: {}\n".format(results.failed_count,results.failed))
+    #print("Results.iter_success : {}\n".format(results.iter_success()))
+
+    # missing_scans_after is a list of scans we don't have (download failed)
+    # create_filepath returns tuple of (directory, directory+filename)
+    # [-1] returns the directory+filename
+    missing_files_after = list(filter(lambda x: not Path(x.create_filepath(path,False)[-1]).exists(), scans))
+
+    if len(missing_files_after) > 0:
+        print("ERROR: Some Radar Scans Missing \n ", missing_files_after)
+        exit()
+
+    # Return list of files
+    radar_files = list(map(lambda x: x.create_filepath(path,False)[-1], scans))
+    return radar_files
 
 ##########
-def order_rays_by_angle(sweep_id, rfile):
+def aliasfix(array,delta,nyq):
+    '''
+   Half-assed attempt to fix de-aliasing errors. Calculates texture
+   (difference between point and mean) over a floating window of size delta x delta in the domain.
+   If the texture is greater than 1.5*nyquist (arbitrary threshold), then it is a de-aliasing error.
+   The if statements fix this according to the nyquist velocity.
+    '''
+ 
+    mean = scipy.convolve(array,np.ones((delta,delta))/delta**2.)
+    maskpos = np.logical_and(np.abs(array-mean)>nyq*1.5,array>0)
+    maskneg = np.logical_and(np.abs(array-mean)>nyq*1.5,array<0)
+ 
+    array[maskpos]= -2.*nyq+array[maskpos]
+    array[maskneg]= 2.*nyq+array[maskneg]
+ 
+    return array
+##############################################################
+###############################
+### Command line prompted Defns 
+###############################
+def info_radar_files(level, files):
+    for radar_file in files[:]:
+        print("\nInfo ... " + " Input File: " + str(radar_file))
+        radar = pyart.io.read(radar_file)
+        radar.info(level = level)
+        print(radar.info(level='compact'))
+        #  print('Nyquist Vel: {}'.format(radar.get_nyquist_vel(swp_id)))
+        #  print('Vel limits: {}'.format(pyart.config.get_field_limits('velocity', container=radar)))
+        #  print('Refl limits: {}'.format(pyart.config.get_field_limits('reflectivity', container=radar)))
+        #  print('range: {}'.format(radar.range))
+        #  print('Gate Area: {}'.format(radar.get_gate_area(swp_id)))
+        #  print('XYZ: {}'.format(radar.get_gate_x_y_z(swp_id)))
+
+
+def dealias_radar_files(prefix, files, Rtype):
+    dealiased_files, duplicated_files, skipped_files = [], [], []
+    ###Set Up Temporary Directory
+    cachedir='./cachedir'
+    mem= Memory(cachedir,verbose=1)
+    def dealias_radar(radar_pickled):
+        # Regenerate the calculated values in the object
+        radar = pickle.loads(radar_pickled)
+        dealias_data = pyart.correct.region_dealias.dealias_region_based(radar, vel_field=vel_field)
+        return dealias_data
+
+    ###joblib dealias stuff
+    #Don't use cached results
+    #  persistant_dealias_radar = dealias_radar
+    #Use caching
+    persistant_dealias_radar = mem.cache( dealias_radar )
+
+    if Rtype == 'KA':
+        vel_field = 'velocity'
+    elif Rtype == 'NOXP':
+        vel_field = 'VEL'
+
+    for radar_file in files[:]:
+        #  print("a: {},\n b:{},\n c:{},\n d:{},\n e:{}".format(radar_file, str(radar_file),
+                                #  os.path.dirname(radar_file), prefix, os.path.basename(radar_file)))
+        out_filename = os.path.dirname(radar_file) + '/' + prefix + os.path.basename(radar_file)
+        print("\nDealiasing... " + " Input File: " + str(radar_file) + " Output File: " + out_filename)
+
+        if radar_file == '.':
+            skipped_files.append(radar_file)
+            continue;
+
+        radar = pyart.io.read(radar_file)
+
+        if radar.scan_type == 'rhi':
+            print('Skipping, we are not dealiasing RHI files at this time \n')
+            skipped_files.append(radar_file)
+            continue;
+
+        #  if 'corrected_velocity' in radar.fields:
+            #  print('Input file already contains dealias data in field corrected_velocity......'
+                      #  ' so just creating a copy with the specified prefix \n')
+            #  duplicated_files.append(out_filename)
+        #  else:
+        dealias_data = persistant_dealias_radar( pickle.dumps(radar) )
+        radar.add_field('corrected_velocity', dealias_data, replace_existing=True)
+        dealiased_files.append(out_filename)
+
+        pyart.io.write_cfradial(out_filename, radar)
+
+    print("\n dealiased_files:")
+    pprint(dealiased_files)
+    print("\n skipped_files:")
+    pprint(skipped_files)
+    print("\n duplicated_files:")
+    pprint(duplicated_files)
+
+
+def fix_NOXP_order(prefix, files):
     ''' pyart requires rays in sweep to be ordered by angle
         Some radars sweeps cross the 360 degree threshold (359->0->1)
         Some radars sweeps contain segments that are out of order
         We need to fix both problems for pyart so all rays in sweep are ordered by ascending azimuth angle
+        *** both azimuth angle array and field arrays are reordered in rfile
         ---
         input:  azimuth_angles = [..., 358, 359,   0,   1,   2, ...,  39,  40, 200, 201, ...]
         output: azimuth_angles = [200, 201, ..., 358, 359, 360, 361, 362, ..., 399, 400, ...]
-
-        both azimuth angle array and field arrays are reordered in rfile
     '''
     def remove_zero_crossing(azimuth_angles):
         ''' Use angles >= 360 when sweep passes from 359.x to 0.x degrees: Dont use offset on other segments
@@ -194,169 +423,64 @@ def order_rays_by_angle(sweep_id, rfile):
           array[target_index] = array_copy[source_index]
         return array
 
-    azimuth_angles = rfile.get_azimuth(sweep_id)
-    azimuth_angles = remove_zero_crossing(azimuth_angles)
-    sorted_index_list = sort_on_ascending_angles(azimuth_angles)
+    ### read radar file
+    # # # # # # # # # #
+    for radar_file in files[:]:
+        rfile= pyart.io.read(radar_file)
 
-    # reorder azimuth angles so rays are in order of assending angles
-    azimuth_angles = reorder_array(azimuth_angles, sorted_index_list)
-    for field_name in list(rfile.fields):
-        # Ray data array were overwriting
-        field_sweep_data_reference = rfile.get_field(sweep_id, field_name, copy=False)
-        # reorder field ray data so rays are in order of assending angles
-        field_sweep_data_reference = reorder_array(field_sweep_data_reference, sorted_index_list)
+        ### order_rays_by_angle
+        # # # #  # # # #  # # # 
+        for sweep_id in range(rfile.nsweeps):
+            azimuth_angles = rfile.get_azimuth(sweep_id)
+            azimuth_angles = remove_zero_crossing(azimuth_angles)
+            sorted_index_list = sort_on_ascending_angles(azimuth_angles)
 
-def texture(radar, var):
-    """ Determine a texture field using an 11pt stdev
-    texarray=texture(pyradarobj, field). """
-    fld = radar.fields[var]['data']
-    print(fld.shape)
-    tex = np.ma.zeros(fld.shape)
-    for timestep in range(tex.shape[0]):
-        ray = np.ma.std(rolling_window(fld[timestep, :], 11), 1)
-        tex[timestep, 5:-5] = ray
-        tex[timestep, 0:4] = np.ones(4) * ray[0]
-        tex[timestep, -5:] = np.ones(5) * ray[-1]
-    return tex
+            # reorder azimuth angles so rays are in order of assending angles
+            azimuth_angles = reorder_array(azimuth_angles, sorted_index_list)
+            for field_name in list(rfile.fields):
+                # Ray data array were overwriting
+                field_sweep_data_reference = rfile.get_field(sweep_id, field_name, copy=False)
+                # reorder field ray data so rays are in order of assending angles
+                field_sweep_data_reference = reorder_array(field_sweep_data_reference, sorted_index_list)
 
-def texture_along_ray(radar, var, wind_size=7):
-    """
-    Compute field texture along ray using a user specified
-    window size.
 
-    Parameters
-    ----------
-    radar : radar object
-        The radar object where the field is.
-    var : str
-        Name of the field which texture has to be computed.
-    wind_size : int, optional
-        Optional. Size of the rolling window used.
+        ### write out the corrected radar file
+        # # # # # # # # # # # # # # # # # # # #
+        out_filename = os.path.dirname(radar_file) + '/' + prefix + os.path.basename(radar_file)
+        print("\nSorting... " + " Input File: " + str(radar_file) + " Output File: " + out_filename)
+        pyart.io.write_cfradial(out_filename, rfile)
 
-    Returns
-    -------
-    tex : radar field
-        The texture of the specified field.
+############################
+class Radar_File_Functions(object):
+    '''inputs from command line for the various code functionalities; thanks to the fire command below
+    (aka this code does a number of different things depending what inputs you give it)'''
+    def dealias_files(self, *input_files, Rtype, output_file_prefix: str = 'dealiased_'):
+        ''' Dealias radar file(s).
+            ---
+            input_files : array, Radar files to process.
+            Rtype: str (KA or NOXP), Type of radar to process (to determine velocity field name)
+            output_file_prefix : string, Path prefix to start all output files with.
+        '''
+        dealias_radar_files(output_file_prefix, input_files, Rtype)
 
-    """
-    half_wind = int((wind_size-1)/2)
-    fld = radar.fields[var]['data']
-    tex = np.ma.zeros(fld.shape)
-    for timestep in range(tex.shape[0]):
-        ray = np.ma.std(rolling_window(fld[timestep, :], wind_size), 1)
-        tex[timestep, half_wind:-half_wind] = ray
-        tex[timestep, 0:half_wind] = np.ones(half_wind) * ray[0]
-        tex[timestep, -half_wind:] = np.ones(half_wind) * ray[-1]
-    return tex
-def angular_texture_2d(image, N, interval):
-    """
-    Compute the angular texture of an image. Uses convolutions
-    in order to speed up texture calculation by a factor of ~50
-    compared to using ndimage.generic_filter.
+    def dump_file_info(self, *input_files, pyart_info_level: str = 'standard'):
+        ''' Describe radar file(s).
+            ---
+            input_files : array, Radar files to process.
+            pyart_info_level : string, Pyart specification for info level.
+        '''
+        info_radar_files(pyart_info_level, input_files)
+    def fix_NOXP_files(self, *input_files, output_file_prefix: str = 'ordered_'):
+        ''' Fix the ordering of the rays in the NOXP radar file(s).
+            ---
+            input_files : array, Radar files to process.
+            pyart_info_level : string, Pyart specification for info level.
+        '''
+        fix_NOXP_order(output_file_prefix, input_files)
 
-    Parameters
-    ----------
-    image : 2D array of floats
-        The array containing the velocities in which to calculate
-        texture from.
-    N : int
-        This is the window size for calculating texture. The texture will be
-        calculated from an N by N window centered around the gate.
-    interval : float
-        The absolute value of the maximum velocity. In conversion to
-        radial coordinates, pi will be defined to be interval
-        and -pi will be -interval. It is recommended that interval be
-        set to the Nyquist velocity.
-
-    Returns
-    -------
-    std_dev : float array
-        Texture of the radial velocity field.
-
-    """
-    # transform distribution from original interval to [-pi, pi]
-    interval_max = interval
-    interval_min = -interval
-    half_width = (interval_max - interval_min) / 2.
-    center = interval_min + half_width
-
-    # Calculate parameters needed for angular std. dev
-    im = (np.asarray(image) - center) / (half_width) * np.pi
-    x = np.cos(im)
-    y = np.sin(im)
-
-    # Calculate convolution
-    kernel = np.ones((N, N))
-    xs = signal.convolve2d(x, kernel, mode="same", boundary="symm")
-    ys = signal.convolve2d(y, kernel, mode="same", boundary="symm")
-    ns = N**2
-
-    # Calculate norm over specified window
-    xmean = xs/ns
-    ymean = ys/ns
-    norm = np.sqrt(xmean**2 + ymean**2)
-    std_dev = np.sqrt(-2 * np.log(norm)) * (half_width) / np.pi
-    return std_dev
-def calculate_velocity_texture(radar, vel_field=None, wind_size=4, nyq=None,
-                               check_nyq_uniform=True):
-    """
-    Derive the texture of the velocity field.
-
-    Parameters
-    ----------
-    radar: Radar
-        Radar object from which velocity texture field will be made.
-    vel_field : str, optional
-        Name of the velocity field. A value of None will force Py-ART to
-        automatically determine the name of the velocity field.
-    wind_size : int, optional
-        The size of the window to calculate texture from. The window is
-        defined to be a square of size wind_size by wind_size.
-    nyq : float, optional
-        The nyquist velocity of the radar. A value of None will force Py-ART
-        to try and determine this automatically.
-    check_nyquist_uniform : bool, optional
-        True to check if the Nyquist velocities are uniform for all rays
-        within a sweep, False will skip this check. This parameter is ignored
-        when the nyq parameter is not None.
-
-    Returns
-    -------
-    vel_dict: dict
-        A dictionary containing the field entries for the radial velocity
-        texture.
-
-    """
-    # Parse names of velocity field
-    if vel_field is None:
-        vel_field = get_field_name('velocity')
-
-    # Allocate memory for texture field
-    vel_texture = np.zeros(radar.fields[vel_field]['data'].shape)
-
-    # If an array of nyquist velocities is derived, use different
-    # nyquist velocites for each sweep in texture calculation according to
-    # the nyquist velocity in each sweep.
-
-    if nyq is None:
-        # Find nyquist velocity if not specified
-        nyq = [radar.get_nyquist_vel(i, check_nyq_uniform) for i in
-               range(radar.nsweeps)]
-        for i in range(0, radar.nsweeps):
-            start_ray, end_ray = radar.get_start_end(i)
-            inds = range(start_ray, end_ray)
-            vel_sweep = radar.fields[vel_field]['data'][inds]
-            vel_texture[inds] = angular_texture_2d(
-                vel_sweep, wind_size, nyq[i])
-    else:
-        vel_texture = angular_texture_2d(
-            radar.fields[vel_field]['data'], wind_size, nyq)
-    vel_texture_field = get_metadata('velocity')
-    vel_texture_field['long_name'] = 'Doppler velocity texture'
-    vel_texture_field['standard_name'] = (
-        'texture_of_radial_velocity' + '_of_scatters_away_from_instrument')
-    vel_texture_field['data'] = ndimage.filters.median_filter(vel_texture,
-                                                              size=(wind_size,
-                                                                    wind_size))
-    return vel_texture_field
+############################
+def main():
+  fire.Fire(Radar_File_Functions)
+if __name__ == '__main__':
+    main()
 
