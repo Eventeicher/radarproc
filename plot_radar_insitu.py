@@ -59,13 +59,10 @@ import copy
 import singledop
 import pynimbus as pyn 
 import tracemalloc
-import shapefile
-import pickle
 tracemalloc.start()
 
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
-
 
 register_matplotlib_converters()
 logging.basicConfig(filename='this_is.log')
@@ -428,9 +425,18 @@ class Master_Plt:
                 field, vminb, vmaxb, sweep = 'vel_fix', -30., 30., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'WSR88D':
                 field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
+        elif mom == 'vel_smooth':
+            p_title, c_label, c_scale = 'Radial Velocity Smoothed', 'Velocity [m/s]', cmocean.cm.balance#'pyart_balance'
+            if Data['P_Radar'].name in pform_names('KA'):
+                field, vminb, vmaxb, sweep = 'vel_smooth', -30., 30., Data['P_Radar'].swp
         elif mom == 'diff_dbz':
-            p_title, c_label, c_scale = 'DBZ Difference', 'Difference', 'Greys'#'pyart_balance'
-            field, vminb, vmaxb, sweep = 'difference', 0., 2., Data['P_Radar'].swp
+            p_title, c_label, c_scale = 'Difference (vel - vel_fix)', 'Difference', 'Greys_r'#'pyart_balance'
+            #  p_title, c_label, c_scale = 'DBZ Difference', 'Difference', 'Greys'#'pyart_balance'
+            field, sweep = 'difference', Data['P_Radar'].swp
+
+            diff_field = Data['P_Radar'].rfile.fields['difference']['data']
+            vminb=np.min(diff_field)
+            vmaxb=np.max(diff_field)
         elif mom == 'vel_grad':
             p_title, c_label, c_scale = 'Vel Gradient', 'Gradient m/s', 'RdGy'#'pyart_balance'
             field, vminb, vmaxb, sweep = 'vel_gradient', -5., 5, Data['P_Radar'].swp
@@ -607,70 +613,6 @@ class Master_Plt:
                 lat, lon =lsr_reports.points.lat_lon_to_plot()
                 ax_n.scatter(lon, lat, color=hazard_colors[hazard], transform=self.Proj)
 
-
-        if self.config.overlays['Tracks']['Marker']== True:
-            # to Download Data -> https://apps.dat.noaa.gov/StormDamage/DamageViewer/
-            # enter dates, and zoom into wanted tracks
-            # click "extract toolbox" and follow instructions
-            # click shapefile
-            # download the created shapefile file
-
-            # once you download data, you should have 4 files with the same name but with endings .dbf, .prj, .shp, .shx
-            # include the name, but not any file ending in the directory path
-            track_data = self.config.g_TORUS_directory+day+'/data/reports/extractDamage/nws_dat_damage_paths'
-            #  track_data = self.config.g_TORUS_directory+day+'/data/reports/extractDamage/nws_dat_damage_pnts'
-            #directory='/Users/jessmcd/Document/MyPassport_backup/Meso18_19/tor_tracks/20190314/extractDamagePaths'
-
-            # pull the data out into ShapeRecs object
-            data  = shapefile.Reader(track_data)
-            shapeRecs = data.shapeRecords()
-
-            # to look at file, shapeRecs[x].record (x is any number you want) will print out info (date, tor rating, etc.)
-            # each shapeRecs record represents a single tornado track
-            # to get the actual data, shapeRecs[x].shape.points will give you an array filled with lon/lat tuples
-
-            # create a DataFrame with tornado date, rating, and track locations
-            # run shapeRecs[0].record to see if there is any other data you want to include in the DataFrame
-            tor_tracks = pd.DataFrame()
-            track_info= {}
-            for track in np.arange(0, len(shapeRecs)):
-                track_info['date'] = shapeRecs[track].record[0]
-                track_info['rating'] = shapeRecs[track].record[11]
-                track_info['lons'] = [shapeRecs[track].shape.points[i][0] for i in np.arange(0,len(shapeRecs[track].shape.points))]
-                track_info['lats'] = [shapeRecs[track].shape.points[i][1] for i in np.arange(0,len(shapeRecs[track].shape.points))]
-                tor_tracks = tor_tracks.append(track_info, ignore_index=True)
-            print(shapeRecs[0].record)
-            #  print(shapeRecs)
-            #  print(len(shapeRecs))
-            #  print(shapeRecs.record)
-            print('999999999')
-            # quick example plot to make sure data pulled correctly 
-            for tor in np.arange(0, len(tor_tracks)):
-                #  ax_n.scatter(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], label=tor_tracks.loc[tor]['rating'], transform=self.Proj)
-                ax_n.plot(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], label=tor_tracks.loc[tor]['rating'], transform=self.Proj)
-                #  ax_n.plot(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], transform=self.Proj)
-            ax_n.legend()
-            print(shapeRecs[4].record[2])
-            print(shapeRecs[4].record[2])
-            #shapeRecs[4]['lats']
-            #  tortrack = pickle.load(open('20190314.p', 'rb'))
-#
-            #  tor_num=4
-            #  lats, lons = tortrack.loc[tor_num]['lats'],tortrack.loc[tor_num]['lons']
-#
-            #  for tor_event in tor_dict:
-                #  tortrack = pickle.load(open('{}.p'.format(tor_event), 'rb'))
-                #  for SN, tor_num in zip(tor_dict[tor_event][0],tor_dict[tor_event][1]):
-                    #  lats, lons = tortrack.loc[tor_num]['lats'],tortrack.loc[tor_num]['lons']
-                    #  snlat, snlon = probe_locs[SN][0],probe_locs[SN][1]
-                    #  xs, ys = [],[]
-                    #  for i,val in enumerate(lats):
-                        #  temp = get_dist(lons[i], lats[i],snlon, snlat)
-                        #  xs.append(temp[0])
-                        #  ys.append(temp[1])
-                    #  plt.plot(np.asarray(xs)/1000, np.asarray(ys)/1000, color=colors[icol], label=tor_event)
-                #  icol+=1
-#
         # * * *
         ## PLOT BACKGROUND FEATURES
         if self.config.overlays['GEO']['OX'] == True:

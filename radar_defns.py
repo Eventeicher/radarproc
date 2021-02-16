@@ -58,6 +58,7 @@ import pytda
 import singledop
 import pickle
 import fire
+from astropy.convolution import convolve
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -125,18 +126,27 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
             #  rfile=mask(rfile, gatefilter, sd_test, m)
         if m == 'diff_dbz':
             differnce_feild_name= 'difference'
-            tot_field = rfile.fields['DBZ_TOT']['data']
-            dbz_field = rfile.fields['DBZ']['data']
+            #  tot_field = rfile.fields['DBZ_TOT']['data']
+            #  dbz_field = rfile.fields['DBZ']['data']
+            tot_field = rfile.fields['corrected_velocity']['data']
+            dbz_field = rfile.fields['vel_smooth']['data']
             diff = tot_field - dbz_field 
             rfile=mask(rfile, gatefilter, diff, 'difference')
+        if m == 'vel_smooth':
+            vel_field = rfile.fields['corrected_velocity']['data']
+            vel_smoothed=aliasfix(vel_field,13,rfile.get_nyquist_vel(0))
+            rfile=mask(rfile, gatefilter, vel_smoothed, 'vel_smooth')
         if m == 'vel_grad':
             #  vel_field = rfile.get_field(sweep_id, 'vel_fix', copy=False)
-            vel_field = rfile.fields['vel_fix']['data']
+            vel_field = rfile.fields['corrected_velocity']['data']
+            #  vel_field = rfile.fields['vel_fix']['data']
             print(np.shape(rfile.get_field(sweep_id, 'corrected_velocity')))
             #  vel_smoothed=aliasfix(rfile.get_field(sweep_id,'velocity'),13,rfile.get_nyquist_vel(0))
-            vel_smoothed=aliasfix(rfile.get_field(sweep_id,'corrected_velocity'),13,rfile.get_nyquist_vel(0))
+            #  vel_smoothed=aliasfix(rfile.get_field(sweep_id,'corrected_velocity'),13,rfile.get_nyquist_vel(0))
+            vel_smoothed=aliasfix(vel_field,13,rfile.get_nyquist_vel(0))
             #  vel_smoothed = scipy.signal.savgol_filter(vel_field, 15, 1, axis=1)
             vel_grad= np.gradient(vel_smoothed, 15, axis= 1)*100
+            print(np.shape(vel_grad))
             #  rfile.add_field('vel_gradient', {'data': vel_grad}, replace_existing=True)
             rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient')
         if m == 'vel_grad0_0':
@@ -281,7 +291,7 @@ def aliasfix(array,delta,nyq):
    The if statements fix this according to the nyquist velocity.
     '''
  
-    mean = scipy.convolve(array,np.ones((delta,delta))/delta**2.)
+    mean = convolve(array,np.ones((delta,delta))/delta**2.)
     maskpos = np.logical_and(np.abs(array-mean)>nyq*1.5,array>0)
     maskneg = np.logical_and(np.abs(array-mean)>nyq*1.5,array<0)
  

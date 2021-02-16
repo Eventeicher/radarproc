@@ -12,10 +12,11 @@ from os.path import expanduser
 ###############
 ## Plot layout controls
 # ***********************
-r_mom = ['refl','vel'] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
+#  r_mom = ['refl','vel'] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
 #  r_mom = ['vel', 'vel_texture', 'vel_text_texture', 'vel_aray_texture' ] #list; the radar moments to plot on the left and right subplots respectively (current options are 'refl' or 'vel)
 #  r_mom = ['refl','vel', 'sim_vel']
-#  r_mom = ['refl','vel', 'vel_grad']
+#  r_mom = ['refl','vel', 'vel_grad', 'vel_smooth']
+r_mom = ['vel', 'vel_smooth', 'vel_grad', 'diff_dbz']
 #  r_mom = ['refl', 'vel','vel_texture','vel_grad1_1']
 #  r_mom = ['refl', 'vel','vel_texture','specw']
 #  r_mom=[]
@@ -24,8 +25,8 @@ r_mom = ['refl','vel'] #list; the radar moments to plot on the left and right su
 #  Time_Series = ['Thetav']
 Time_Series = []
 
-Radar_Plot_Type = 'NOXP_Plotting'
-#  Radar_Plot_Type = 'KA_Plotting'
+#  Radar_Plot_Type = 'NOXP_Plotting'
+Radar_Plot_Type = 'KA_Plotting'
 #  Radar_Plot_Type = 'WSR_Plotting'
 
 nCPU = 1# -2
@@ -50,15 +51,15 @@ if Radar_Plot_Type == 'WSR_Plotting':
     Wind_Pform = 'Prb2'
 
 #  p_tilt = 1  #what radar elevation tilt (deg) do you want to plot
-p_tilt=[0.5]#, 1.0, 1.5]
+p_tilt=[1.0]#0.5]#, 1.0, 1.5]
 ## Timeframe
 # ***********
 #crop the start or end time to a time you specify (set to None to do the whole day)
 #  day_list=['20190608']
-#  day_list= [ '20190524']
-day_list= [ '20190517']
+day_list= [ '20190524']
+#  day_list= [ '20190517']
 #  day = day_list[0]
-#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 40, 0)
+#  tstart = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 23, 50, 0)
 #  tend = dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), 21, 30, 0)
 #  day_list= ['20190517','20190518','20190520', '20190523', '20190524','20190525','20190526',
            #  '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
@@ -106,7 +107,7 @@ overlays = {'KA': {'Marker': False, 'Label': False, 'RHI_ring': False, 'RHI_Lab'
             'UNL': {'Marker': False, 'Label': False, 'Colorline': False},
             'UAS': {'Marker': False, 'Label': False},
             'LSR': {'Marker': False, 'Label': False},
-            'Tracks': {'Marker': True, 'Label': False},
+            'Tracks': {'Marker': False, 'Label': False},
             'STN_I': {'Marker': False, 'Label': False},
             'GEO': { 'OX': False, 'country_roads': False, 'hwys': False, 'county_lines': False, 'state_lines': False}
            }
