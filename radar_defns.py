@@ -64,13 +64,29 @@ pp = pprint.PrettyPrinter(indent=4)
 
 
 def radar_fields_prep(config, rfile, radar_type, sweep_id):
+    def textures(rfile, call, orig_field='vel_fix'):
+        if call== 'calc_vel':
+            texture_feild_almost= pyart.retrieve.calculate_velocity_texture(rfile, vel_field=orig_field, wind_size=3)
+            texture_feild = texture_feild_almost['data']
+        if call== 'text':
+            texture_feild = pyart.util.texture(rfile, 'vel_fix')
+        if call== 'aray_text':
+            texture_feild = pyart.util.texture_along_ray(rfile, 'vel_fix')
+        return texture_feild
+
+    def mask(rfile, gatefilter, moment, new_mom_name):
+        mom_masked= np.ma.masked_where(gatefilter.gate_included == False, moment)
+        rfile.add_field(new_mom_name, {'data': mom_masked}, replace_existing=True) 
+        return rfile
+    ###########
+
     if radar_type == 'KA':
         vel_name, refl_name, specw_name = 'corrected_velocity', 'reflectivity','spectrum_width' 
         ncp_name, ncp_thresh = 'normalized_coherent_power', .4
         rhv_name= 'None'
 
     if radar_type == 'NOXP':
-        vel_name , refl_name, specw_name = 'corrected_velocity', 'DBZ','NAN' 
+        vel_name , refl_name, specw_name = 'corrected_velocity', 'DBZ','WIDTH' 
         #  vel_name , refl_name = 'VEL', 'DBZ'
         ncp_name, ncp_thresh = 'SQI', .6 
         rhv_name = 'RHOHV'
@@ -84,24 +100,13 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
         #  gatefilter.exclude_below('DBZ', 10)
     gatefilter= pyart.filters.moment_based_gate_filter(rfile, ncp_field= ncp_name, rhv_field=rhv_name, 
                                                       refl_field=refl_name, min_ncp= ncp_thresh)
+    call = 'calc_vel'
+    texture_feild=textures(rfile, call, vel_name)
+    rfile=mask(rfile, gatefilter, texture_feild, 'vel_texture')
+    gatefilter.exclude_above('vel_texture', 3)
     # apply the mask to the necessary feilds
     for m in config.r_mom:
         print(m)
-        def textures(rfile, call, orig_field='vel_fix'):
-            if call== 'calc_vel':
-                texture_feild_almost= pyart.retrieve.calculate_velocity_texture(rfile, vel_field=orig_field, wind_size=3)
-                texture_feild = texture_feild_almost['data']
-            if call== 'text':
-                texture_feild = pyart.util.texture(rfile, 'vel_fix')
-            if call== 'aray_text':
-                texture_feild = pyart.util.texture_along_ray(rfile, 'vel_fix')
-            return texture_feild
-
-        def mask(rfile, gatefilter, moment, new_mom_name):
-            mom_masked= np.ma.masked_where(gatefilter.gate_included == False, moment)
-            rfile.add_field(new_mom_name, {'data': mom_masked}, replace_existing=True) 
-            return rfile
-
         ###
         if m in ['vel', 'refl', 'specw']:
             if m == 'vel': orig_field_name, new_feild_name = vel_name, 'vel_fix'
@@ -162,6 +167,10 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
             vel_field = rfile.fields['vel_fix']['data']
             vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=1, axis=1)
             rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient_sav_gol')
+        if m == 'vel_savgol':
+            vel_field = rfile.fields['vel_fix']['data']
+            vel_savg = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, axis=1)
+            rfile=mask(rfile, gatefilter, vel_savg, 'vel_savgol')
         if m == 'vel_grad0_0':
             vel_field = rfile.fields['vel_fix']['data']
             vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=0, axis=0)
@@ -335,10 +344,10 @@ def dealias_radar_files(prefix, files, Rtype):
     ###Set Up Temporary Directory
     cachedir='./cachedir'
     mem= Memory(cachedir,verbose=1)
-    def dealias_radar(radar_pickled):
+    def dealias_radar(radar_pickled, gatefilter):
         # Regenerate the calculated values in the object
         radar = pickle.loads(radar_pickled)
-        dealias_data = pyart.correct.region_dealias.dealias_region_based(radar, vel_field=vel_field)
+        dealias_data = pyart.correct.region_dealias.dealias_region_based(radar, vel_field=vel_field, gatefilter=gatefilter)
         return dealias_data
 
     ###joblib dealias stuff
@@ -349,8 +358,11 @@ def dealias_radar_files(prefix, files, Rtype):
 
     if Rtype == 'KA':
         vel_field = 'velocity'
+        texture_thresh= 3
     elif Rtype == 'NOXP':
         vel_field = 'VEL'
+        texture_thresh= 3
+    #  rfile=mask(rfile, gatefilter, texture_feild, 'vel_texture')
 
     for radar_file in files[:]:
         #  print("a: {},\n b:{},\n c:{},\n d:{},\n e:{}".format(radar_file, str(radar_file),
@@ -369,12 +381,19 @@ def dealias_radar_files(prefix, files, Rtype):
             skipped_files.append(radar_file)
             continue;
 
+        texture_feild_almost= pyart.retrieve.calculate_velocity_texture(radar, vel_field=vel_field, wind_size=3)
+        #  texture_feild = texture_feild_almost['data']
+        radar.add_field('vel_texture', texture_feild_almost, replace_existing=True)
+
+        gatefilter = pyart.filters.GateFilter(radar)
+        gatefilter.exclude_above('vel_texture', texture_thresh)
+
         #  if 'corrected_velocity' in radar.fields:
             #  print('Input file already contains dealias data in field corrected_velocity......'
                       #  ' so just creating a copy with the specified prefix \n')
             #  duplicated_files.append(out_filename)
         #  else:
-        dealias_data = persistant_dealias_radar( pickle.dumps(radar) )
+        dealias_data = persistant_dealias_radar( pickle.dumps(radar), gatefilter )
         radar.add_field('corrected_velocity', dealias_data, replace_existing=True)
         dealiased_files.append(out_filename)
 
