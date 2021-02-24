@@ -65,12 +65,12 @@ pp = pprint.PrettyPrinter(indent=4)
 
 def radar_fields_prep(config, rfile, radar_type, sweep_id):
     if radar_type == 'KA':
-        vel_name, refl_name = 'corrected_velocity', 'reflectivity'
+        vel_name, refl_name, specw_name = 'corrected_velocity', 'reflectivity','spectrum_width' 
         ncp_name, ncp_thresh = 'normalized_coherent_power', .4
         rhv_name= 'None'
 
     if radar_type == 'NOXP':
-        vel_name , refl_name = 'corrected_velocity', 'DBZ'
+        vel_name , refl_name, specw_name = 'corrected_velocity', 'DBZ','NAN' 
         #  vel_name , refl_name = 'VEL', 'DBZ'
         ncp_name, ncp_thresh = 'SQI', .6 
         rhv_name = 'RHOHV'
@@ -103,11 +103,19 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
             return rfile
 
         ###
-        if m in ['vel', 'refl']:
+        if m in ['vel', 'refl', 'specw']:
             if m == 'vel': orig_field_name, new_feild_name = vel_name, 'vel_fix'
             if m == 'refl': orig_field_name, new_feild_name = refl_name, 'refl_fix'
+            if m == 'specw': orig_field_name, new_feild_name = specw_name, 'specw_fix'
             orig_field = rfile.fields[orig_field_name]['data']
             rfile=mask(rfile, gatefilter, orig_field, new_feild_name)
+        if m in ['vel_despeck', 'refl_despeck']:
+            if m == 'refl_despeck':
+                speckeled_gatefilter =pyart.correct.despeckle_field(rfile, field='refl_fix', gatefilter=gatefilter) 
+                rfile=mask(rfile, speckeled_gatefilter, 'refl_fix', 'refl_despeck')
+            else:
+                rfile=mask(rfile, speckeled_gatefilter, 'vel_fix', 'vel_despeck')
+
         
         if m in ['vel_texture', 'vel_text_texture', 'vel_aray_texture']: 
             if m == 'vel_texture':
@@ -124,13 +132,16 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
 #
             #  sim_V= pyart.util.simulated_vel_from_profile(rfile, rfile.fields['vel_fix']['data'])
             #  rfile=mask(rfile, gatefilter, sd_test, m)
-        if m == 'diff_dbz':
+        if m == 'diff':
             differnce_feild_name= 'difference'
             #  tot_field = rfile.fields['DBZ_TOT']['data']
             #  dbz_field = rfile.fields['DBZ']['data']
-            tot_field = rfile.fields['corrected_velocity']['data']
-            dbz_field = rfile.fields['vel_smooth']['data']
-            diff = tot_field - dbz_field 
+            #  tot_field = rfile.fields['corrected_velocity']['data']
+            #  final_field = rfile.fields['vel_smooth']['data']
+            final_field= rfile.fields['vel_fix']['data']
+            inital_field = rfile.fields['VEL']['data']
+            #  inital_field = rfile.fields['corrected_velocity']['data']
+            diff = final_field - inital_field 
             rfile=mask(rfile, gatefilter, diff, 'difference')
         if m == 'vel_smooth':
             vel_field = rfile.fields['corrected_velocity']['data']
@@ -140,15 +151,17 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
             #  vel_field = rfile.get_field(sweep_id, 'vel_fix', copy=False)
             vel_field = rfile.fields['corrected_velocity']['data']
             #  vel_field = rfile.fields['vel_fix']['data']
-            print(np.shape(rfile.get_field(sweep_id, 'corrected_velocity')))
             #  vel_smoothed=aliasfix(rfile.get_field(sweep_id,'velocity'),13,rfile.get_nyquist_vel(0))
             #  vel_smoothed=aliasfix(rfile.get_field(sweep_id,'corrected_velocity'),13,rfile.get_nyquist_vel(0))
             vel_smoothed=aliasfix(vel_field,13,rfile.get_nyquist_vel(0))
             #  vel_smoothed = scipy.signal.savgol_filter(vel_field, 15, 1, axis=1)
             vel_grad= np.gradient(vel_smoothed, 15, axis= 1)*100
-            print(np.shape(vel_grad))
             #  rfile.add_field('vel_gradient', {'data': vel_grad}, replace_existing=True)
             rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient')
+        if m == 'vel_savgol_grad':
+            vel_field = rfile.fields['vel_fix']['data']
+            vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=1, axis=1)
+            rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient_sav_gol')
         if m == 'vel_grad0_0':
             vel_field = rfile.fields['vel_fix']['data']
             vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=0, axis=0)

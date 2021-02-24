@@ -59,6 +59,8 @@ import copy
 import singledop
 import pynimbus as pyn 
 import tracemalloc
+import shapefile
+import pickle
 tracemalloc.start()
 
 import pprint
@@ -425,21 +427,46 @@ class Master_Plt:
                 field, vminb, vmaxb, sweep = 'vel_fix', -30., 30., Data['P_Radar'].swp
             if Data['P_Radar'].name == 'WSR88D':
                 field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
+        elif mom == 'vel_despeck':
+            p_title, c_label, c_scale = 'Radial Velocity DS', 'Velocity [m/s]', cmocean.cm.balance#'pyart_balance'
+            if Data['P_Radar'].name in pform_names('KA'):
+                field, vminb, vmaxb, sweep = 'vel_despeck', -30., 30., Data['P_Radar'].swp
+            if Data['P_Radar'].name == 'NOXP':
+                field, vminb, vmaxb, sweep = 'vel_despeck', -30., 30., Data['P_Radar'].swp
+        elif mom == 'refl_despeck':
+            p_title, c_label, c_scale = 'Reflectivity DS', 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow'
+            if Data['P_Radar'].name in pform_names('KA'):
+                field, vminb, vmaxb, sweep = 'refl_despeck', -30., 30., Data['P_Radar'].swp
+            if Data['P_Radar'].name == 'NOXP':
+                field, vminb, vmaxb, sweep = 'refl_despeck',-10, 60 , Data['P_Radar'].swp#-10., 60., 0# Data['P_Radar'].swp
+        elif mom == 'specw':
+            p_title, c_label, c_scale = 'Spectrum Width', 'Spectrum Width' r' [$\frac{m}{s}$]', 'cubehelix_r'
+        #  display.plot('sw_fix',swp_id, vmin=0., vmax=4.,cmap='cubehelix_r', colorbar_label='', ax=ax2, title='',ticks=[0,0.4,0.8,1.2,1.6,2,2.4,2.8,3.2,3.6,4])
+            if Data['P_Radar'].name in pform_names('KA'):
+                field, vminb, vmaxb, sweep = 'specw_fix', 0., 4, Data['P_Radar'].swp
         elif mom == 'vel_smooth':
             p_title, c_label, c_scale = 'Radial Velocity Smoothed', 'Velocity [m/s]', cmocean.cm.balance#'pyart_balance'
-            if Data['P_Radar'].name in pform_names('KA'):
-                field, vminb, vmaxb, sweep = 'vel_smooth', -30., 30., Data['P_Radar'].swp
-        elif mom == 'diff_dbz':
-            p_title, c_label, c_scale = 'Difference (vel - vel_fix)', 'Difference', 'Greys_r'#'pyart_balance'
+            field, vminb, vmaxb, sweep = 'vel_smooth', -30., 30., Data['P_Radar'].swp
+        elif mom == 'vel_unfixed':
+            p_title, c_label, c_scale = 'Velocity Unfixed', 'Velocity [m/s]', cmocean.cm.balance#'pyart_balance'
+            field, vminb, vmaxb, sweep = 'VEL', -30., 30., Data['P_Radar'].swp
+        elif mom == 'diff':
+            p_title, c_label, c_scale = 'Difference (fixed - original)', 'Difference', cmocean.cm.balance#'pyart_balance'
             #  p_title, c_label, c_scale = 'DBZ Difference', 'Difference', 'Greys'#'pyart_balance'
             field, sweep = 'difference', Data['P_Radar'].swp
 
-            diff_field = Data['P_Radar'].rfile.fields['difference']['data']
+            diff_field = Data['P_Radar'].rfile.get_field(Data['P_Radar'].swp, 'difference', copy=False)
+            #  diff_field = Data['P_Radar'].rfile.fields['difference']['data']
             vminb=np.min(diff_field)
             vmaxb=np.max(diff_field)
+            #  vminb=-2
+            #  vmaxb=2
         elif mom == 'vel_grad':
-            p_title, c_label, c_scale = 'Vel Gradient', 'Gradient m/s', 'RdGy'#'pyart_balance'
+            p_title, c_label, c_scale = 'Vel Gradient', 'Gradient m/s', cmocean.cm.balance#'RdGy'#'pyart_balance'
             field, vminb, vmaxb, sweep = 'vel_gradient', -5., 5, Data['P_Radar'].swp
+        elif mom == 'vel_savgol_grad':
+            p_title, c_label, c_scale = 'Radial Acceleration poly(2)', 'm/s^2', cmocean.cm.balance
+            field, vminb, vmaxb, sweep = 'vel_gradient_sav_gol', -1., 1, Data['P_Radar'].swp
         elif mom == 'sim_vel': 
             p_title, c_label, c_scale = 'Sim', 'Difference', 'Greys'#'pyart_balance'
             field, vminb, vmaxb, sweep = 'difference', 0., 2., Data['P_Radar'].swp
@@ -485,6 +512,7 @@ class Master_Plt:
         ax_n.set_extent(self.Domain)
         self.tick_grid_settings(ax=ax_n, radar=True, scan_time=None, interval=10*1000)
         ax_n.grid(True)
+
         # Do it again here to restore extent
         ax_n.set_extent(self.Domain)
         
@@ -605,6 +633,8 @@ class Master_Plt:
             if self.config.overlays[p.type]['Marker'] == True and valid_sites == True: 
                 plot_markers(p, LON, LAT, txt_label)
 
+        # * * *
+        ## PLot LSR and Tor damage paths
         if self.config.overlays['LSR']['Marker']== True:
             link = "https://www.spc.noaa.gov/climo/reports/19"+day[4:6]+day[6:8]+"_rpts_filtered.csv"
             hazard_colors={'tornado': 'red', 'hail':'green', 'wind': 'blue'}
@@ -612,6 +642,67 @@ class Master_Plt:
                 lsr_reports = pyn.get_spc_storm_reports(link, type_of_df= hazard)
                 lat, lon =lsr_reports.points.lat_lon_to_plot()
                 ax_n.scatter(lon, lat, color=hazard_colors[hazard], transform=self.Proj)
+        
+        if self.config.overlays['Tracks']['Marker']== True:
+            # to Download Data -> https://apps.dat.noaa.gov/StormDamage/DamageViewer/
+            # enter dates, and zoom into wanted tracks
+            # click "extract toolbox" and follow instructions
+            # click shapefile
+            # download the created shapefile file
+
+            # once you download data, you should have 4 files with the same name but with endings .dbf, .prj, .shp, .shx
+            # include the name, but not any file ending in the directory path
+            #  track_data = self.config.g_TORUS_directory+day+'/data/reports/extractDamage/nws_dat_damage_paths'
+            #  track_data = self.config.g_TORUS_directory+day+'/data/reports/extractDamage/nws_dat_damage_polys'
+            track_data = self.config.g_TORUS_directory+day+'/data/reports/extractDamage/nws_dat_damage_pnts'
+
+            # pull the data out into ShapeRecs object
+            data  = shapefile.Reader(track_data)
+            shapeRecs = data.shapeRecords()
+
+            # to look at file, shapeRecs[x].record (x is any number you want) will print out info (date, tor rating, etc.)
+            # each shapeRecs record represents a single tornado track
+            # to get the actual data, shapeRecs[x].shape.points will give you an array filled with lon/lat tuples
+
+            # create a DataFrame with tornado date, rating, and track locations
+            # run shapeRecs[0].record to see if there is any other data you want to include in the DataFrame
+            tor_tracks = pd.DataFrame()
+            track_info= {}
+            for track in np.arange(0, len(shapeRecs)):
+                track_info['date'] = shapeRecs[track].record[0]
+                track_info['rating'] = shapeRecs[track].record[11]
+                track_info['lons'] = [shapeRecs[track].shape.points[i][0] for i in np.arange(0,len(shapeRecs[track].shape.points))]
+                track_info['lats'] = [shapeRecs[track].shape.points[i][1] for i in np.arange(0,len(shapeRecs[track].shape.points))]
+                tor_tracks = tor_tracks.append(track_info, ignore_index=True)
+            #  print(shapeRecs[0].record)
+            #  print(shapeRecs)
+            #  print(len(shapeRecs))  #  print(shapeRecs.record)
+            #  print('999999999')
+            # quick example plot to make sure data pulled correctly 
+            for tor in np.arange(0, len(tor_tracks)):
+                ax_n.scatter(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], label=tor_tracks.loc[tor]['rating'], transform=self.Proj)
+                #  ax_n.plot(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], label=tor_tracks.loc[tor]['rating'], transform=self.Proj)
+                #  ax_n.plot(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], transform=self.Proj)
+            #  ax_n.legend()
+            #  print(shapeRecs[4].record[2])
+            #  print(shapeRecs[4].record[2])
+            #shapeRecs[4]['lats']
+            #  tortrack = pickle.loadopen('20190314.p', 'rb'))
+            #  tor_num=4
+            #  lats, lons = tortrack.loc[tor_num]['lats'],tortrack.loc[tor_num]['lons']
+            
+            #  for tor_event in tor_dict:
+                #  tortrack = pickle.load(open('{}.p'.format(tor_event), 'rb'))
+                #  for SN, tor_num in zip(tor_dict[tor_event][0],tor_dict[tor_event][1]):
+                    #  lats, lons = tortrack.loc[tor_num]['lats'],tortrack.loc[tor_num]['lons']
+                    #  snlat, snlon = probe_locs[SN][0],probe_locs[SN][1]
+                    #  xs, ys = [],[]
+                    #  for i,val in enumerate(lats):
+                        #  temp = get_dist(lons[i], lats[i],snlon, snlat)
+                        #  xs.append(temp[0])
+                        #  ys.append(temp[1])
+                    #  plt.plot(np.asarray(xs)/1000, np.asarray(ys)/1000, color=colors[icol], label=tor_event)
+                #  icol+=1
 
         # * * *
         ## PLOT BACKGROUND FEATURES
@@ -716,25 +807,17 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
             else: plt_type = config.R_Tvar
         #if only radar is included in the image (aka no platform info overlayed)
         else:
-            file_string= 'r_only'
-            if 'vel_texture' in config.r_mom:
-                plt_type='Radar_only/ppi/texture'
-            #  if 'vel_grad' in config.r_mom:
-                #  plt_type='Radar_only/ppi/gradient'
-            elif 'sim_vel' in config.r_mom:
-                plt_type='Radar_only/ppi/sim'
-            elif 'diff_dbz' in config.r_mom:
-                plt_type='Radar_only/ppi/diff'
-            else:
-                plt_type='Radar_only/ppi'
-        
+            file_string = 'r_only'
+            plt_type='Radar_only/ppi'
+
         #add the file name
         if Data['P_Radar'].name in pform_names('KA'):
             output_name = Data['P_Radar'].site_name+'_'+Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'.png'
         else: #aka WSR88D or NOXP    
             output_name = Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
         #path to file 
-        plt_dir=Data['P_Radar'].dir_name+'/'+plt_type+'/'+str(tilt)+'_deg/'+config.Centered_Pform+'/'+str(config.offsetkm)+'km/'
+        rmom_string= '_'.join(config.r_mom)
+        plt_dir=Data['P_Radar'].dir_name+'/'+plt_type+'/'+rmom_string+'/'+str(tilt)+'_deg/'+config.Centered_Pform+'/'+str(config.offsetkm)+'km/'
 
     #if only timeseries are included in the image
     elif len(config.Time_Series) != 0 and len(config.r_mom) == 0:

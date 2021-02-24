@@ -167,12 +167,11 @@ def pform_attr(pname):
        ##create the legend elements that will be appended to the legend array
     if pname in pform_names('KA'): #the legend entries for the KA radars
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor='black', markeredgewidth=3, label=legend_str, markerfacecolor=marker_color, markersize=26)
-    elif pname == 'WSR88D':
-        legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, markeredgewidth=3, label=legend_str, markersize=26, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')])
     elif pname in ['WTx_M','OK_M','IA_M','KS_M', 'ASOS']:
         legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, label=legend_str, markersize=26)
     else:
-        legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, markeredgewidth=3, label=legend_str, markersize=26, path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')])
+        legend_entry = Line2D([], [], marker=marker_style, markeredgecolor=marker_color, markeredgewidth=3, label=legend_str, markersize=26, 
+                              path_effects=[PathEffects.withStroke(linewidth=12, foreground='k')])
     return marker_style, marker_color, marker_size, line_color, legend_str, legend_entry
 
 ################################################################################################
@@ -473,15 +472,9 @@ def read_Radar(config, day, pname, swp=None, rfile= None, d_testing=False, known
             MR_time = cftime.num2pydate(rfile.time['data'][index_at_start], rfile.time['units'])
 
         else:# if the main plotting radar is a KA or NOXP radar
-            if pname == 'NOXP':
-                #fix the ordering of the NOXP rays 
-                #  for sweep_id in range(rfile.nsweeps):
-                    #  order_rays_by_angle(sweep_id, rfile)
-                #apply mask and make texture feilds
-                radar_fields_prep(config, rfile, 'NOXP', swp)
-            elif pname in pform_names('KA'):
-                #apply mask and make texture feilds
-                radar_fields_prep(config, rfile, 'KA', swp)
+            #apply mask and make texture, gradient etc feilds
+            if pname == 'NOXP': radar_fields_prep(config, rfile, 'NOXP', swp)
+            elif pname in pform_names('KA'): radar_fields_prep(config, rfile, 'KA', swp)
             #det the scantime
             MR_time = datetime.strptime(rfile.time['units'][14:-1], "%Y-%m-%dT%H:%M:%S")
 
@@ -537,7 +530,8 @@ def read_Radar(config, day, pname, swp=None, rfile= None, d_testing=False, known
                 checking=0
                 for file in NOXPfiles:
                     head_tail= os.path.split(file)
-                    str_time = datetime.strptime(head_tail[1][24:39], "%Y%m%d_%H%M%S")
+                    str_time = datetime.strptime(head_tail[1][13:28], "%Y%m%d_%H%M%S")
+                    #  str_time = datetime.strptime(head_tail[1][24:39], "%Y%m%d_%H%M%S")
                     end_time = datetime.strptime(head_tail[1][43:58], "%Y%m%d_%H%M%S")
                     valid_time = time_in_range(str_time, end_time, known_scan_time)
 
@@ -574,10 +568,7 @@ def read_Radar(config, day, pname, swp=None, rfile= None, d_testing=False, known
                 except:return False
             else:  return WSR_df, 'WSR'
 
-
-    # * * *
-    #  * * *
-
+##########################################################################################
 ##########
 # Classes
 ##########
