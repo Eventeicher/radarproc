@@ -61,6 +61,7 @@ import pynimbus as pyn
 import tracemalloc
 import shapefile
 import pickle
+import math 
 tracemalloc.start()
 
 import pprint
@@ -151,29 +152,50 @@ class Master_Plt:
 
         ## Establish the Plot size and layout
         #### * * * * * * * * * * * * * * * * *
+        def radar_layout(config):
+            #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
+            try:  R_rows = config.numRrows
+            except: R_rows = math.trunc(len(config.r_mom) / 2)
+
+            try: R_cols = config.numRcols
+            except: 
+                if ((len(config.r_mom) / 2) % 2) ==0: R_cols = 2
+                else: R_cols = 3
+           
+            #***
+            if len(config.r_mom) <=2: 
+                self.Radar_title_font= {'fontsize':40}
+            else:
+                self.Radar_title_font={'fontsize':15}
+            #***
+            return R_rows, R_cols
+
         # This is the layout for radar and time series subplots
         if len(config.Time_Series) != 0 and len(config.r_mom) != 0:
             self.fig= plt.figure(figsize=(32,20))
             if len(config.Time_Series) == 1:
-                self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=[3,2], hspace=.1)
-                hratio=[1]
+                outer_hratio = [3,2] #the height ratio between the space alocated for radar imagaes and timeseries
+                ts_hratio=[1] #the relative height alocated to each timeseries [within the space allocated for all timeseries]
             if len(config.Time_Series) == 2:
-                self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=[4,3], hspace=.1)
-                if 'Wind' in config.Time_Series: hratio=[2,3]
-                else: hratio=[1,1]
-            self.ts_gs = GridSpecFromSubplotSpec(len(config.Time_Series), 1, subplot_spec=self.outer_gs[1, :], height_ratios=hratio, hspace=0)
-            self.r_gs = GridSpecFromSubplotSpec(1, len(config.r_mom), subplot_spec=self.outer_gs[0, :])
+                outer_hratio = [4,3] 
+                if 'Wind' in config.Time_Series: ts_hratio=[2,3]
+                else: ts_hratio=[1,1]
+            self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=outer_hratio, hspace=.1)
+
+            self.ts_gs = GridSpecFromSubplotSpec(len(config.Time_Series), 1, subplot_spec=self.outer_gs[1, :], height_ratios=ts_hratio, hspace=0)
+            self.R_rows, self.R_cols = radar_layout(config)
+            self.r_gs = GridSpecFromSubplotSpec(self.R_rows, self.R_cols, subplot_spec=self.outer_gs[0, :])
 
         # This is the layout for time series only
         if len(config.Time_Series) != 0 and len(config.r_mom) == 0:
             print('this is the layout for time series only')
             #  self.fig= plt.figure(figsize=(32,5))
             self.fig= plt.figure(figsize=(32,10))
-            if len(config.Time_Series) == 1:  hratio=[1]
+            if len(config.Time_Series) == 1:  ts_hratio=[1]
             if len(config.Time_Series) == 2:
-                if 'Wind' in config.Time_Series: hratio=[2,3]
-                else: hratio=[1,1]
-            self.ts_gs = GridSpec(len(config.Time_Series), 1, height_ratios=hratio, hspace=0)
+                if 'Wind' in config.Time_Series: ts_hratio=[2,3]
+                else: ts_hratio=[1,1]
+            self.ts_gs = GridSpec(len(config.Time_Series), 1, height_ratios=ts_hratio, hspace=0)
 
         # This is the layout for radar only
         if len(config.r_mom) != 0 and len(config.Time_Series) == 0:
@@ -183,11 +205,9 @@ class Master_Plt:
             self.Radar_title_font= {'fontsize':10}
             print('this is the layout for radar plots only')
             self.fig= plt.figure(figsize=(15,25))
-            if len(config.r_mom) <= 2: rows=1
-            if len(config.r_mom) <= 4: rows=2
-            if len(config.r_mom) <= 6: rows=3
 
-            self.r_gs = GridSpec(nrows=rows, ncols=2)
+            self.R_rows, self.R_cols = radar_layout(config)
+            self.r_gs = GridSpec(nrows=self.R_rows, ncols=self.R_cols)
 
         ## Establish some vars that will be helpful to the plot later on
         #### * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -324,83 +344,92 @@ class Master_Plt:
         TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
         ## MAKE THE TIMESERIES
         #### * * * * * * * * *
-        if ts in ['Thetav', 'Thetae']:
-            for p in Data.values():
-                if isinstance(p, Torus_Insitu):
-                    if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
-                    ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
-                    if p.type in self.config.TS_masking[:]:
-                        if ts == "Thetae":   plotting_data= p.Thetae_ts_mask_df
-                        elif ts == "Thetav":   plotting_data= p.Thetav_ts_mask_df
-                    else: plotting_data= p.df[ts].values
+        if ts == 'histogram':
+            hist, bins = np.histogram(Data['P_Radar'].rfile.fields['vel_texture']['data'][~np.isnan(Data['P_Radar'].rfile.fields['vel_texture']['data'])], bins=150)
+            bins = (bins[1:]+bins[:-1])/2.0
+            ax_n.plot(bins, hist)
+            #  ax_n.set_yscale('log')
+            ax_n.axvline(x=3,c='k')
+            ax_n.set_xlabel('Velocity texture')
+            ax_n.set_ylabel('Count')
 
-                    ## Plot
-                    #assigning label= is what allows the legend to work
-                    ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str)
+        elif ts in ['Thetae', 'Thetav', 'Wind']:
+            if ts in ['Thetav', 'Thetae']:
+                for p in Data.values():
+                    if isinstance(p, Torus_Insitu):
+                        if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
+                        ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
+                        if p.type in self.config.TS_masking[:]:
+                            if ts == "Thetae":   plotting_data= p.Thetae_ts_mask_df
+                            elif ts == "Thetav":   plotting_data= p.Thetav_ts_mask_df
+                        else: plotting_data= p.df[ts].values
 
-                    TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
-                    TSleg_elements.append(TSleg_entry)
-            ## Set up XY axes tick locations and Labels
-            if len(self.config.r_mom) != 0: scan= Data['P_Radar'].Scan_time
-            else: scan= None 
-            self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=scan)
+                        ## Plot
+                        #assigning label= is what allows the legend to work
+                        ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str)
 
-            if ts == "Thetae":   ylab = TVARS.Te_lab
-            elif ts == "Thetav":   ylab = TVARS.Tv_lab
-            ax_n.set_ylabel(ylab)
+                        TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
+                        TSleg_elements.append(TSleg_entry)
+                ## Set up XY axes tick locations and Labels
+                if len(self.config.r_mom) != 0: scan= Data['P_Radar'].Scan_time
+                else: scan= None 
+                self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=scan)
+
+                if ts == "Thetae":   ylab = TVARS.Te_lab
+                elif ts == "Thetav":   ylab = TVARS.Tv_lab
+                ax_n.set_ylabel(ylab)
 
 
-        # * * *
-        if ts == 'Wind':
-            p = Data[self.config.Wind_Pform]
-            if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
+            # * * *
+            if ts == 'Wind':
+                p = Data[self.config.Wind_Pform]
+                if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
 
-            ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
-            ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
-            ax_n.set_ylabel('Wind Speed (kn)')
-            self.tick_grid_settings(ax=ax_n, ts=ts,scan_time=Data['P_Radar'].Scan_time)
-            TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
-            TSleg_elements.append(TSleg_entry)
+                ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
+                ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
+                ax_n.set_ylabel('Wind Speed (kn)')
+                self.tick_grid_settings(ax=ax_n, ts=ts,scan_time=Data['P_Radar'].Scan_time)
+                TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
+                TSleg_elements.append(TSleg_entry)
 
-            ax_2 = ax_n.twinx()
-            ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05, label='Wind Dir')
-            ax_2.set_ylabel('Wind Dir ($^{\circ}$)')
-            self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True, scan_time=Data['P_Radar'].Scan_time)
-            TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
-            TSleg_elements.append(TSleg_entry)
+                ax_2 = ax_n.twinx()
+                ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05, label='Wind Dir')
+                ax_2.set_ylabel('Wind Dir ($^{\circ}$)')
+                self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True, scan_time=Data['P_Radar'].Scan_time)
+                TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
+                TSleg_elements.append(TSleg_entry)
 
-        ## Plot legend
-        leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center left')
-        if ts == 'Wind':
-            leg.set_title(self.config.Wind_Pform, prop=self.leg_title_font)
-            leg.remove()
-            ax_2.add_artist(leg)
+            ## Plot legend
+            leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center left')
+            if ts == 'Wind':
+                leg.set_title(self.config.Wind_Pform, prop=self.leg_title_font)
+                leg.remove()
+                ax_2.add_artist(leg)
 
-        #if plotting more than one timeseries only include the xaxis label & ticks to the bottom timeseries
-        ax_n.label_outer()
+            #if plotting more than one timeseries only include the xaxis label & ticks to the bottom timeseries
+            ax_n.label_outer()
 
-        #if you are not making the bottom timeseries
-        if ax_n.get_subplotspec().rowspan.stop != len(self.config.Time_Series):
-            ax_n.spines['bottom'].set_linewidth(5)
-            # if you are doing two thermo plots while also plotting radar remove one of the legends (for space)
-            if (len(self.config.r_mom) != 0) & (ts in ['Thetav', 'Thetae']): leg.remove()
+            #if you are not making the bottom timeseries
+            if ax_n.get_subplotspec().rowspan.stop != len(self.config.Time_Series):
+                ax_n.spines['bottom'].set_linewidth(5)
+                # if you are doing two thermo plots while also plotting radar remove one of the legends (for space)
+                if (len(self.config.r_mom) != 0) & (ts in ['Thetav', 'Thetae']): leg.remove()
 
-        ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
-        #  radar scan and the timerange ploted (via filled colorline) on the radar plots
-        if len(self.config.r_mom) != 0:
-            ax_n.axvline(Data['P_Radar'].Scan_time, color='r', linewidth=4, alpha=.5)
-            ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.cline_extent),
-                         Data['P_Radar'].Scan_time + timedelta(minutes=self.config.cline_extent), facecolor='0.5', alpha=0.4)
-        ##Label Formatter
-        # # # # # # # # #
-        ax_n.set_xlabel('Time (UTC)')
-        ax_n.yaxis.set_label_coords(-.03, .5)
-        #  make_axes_area_auto_adjustable(ax_n)
+            ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
+            #  radar scan and the timerange ploted (via filled colorline) on the radar plots
+            if len(self.config.r_mom) != 0:
+                ax_n.axvline(Data['P_Radar'].Scan_time, color='r', linewidth=4, alpha=.5)
+                ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.cline_extent),
+                             Data['P_Radar'].Scan_time + timedelta(minutes=self.config.cline_extent), facecolor='0.5', alpha=0.4)
+            ##Label Formatter
+            # # # # # # # # #
+            ax_n.set_xlabel('Time (UTC)')
+            ax_n.yaxis.set_label_coords(-.03, .5)
+            #  make_axes_area_auto_adjustable(ax_n)
 
-        ###################
+            ###################
         if self.config.print_long == True: print('~~~~~~~~~~~Made it through time_series~~~~~~~~~~~~~~')
-
-
+    
     # * * * * * *  *
     def radar_subplots(self, mom, day, ax_n, fig, TVARS, Data, leg):
         ''' Plots each of the radar subplots including the marker overlays corresponding to the additional platforms
@@ -410,97 +439,113 @@ class Master_Plt:
                 leg: bool str whether or not you want a legend associated with this particular subplot
         '''
         if self.config.print_long == True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
+
         ## SET UP VARS FOR EACH RADAR MOMENTS
-        if mom == 'refl':
-            p_title, c_label, c_scale = 'Reflectivity', 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow'
-            if Data['P_Radar'].name in pform_names('KA'):
-                field, vminb, vmaxb, sweep = 'refl_fix', -30., 30., Data['P_Radar'].swp
-            if Data['P_Radar'].name == 'NOXP':
-                field, vminb, vmaxb, sweep = 'refl_fix',-10, 60 , Data['P_Radar'].swp#-10., 60., 0# Data['P_Radar'].swp
+        #####################################
+        if mom in ['refl', 'relf_despeck']:
+            c_label, c_scale = 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow'
             if Data['P_Radar'].name == 'WSR88D':
-                field, vminb, vmaxb, sweep =  'reflectivity', -10., 75., Data['P_Radar'].swp[0]
-        elif mom == 'vel':
-            p_title, c_label, c_scale = 'Radial Velocity', 'Velocity [m/s]', cmocean.cm.balance#'pyart_balance'
-            if Data['P_Radar'].name in pform_names('KA'):
-                field, vminb, vmaxb, sweep = 'vel_fix', -30., 30., Data['P_Radar'].swp
-            if Data['P_Radar'].name == 'NOXP':
-                field, vminb, vmaxb, sweep = 'vel_fix', -30., 30., Data['P_Radar'].swp
+                sweep = Data['P_Radar'].swp[0]
+                vminb, vmaxb = -10., 75.
+            else:
+                sweep = Data['P_Radar'].swp
+                if Data['P_Radar'].name in pform_names('KA'): vminb, vmaxb= -30., 30.
+                elif Data['P_Radar'].name == 'NOXP': vminb, vmaxb= -10, 60
+            #****
+            if mom == 'refl':
+                p_title= 'Reflectivity' 
+                if Data['P_Radar'].name == 'WSR88D': field = 'reflectivity'
+                else: field= 'refl_fix'
+            elif mom == 'refl_despeck':
+                p_title= 'Reflectivity DS'
+                field= 'refl_despeck'
+
+        ###
+        elif mom in ['vel', 'vel_unfixed', 'vel_despeck', 'vel_smooth', 'vel_savgol']: 
+            c_label, c_scale = 'Velocity [m/s]', cmocean.cm.balance
             if Data['P_Radar'].name == 'WSR88D':
-                field, vminb, vmaxb, sweep = 'velocity', -40., 40., Data['P_Radar'].swp[1]
-        elif mom == 'vel_despeck':
-            p_title, c_label, c_scale = 'Radial Velocity DS', 'Velocity [m/s]', cmocean.cm.balance#'pyart_balance'
-            if Data['P_Radar'].name in pform_names('KA'):
-                field, vminb, vmaxb, sweep = 'vel_despeck', -30., 30., Data['P_Radar'].swp
-            if Data['P_Radar'].name == 'NOXP':
-                field, vminb, vmaxb, sweep = 'vel_despeck', -30., 30., Data['P_Radar'].swp
-        elif mom == 'refl_despeck':
-            p_title, c_label, c_scale = 'Reflectivity DS', 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow'
-            if Data['P_Radar'].name in pform_names('KA'):
-                field, vminb, vmaxb, sweep = 'refl_despeck', -30., 30., Data['P_Radar'].swp
-            if Data['P_Radar'].name == 'NOXP':
-                field, vminb, vmaxb, sweep = 'refl_despeck',-10, 60 , Data['P_Radar'].swp#-10., 60., 0# Data['P_Radar'].swp
+               vminb, vmaxb, sweep = -40., 40., Data['P_Radar'].swp[1]
+            else:
+               vminb, vmaxb, sweep = -30., 30., Data['P_Radar'].swp
+            #****
+            if mom == 'vel':
+                p_title = 'Radial Velocity'
+                if Data['P_Radar'].name == 'WSR88D': field= 'velocity'
+                else: field= 'vel_fix'
+            elif mom == 'vel_unfixed':
+                p_title= 'Velocity Unfixed'
+                if Data['P_Radar'].name in pform_names('KA'): field= 'velocity'
+                elif Data['P_Radar'].name == 'NOXP': field = 'VEL' 
+            elif mom == 'vel_despeck':
+                p_title= 'Radial Velocity DS'
+                field= 'vel_despeck'
+            elif mom == 'vel_smooth':
+                p_title= 'Radial Velocity Smoothed'
+                field= 'vel_smooth'
+            elif mom == 'vel_savgol':
+                p_title= 'Radial Velocity Savgol'
+                field= 'vel_savgol'
+        ###
         elif mom == 'specw':
             p_title, c_label, c_scale = 'Spectrum Width', 'Spectrum Width' r' [$\frac{m}{s}$]', 'cubehelix_r'
-        #  display.plot('sw_fix',swp_id, vmin=0., vmax=4.,cmap='cubehelix_r', colorbar_label='', ax=ax2, title='',ticks=[0,0.4,0.8,1.2,1.6,2,2.4,2.8,3.2,3.6,4])
-            if Data['P_Radar'].name in pform_names('KA'):
-                field, vminb, vmaxb, sweep = 'specw_fix', 0., 4, Data['P_Radar'].swp
-        elif mom == 'vel_smooth':
-            p_title, c_label, c_scale = 'Radial Velocity Smoothed', 'Velocity [m/s]', cmocean.cm.balance#'pyart_balance'
-            field, vminb, vmaxb, sweep = 'vel_smooth', -30., 30., Data['P_Radar'].swp
-        elif mom == 'vel_unfixed':
-            p_title, c_label, c_scale = 'Velocity Unfixed', 'Velocity [m/s]', cmocean.cm.balance#'pyart_balance'
-            field, vminb, vmaxb, sweep = 'VEL', -30., 30., Data['P_Radar'].swp
+            field, vminb, vmaxb, sweep = 'specw_fix', 0., 4, Data['P_Radar'].swp
+
+        ###
+        elif mom in ['vel_texture', 'vel_texture_dea']:
+            c_label, c_scale = 'STD Dev', 'pyart_balance'#'Greys'#'pyart_balance'
+            vminb, vmaxb, sweep =  0., 10, Data['P_Radar'].swp
+            if mom == 'vel_texture':
+                p_title = 'Radial Velocity Texture (no DEA)' 
+                field = 'vel_texture'
+            elif mom == 'vel_texture_dea':
+                p_title = 'Radial Velocity Texture (DEA) '
+                field= 'vel_texture_dea'
+
+        ###
+        elif mom in ['vel_grad']:
+            sweep = Data['P_Radar'].swp
+            c_scale = cmocean.cm.balance  
+            if mom == 'vel_grad':
+                p_title, c_label= 'Vel Gradient', 'Gradient m/s'
+                field, vminb, vmaxb= 'vel_gradient', -5., 5
+            elif mom == 'vel_savgol_der':
+                p_title, c_label= 'Radial Acceleration poly(2)', 'm/s^2'
+                field, vminb, vmaxb= 'vel_savgol_der', -1., 1
+            elif mom == 'vel_savgol_grad':
+                p_title, c_label= 'Radial Gradient (savgol smoothed)', 'm/s'
+                field, vminb, vmaxb= 'vel_savgol_grad', -5., 5
+            elif mom == 'vel_grad0_0':
+                p_title, c_label= 'Radial Velocity (savgol 0) A0', 'Velocity [m/s]'
+                field, vminb, vmaxb= 'vel_gradient0_0', -30., 30
+            elif mom == 'vel_grad1_0':
+                p_title, c_label= 'Radial Acceleration (savgol 1) A0', 'm/s^2'
+                field, vminb, vmaxb= 'vel_gradient1_0', -2., 2
+            elif mom == 'vel_grad2_0':
+                p_title, c_label= 'Radial 3rd Deriv (savgol 2) A0', 'm/s^3'
+                field, vminb, vmaxb= 'vel_gradient2_0', -0.2, 0.2
+            elif mom == 'vel_grad0_1':
+                p_title, c_label= 'Radial Velocity (savgol 0) A1', 'Velocity [m/s]'
+                field, vminb, vmaxb= 'vel_gradient0_1', -30., 30
+            elif mom == 'vel_grad1_1':
+                p_title, c_label= 'Radial Acceleration (savgol 1) A1', 'm/s^2'
+                field, vminb, vmaxb= 'vel_gradient1_1', -1., 1
+            elif mom == 'vel_grad2_1':
+                p_title, c_label= 'Radial 3rd Deriv (savgol 2) A1', 'm/s^3'
+                field, vminb, vmaxb= 'vel_gradient2_1', -0.1, 0.1
+            elif mom == 'sim_vel': 
+                p_title, c_label, c_scale = 'Sim', 'Difference', 'Greys'#'pyart_balance'
+                field, vminb, vmaxb= 'difference', 0., 2.
+
+        ###
         elif mom == 'diff':
             p_title, c_label, c_scale = 'Difference (fixed - original)', 'Difference', cmocean.cm.balance#'pyart_balance'
-            #  p_title, c_label, c_scale = 'DBZ Difference', 'Difference', 'Greys'#'pyart_balance'
             field, sweep = 'difference', Data['P_Radar'].swp
 
             diff_field = Data['P_Radar'].rfile.get_field(Data['P_Radar'].swp, 'difference', copy=False)
             #  diff_field = Data['P_Radar'].rfile.fields['difference']['data']
-            vminb=np.min(diff_field)
-            vmaxb=np.max(diff_field)
-            #  vminb=-2
-            #  vmaxb=2
-        elif mom == 'vel_grad':
-            p_title, c_label, c_scale = 'Vel Gradient', 'Gradient m/s', cmocean.cm.balance#'RdGy'#'pyart_balance'
-            field, vminb, vmaxb, sweep = 'vel_gradient', -5., 5, Data['P_Radar'].swp
-        elif mom == 'vel_savgol_grad':
-            p_title, c_label, c_scale = 'Radial Acceleration poly(2)', 'm/s^2', cmocean.cm.balance
-            field, vminb, vmaxb, sweep = 'vel_gradient_sav_gol', -1., 1, Data['P_Radar'].swp
-        elif mom == 'sim_vel': 
-            p_title, c_label, c_scale = 'Sim', 'Difference', 'Greys'#'pyart_balance'
-            field, vminb, vmaxb, sweep = 'difference', 0., 2., Data['P_Radar'].swp
-        elif mom == 'vel_texture':
-            p_title, c_label, c_scale = 'Radial Calc Velocity Texture ', 'Vel Texture STD Dev', 'Greys'#'pyart_balance'
-            field, vminb, vmaxb, sweep = 'vel_texture', 0., 2., Data['P_Radar'].swp
-        elif mom == 'vel_text_texture':
-            p_title, c_label, c_scale = 'Radial Velocity Texture (only)', 'Velocity Texture?', 'Greys'#'pyart_balance'
-            field, vminb, vmaxb, sweep = 'vel_text_texture', 0., 2., Data['P_Radar'].swp
-        elif mom == 'vel_aray_texture':
-            p_title, c_label, c_scale = 'Radial Velocity Texture (along ray)', 'Velocity Texture?', 'Greys'#'pyart_balance'
-            field, vminb, vmaxb, sweep = 'vel_aray_texture', 0., 2., Data['P_Radar'].swp
-        elif mom == 'vel_grad0_0':
-            p_title, c_label, c_scale = 'Radial Velocity (savgol 0) A0', 'Velocity [m/s]', cmocean.cm.balance
-            field, vminb, vmaxb, sweep = 'vel_gradient0_0', -30., 30, Data['P_Radar'].swp
-        elif mom == 'vel_grad1_0':
-            p_title, c_label, c_scale = 'Radial Acceleration (savgol 1) A0', 'm/s^2', cmocean.cm.balance
-            field, vminb, vmaxb, sweep = 'vel_gradient1_0', -2., 2, Data['P_Radar'].swp
-        elif mom == 'vel_grad2_0':
-            p_title, c_label, c_scale = 'Radial 3rd Deriv (savgol 2) A0', 'm/s^3', cmocean.cm.balance
-            field, vminb, vmaxb, sweep = 'vel_gradient2_0', -0.2, 0.2, Data['P_Radar'].swp
-
-        elif mom == 'vel_grad0_1':
-            p_title, c_label, c_scale = 'Radial Velocity (savgol 0) A1', 'Velocity [m/s]', cmocean.cm.balance
-            field, vminb, vmaxb, sweep = 'vel_gradient0_1', -30., 30, Data['P_Radar'].swp
-        elif mom == 'vel_grad1_1':
-            p_title, c_label, c_scale = 'Radial Acceleration (savgol 1) A1', 'm/s^2', cmocean.cm.balance
-            field, vminb, vmaxb, sweep = 'vel_gradient1_1', -1., 1, Data['P_Radar'].swp
-            #  field, vminb, vmaxb, sweep = 'vel_gradient1_1', -30., 30, Data['P_Radar'].swp
-        elif mom == 'vel_grad2_1':
-            p_title, c_label, c_scale = 'Radial 3rd Deriv (savgol 2) A1', 'm/s^3', cmocean.cm.balance
-            field, vminb, vmaxb, sweep = 'vel_gradient2_1', -0.1,0.1, Data['P_Radar'].swp
-            #  field, vminb, vmaxb, sweep = 'vel_gradient2_1', -30, 30, Data['P_Radar'].swp
+            vminb, vmaxb = np.min(diff_field), np.max(diff_field)
         else: print("Hey what just happened!\n Check the Radar moments for spelling")
+        #####################################
 
         ## Plot the radar
         ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
@@ -768,18 +813,22 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
             display.four_panel_plot(scale=400, legend=20, return_flag=False, thin=6,
                         levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix', dz_cmap='pyart_HomeyerRainbow' , xlim=[-21,21], ylim=[-21,21])
         else:
-            for (subcol,), mom in np.ndenumerate(config.r_mom):
-                if subcol==0: row, col =0,0
-                if subcol==1: row, col =0,1
-                if subcol==2: row, col =1,0
-                if subcol==3: row, col =1,1
-                if subcol==4: row, col =2,0
-                if subcol==5: row, col =2,1
-                print('Radar plot: '+ mom +', Outer GridSpec Pos: [0, :], SubGridSpec Pos: ['+str(row)+', '+str(col)+']')
-                ax_n= PLT.fig.add_subplot(PLT.r_gs[row, col], projection= PLT.R_Proj)
-                if col==0: leg = True
-                else: leg = False
-                PLT.radar_subplots(mom, day, ax_n, PLT.fig, TVARS, Data, leg)
+            mom_index=0
+            for row in range(PLT.R_rows):
+                for col in range(PLT.R_cols):
+                    try:
+                        mom=config.r_mom[mom_index]
+                        make_rplt = True
+                    except: make_rplt= False
+
+                    if make_rplt == True:
+                        print('Radar plot: '+ mom +', Outer GridSpec Pos: [0, :], SubGridSpec Pos: ['+str(row)+', '+str(col)+']')
+                        ax_n= PLT.fig.add_subplot(PLT.r_gs[row, col], projection= PLT.R_Proj)
+                        if row==0 and col==0: leg = True
+                        else: leg = False
+                        PLT.radar_subplots(mom, day, ax_n, PLT.fig, TVARS, Data, leg)
+                        mom_index =mom_index+1
+                    else: pass
 
     ## Make the Times Series Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
@@ -839,7 +888,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
     output_path_plus_name = outdir + output_name
     print(output_path_plus_name)
 
-    PLT.fig.tight_layout()
+    #  PLT.fig.tight_layout()
     plt.savefig(output_path_plus_name, bbox_inches='tight', pad_inches=.3)
     timer(start_comptime, time.time())
     plt.close('all')   # close it

@@ -14,9 +14,11 @@ from os.path import expanduser
 # ***********************
 #list; the radar moments to plot on the left and right subplots respectively (leave list empty to plot only timeseries) 
 #  r_mom=[]
-r_mom = ['refl','vel']
-#  r_mom = ['refl','vel', 'refl_despeck', 'vel_despeck'] 
-#  r_mom = ['vel', 'vel_texture', 'vel_text_texture', 'vel_aray_texture' ] 
+#  r_mom = ['refl','vel']
+#  r_mom = ['refl','vel', 'vel_savgol_grad','vel_savgol']
+#  r_mom = ['refl','vel', 'specw','vel_texture', 'vel_savgol_der', 'vel_savgol_grad']
+#  r_mom = ['refl','vel', 'refl_despeck', 'vel_despeck']
+r_mom = ['refl', 'vel', 'vel_unfixed', 'vel_texture', 'vel_texture_dea']
 #  r_mom = ['refl','vel', 'sim_vel']
 #  r_mom = ['refl','vel', 'vel_grad', 'vel_smooth']
 #  r_mom = ['vel', 'vel_smooth', 'vel_savgol_grad', 'vel_grad']
@@ -25,18 +27,20 @@ r_mom = ['refl','vel']
 #  r_mom = ['refl', 'vel','vel_texture','specw']
 
 #list; the timeseries to plot (leave list empty to plot only radar) 
-Time_Series = []
+#  Time_Series = []
+Time_Series = ['histogram']
 #  Time_Series = ['Wind', 'Thetav']
 #  Time_Series = ['Wind', R_Tvar]
 #  Time_Series = ['Thetav']
 
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
 #number of CPUs to use (recomend either 1 or -2)
-nCPU = 1 #-2
+nCPU = 1#-2
 
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
 # what radar elevation tilt (deg) do you want to plot
-p_tilt=[0.5, 1.0, 1.5]
+p_tilt=[1.0]
+#  p_tilt=[0.5, 1.0, 1.5]
 
 ## What type of radar do you want to plot 
 #  Radar_Plot_Type = 'NOXP_Plotting'
@@ -63,11 +67,13 @@ if Radar_Plot_Type == 'WSR_Plotting':
 ## Timeframe
 # ***********
 ## list of days to plot
-day_list= ['20190528']
+day_list= ['20190517']
 #  day_list= ['20190517','20190518','20190520', '20190523', '20190524','20190525','20190526',
              #  '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
+#  day_list= ['20190525','20190526',
+             #  '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
 ## Crop the start or end time to a time you specify (comment out to use datafrom the whole day)
-#  tstart = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8])+1, 0, 0, 0)
+tstart = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 23, 40, 0)
 #  tend = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 21, 30, 0)
 
 
@@ -117,8 +123,8 @@ overlays = {'KA': {'Marker': False, 'Label': False, 'RHI_ring': False, 'RHI_Lab'
 
 ## Time Series controls
 # would you like to restrict the time series to display only a timespan +/- x time from the scantime 
-#  ts_extent = 30 #so actually 60 min 
-ts_extent = None
+ts_extent = 30 #so actually 60 min
+#  ts_extent = None
 #if you are plotting a wind time series what platform would you like it to be 
 Wind_Pform = 'Prb1' 
 #how long would you like the colorlines for each platforms to cover +-x min (also control width of greybox on tseries)
