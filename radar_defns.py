@@ -66,7 +66,7 @@ pp = pprint.PrettyPrinter(indent=4)
 
 def radar_fields_prep(config, rfile, radar_type, sweep_id):
     ###########
-    #  print(rfile.info(level='compact'))
+    print(rfile.info(level='compact'))
     
     if radar_type == 'KA':
         vel_name, refl_name, specw_name = 'corrected_velocity', 'reflectivity','spectrum_width' 
@@ -387,7 +387,10 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
     
     #  data quality controls on entire volume
     #  smooth_data(radar, vel_nam)
-    
+   
+    print(sweep_startidx)
+    print(sweep_endidx)
+    print('999999999999999')
     #extract data
     r= radar.range['data']
     theta = radar.azimuth['data'][sweep_startidx:sweep_endidx+1]
@@ -401,10 +404,15 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
     vrad     = np.ma.filled(vrad_ma, fill_value=0)
     mask     = np.ma.getmask(vrad_ma)
     #call llsd compute function
-    azi_shear = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx,refl_full,type_grad='az')
+    azi_shear_tilt = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx,refl_full,type_grad='az')
     #scale
-    azi_shear = azi_shear*SCALING
+    azi_shear_tilt = azi_shear_tilt*SCALING
     
+    #init az_shear for the volume
+    azi_shear = np.zeros(refl_full.shape)
+    #insert az shear tilt into volume array
+    azi_shear[sweep_startidx:sweep_endidx+1] = azi_shear_tilt
+
     #define meta data
     azi_shear_meta = {'data': azi_shear,
                       'long_name': 'LLSD Azimuthal Shear', 
@@ -440,19 +448,17 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
     """
     #set the constants definining the LLSD grid in the azimuthal and radial directions
     if type_grad == 'az':
-        azi_saxis = 1000#m              #notes: total azimuthal size = 2*azi_saxis
+        azi_saxis = 500#m              #notes: total azimuthal size = 2*azi_saxis
         rng_saxis = 1  #idx away from i  #notes: total range size = 2*rng_saxis
     elif type_grad == 'div':
         azi_saxis = 100#m              #notes: total azimuthal size = 2*azi_saxis
         rng_saxis = 3  #idx away from i  #notes: total range size = 2*rng_saxis
     
-    
     #get size and init az_shear_tilt
     sz = vrad.shape
-    print('8888888')
-    print(vrad.shape)
-    print('8888888')
+    #  print(vrad.shape)
     azi_shear_tilt = np.zeros(sz)
+    div_shear_tilt= np.zeros(sz)
 
     #  theta = np.ma.filled(theta, fill_value=0)
     #  r_fromradar= np.ma.filled(r_fromradar, fill_value=0)
@@ -488,52 +494,61 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
     for c_ray in np.arange(0, sz[0]): #iterate over each ray
         for c_rangebin in np.arange(0 + rng_saxis, sz[1] - rng_saxis): #iterate over each range bin
             #skip if centered bin is masked
-            if mask[c_ray, c_rangebin]:
-                continue
-            #define the indices for the LLSd grid and deal with wrapping
-            #  print('c_ray:{} c_rangebin:{} '.format(c_ray, c_rangebin))
-            j_max, j_min = c_ray+az_k_datapnts[c_rangebin], c_ray-az_k_datapnts[c_rangebin]
-            i_max, i_min = c_rangebin+rng_saxis, c_rangebin-rng_saxis
-            if j_min< 0: j_min = j_min + sz[0]
-            if j_max > sz[0]-1: j_max = j_max - sz[0]                 
-            #  print('j_max:{} j_min:{} '.format(j_max, j_min))
-            #  print('i_max:{} i_min:{} '.format(i_max, i_min))
-            if j_max< j_min:
-                jj_range = np.concatenate((np.arange(j_min, sz[0], 1), np.arange(0, j_max+1 ,1)), axis=0)
+            if mask[c_ray, c_rangebin]: pass
             else:
-                jj_range = np.arange(j_min, j_max+1)
-            #  print(jj_range)
-            #define ii range
-            ii_range = np.arange(i_min, i_max) 
-            #perform calculations according to Miller et al., (2013)
-            topsum, botsum = 0, 0
-            masked = False
-            for i in ii_range:
-                for j in jj_range:
-                    if type_grad == 'az':
-                        dtheta = (theta[j, i] - theta[c_ray, c_rangebin])
-                        topsum = topsum + (r_fromradar[j, i]*dtheta) * vrad[j, i]
-                        botsum = botsum + (r_fromradar[j, i]*dtheta)**2
-                        #arclength = 2pi(r)(theta/360)
-                        if mask[j, i]: masked = True
+                #define the indices for the LLSd grid and deal with wrapping
+                #  print('c_ray:{} c_rangebin:{} '.format(c_ray, c_rangebin))
+                j_max, j_min = c_ray+abs(az_k_datapnts[c_rangebin]), c_ray-abs(az_k_datapnts[c_rangebin])
+                i_max, i_min = c_rangebin+rng_saxis, c_rangebin-rng_saxis
+                if j_min< 0: j_min = j_min + sz[0]
+                if j_max > sz[0]-1: j_max = j_max - sz[0]                 
+                #  print('j_max:{} j_min:{} '.format(j_max, j_min))
+                #  print('i_max:{} i_min:{} '.format(i_max, i_min))
+                
+                if j_max< j_min:
+                    kernal_thetas=theta
+                    kernal_thetas=np.delete(kernal_thetas, np.s_[j_max:j_min], axis=0)
 
-                    elif type_grad == 'div':
-                        pass
+                    kernal_ranges=r_fromradar
+                    kernal_ranges= np.delete(kernal_ranges, np.s_[j_max:j_min], axis=0)
+
+                    kernal_vrad=vrad
+                    kernal_vrad= np.delete(kernal_vrad, np.s_[j_max:j_min], axis=0)
+                else:
+                    kernal_thetas=theta[j_min:j_max+1]
+                    kernal_ranges=r_fromradar[j_min:j_max+1]
+                    kernal_vrad=vrad[j_min:j_max+1]
+                
+                #perform calculations according to Miller et al., (2013)
+                topsum, botsum = 0, 0
+                masked = False
+                if type_grad == 'az':
+                    dtheta = (kernal_thetas[:,i_min:i_max+1] - theta[c_ray, c_rangebin])
+                    topsum = np.sum((kernal_ranges[:, i_min:i_max+1]*dtheta) * kernal_vrad[:, i_min:i_max+1])
+                    botsum = np.sum((kernal_ranges[:, i_min:i_max+1]*dtheta)**2)
+                    #arclength = 2pi(r)(theta/360)
+                    if mask[c_ray, c_rangebin]: masked = True
+
+                elif type_grad == 'div':
+                    drange= 15 
+                    i_range= np.arange(i_min, i_max)
+                    i =  i_range-c_rangebin 
+                    topsum = np.sum(i * kernal_vrad[:, i_min:i_max+1])
+                    botsum = drange*(np.sum((i)**2))
             
-            #exclude regions which contain any masked pixels
-            if masked: pass
-            #exclude areas where there is only one point in each grid
-            elif botsum == 0: pass
-            else: azi_shear_tilt[j, i] = topsum/botsum
-            #  if i in range(300,400):
-                #  azi_shear_tilt[j, i] = 300
-
-    #init az_shear for the volume
-    azi_shear = np.zeros(refl_full.shape)
-    #insert az shear tilt into volume array
-    azi_shear[sweep_startidx:sweep_endidx+1] = azi_shear_tilt
-
-    return azi_shear 
+                #exclude regions which contain any masked pixels
+                if masked: pass
+                #exclude areas where there is only one point in each grid
+                elif botsum == 0: pass
+                else: 
+                    #  print('topsum:{} botsum:{}'.format(topsum, botsum))
+                    #  print('top/bot:{}'.format(topsum/botsum))
+                    if type_grad == 'az':
+                        azi_shear_tilt[c_ray, c_rangebin] = topsum/botsum
+                    elif type_grad == 'div':
+                        div_shear_tilt[c_ray, c_rangebin] = topsum/botsum
+                #  if i in range(300,400): #  azi_shear_tilt[j, i] = 300
+    return azi_shear_tilt 
 
 
 '''
