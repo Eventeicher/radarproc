@@ -67,7 +67,7 @@ pp = pprint.PrettyPrinter(indent=4)
 def radar_fields_prep(config, rfile, radar_type, sweep_id):
     ###########
     #  print(rfile.info(level='compact'))
-
+    
     if radar_type == 'KA':
         vel_name, refl_name, specw_name = 'corrected_velocity', 'reflectivity','spectrum_width' 
         ncp_name, ncp_thresh = 'normalized_coherent_power', .4
@@ -140,9 +140,18 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
 
         # * * *
         if m == 'az_shear':
+            vel_field = rfile.fields['corrected_velocity']['data']
+            smooth_data = scipy.ndimage.filters.median_filter(vel_field, 3)
+            smooth_data_ma = np.ma.masked_where(np.ma.getmask(vel_field), smooth_data)
+            #  vel_smoothed=aliasfix(vel_field,13,rfile.get_nyquist_vel(0))
+            #  radar.add_field('vel_smooth', {'data': smooth_data}, replace_existing=True)
+            #  radar=mask(radar, gatefilter, smooth_data, m, masking =True)
+            rfile=mask(rfile, gatefilter, smooth_data, 'vel_smooth', masking =True)
+
             #  azshear_test=llsd.main(rfile, refl_name, vel_name)
             #  az_shear_meta = llsd.main(rfile, refl_name, vel_name)
             az_shear_meta = llsdmain(rfile, refl_name, 'vel_smooth', sweep_id)
+            #  az_shear_meta = llsdmain(rfile, refl_name, vel_name, sweep_id)
             print(az_shear_meta)
             #  print("LLSD COMPUTE --- %s seconds ---" % (time.time() - start_time))
             #  rfile.add_field('azi_shear', az_shear_meta, replace_existing=True)
@@ -167,6 +176,11 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
             vel_field = rfile.fields['vel_fix']['data']
             vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=1, axis=1)
             rfile=mask(rfile, gatefilter, vel_grad, 'vel_savgol_der')
+
+        if m == 'vel_savgol_der2':
+            vel_field = rfile.fields['vel_fix']['data']
+            vel_grad = scipy.signal.savgol_filter(vel_field, window_length=19, polyorder=2, deriv=1, axis=0)
+            rfile=mask(rfile, gatefilter, vel_grad, 'vel_savgol_der2')
 
         if m == 'vel_savgol_grad':
             vel_field = rfile.fields['vel_fix']['data']
@@ -375,25 +389,21 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
     #  smooth_data(radar, vel_nam)
     
     #extract data
-    r        = radar.range['data']
-    theta    = radar.azimuth['data']
-    theta    = theta*np.pi/180
-    refl_ma  = radar.fields[ref_name]['data']
-    vrad_ma  = radar.fields[vel_name]['data']
+    r= radar.range['data']
+    theta = radar.azimuth['data'][sweep_startidx:sweep_endidx+1]
+    #  print(theta)
+    #  theta = theta*np.pi/180
+    #  theta, r = np.meshgrid(theta, r)
+    r, theta = np.meshgrid(r, theta)
+
+    refl_full= radar.fields[ref_name]['data']
+    vrad_ma  = radar.fields[vel_name]['data'][sweep_startidx:sweep_endidx+1]
     vrad     = np.ma.filled(vrad_ma, fill_value=0)
     mask     = np.ma.getmask(vrad_ma)
-    r, theta = np.meshgrid(r, theta)
     #call llsd compute function
-    azi_shear = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx)
+    azi_shear = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx,refl_full,type_grad='az')
     #scale
     azi_shear = azi_shear*SCALING
-    
-    #generate mask according to reflectivity 
-    #  refl_mask = ref_mask(refl_ma, 40, 8)
-    #combine with vrad mask
-    #  azi_mask  = np.logical_or(refl_mask, mask)
-    # apply combined mask to azi_shear
-    #  azi_shear = np.ma.masked_where(azi_mask, azi_shear).astype(np.float32)
     
     #define meta data
     azi_shear_meta = {'data': azi_shear,
@@ -404,9 +414,8 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
                       'units': 'Hz'}
     #return shear data 
     return azi_shear_meta
-#compile using jit
-#  @jit(nopython=True)
-def lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx):
+
+def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, refl_full, type_grad):
     """
     Compute core for llsd, uses numpy only functions and numba jit.
     Parameters:
@@ -438,34 +447,107 @@ def lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx):
         rng_saxis = 3  #idx away from i  #notes: total range size = 2*rng_saxis
     
     
-    #begin looping over grid
-    #  for k in np.arange(len(sweep_startidx)):
-    #subset volume into tilt
-    r_tilt     = r[sweep_startidx:sweep_endidx+1]
-    theta_tilt = theta[sweep_startidx:sweep_endidx+1]
-    vrad_tilt  = vrad[sweep_startidx:sweep_endidx+1]
-    mask_tilt  = mask[sweep_startidx:sweep_endidx+1]
-    #convert from cylindinrical to cartesian coords
-    #  x  = r_tilt * np.cos(theta_tilt)
-    #  y  = r_tilt * np.sin(theta_tilt)
     #get size and init az_shear_tilt
-    sz = vrad_tilt.shape
+    sz = vrad.shape
+    print('8888888')
+    print(vrad.shape)
+    print('8888888')
     azi_shear_tilt = np.zeros(sz)
-    
-    for i in np.arange(0, sz[0]):
-        for j in np.arange(0 + rng_saxis, sz[1] - rng_saxis):
+
+    #  theta = np.ma.filled(theta, fill_value=0)
+    #  r_fromradar= np.ma.filled(r_fromradar, fill_value=0)
+
+    #determine the az extent of the [half] kernal along the radial
+    az_k_datapnts=[0] #the zero here just shifts the index so its in line with c_rangebin later on (everything is shifted +1)
+    for c_rangebin in np.arange(0 + rng_saxis, sz[1] - rng_saxis): #iterate over each range bin
+        distfrom_rad_to_cp = r_fromradar[0, c_rangebin]
+        center_raytheta= theta[0,c_rangebin]
+        max_offset_theta= math.degrees(math.atan(azi_saxis/distfrom_rad_to_cp))
+
+        #number of kernals (for half kernal)
+        num_k =0
+        for ray in np.arange(0, sz[0]): #iterate over each ray
+            ray_theta = theta[ray, 0]
+            offset_theta= ray_theta-center_raytheta
+            #  print('ray:{} center:{} offset:{} maxoffset:{}'.format(ray_theta,
+                                        #  center_raytheta, offset_theta, max_offset_theta))
+            if abs(offset_theta) <= abs(max_offset_theta): 
+                num_k = num_k+1
+            else:
+               break 
+
+        #limit the offset to 100(100 is the legacy) 
+        if num_k> 100:  num_k= 100
+
+        az_k_datapnts.append(num_k)
+        #  print((r_fromradar[0, c_rangebin]))
+        #  print(num_k)
+        #  print('&&&&&&&&&&&&&&&&&&')
+    print(az_k_datapnts)
+
+    for c_ray in np.arange(0, sz[0]): #iterate over each ray
+        for c_rangebin in np.arange(0 + rng_saxis, sz[1] - rng_saxis): #iterate over each range bin
+            #skip if centered bin is masked
+            if mask[c_ray, c_rangebin]:
+                continue
+            #define the indices for the LLSd grid and deal with wrapping
+            #  print('c_ray:{} c_rangebin:{} '.format(c_ray, c_rangebin))
+            j_max, j_min = c_ray+az_k_datapnts[c_rangebin], c_ray-az_k_datapnts[c_rangebin]
+            i_max, i_min = c_rangebin+rng_saxis, c_rangebin-rng_saxis
+            if j_min< 0: j_min = j_min + sz[0]
+            if j_max > sz[0]-1: j_max = j_max - sz[0]                 
+            #  print('j_max:{} j_min:{} '.format(j_max, j_min))
+            #  print('i_max:{} i_min:{} '.format(i_max, i_min))
+            if j_max< j_min:
+                jj_range = np.concatenate((np.arange(j_min, sz[0], 1), np.arange(0, j_max+1 ,1)), axis=0)
+            else:
+                jj_range = np.arange(j_min, j_max+1)
+            #  print(jj_range)
+            #define ii range
+            ii_range = np.arange(i_min, i_max) 
+            #perform calculations according to Miller et al., (2013)
+            topsum, botsum = 0, 0
+            masked = False
+            for i in ii_range:
+                for j in jj_range:
+                    if type_grad == 'az':
+                        dtheta = (theta[j, i] - theta[c_ray, c_rangebin])
+                        topsum = topsum + (r_fromradar[j, i]*dtheta) * vrad[j, i]
+                        botsum = botsum + (r_fromradar[j, i]*dtheta)**2
+                        #arclength = 2pi(r)(theta/360)
+                        if mask[j, i]: masked = True
+
+                    elif type_grad == 'div':
+                        pass
+            
+            #exclude regions which contain any masked pixels
+            if masked: pass
+            #exclude areas where there is only one point in each grid
+            elif botsum == 0: pass
+            else: azi_shear_tilt[j, i] = topsum/botsum
+            #  if i in range(300,400):
+                #  azi_shear_tilt[j, i] = 300
+
+    #init az_shear for the volume
+    azi_shear = np.zeros(refl_full.shape)
+    #insert az shear tilt into volume array
+    azi_shear[sweep_startidx:sweep_endidx+1] = azi_shear_tilt
+
+    return azi_shear 
+
+
+'''
+    #begin looping over grid
+    for i in np.arange(0, sz[0]): #iterate over each ray
+        for j in np.arange(0 + rng_saxis, sz[1] - rng_saxis): #iterate over each range bin
             #skip if j is invalid
-            if mask_tilt[i, j]:
+            if mask[i, j]:
                 continue
             #defining the amount of index offsets for azimuthal direction
-            arc_len_idx_offset = np.int64([(azi_saxis//((2*r_tilt[i, j]*np.pi)/360))])[0] #arc length as a fraction or circ
-            #  print(arc_len_idx_offset)
+            arc_len_idx_offset = np.int64([(azi_saxis//((2*r_fromradar[i, j]*np.pi)/360))])[0] #arc length as a fraction or circ
             #limit the offset to 100 
-            if arc_len_idx_offset > 100: 
-                print('HEEEYYYY')
-                print('i: ', i, ' j: ', j)
-                print(arc_len_idx_offset)
-                arc_len_idx_offset = 100
+            #  if arc_len_idx_offset > 100:
+                #  arc_len_idx_offset = 100
             #define the indices for the LLSd grid and deal with wrapping
             lower_arc_idx = i - arc_len_idx_offset              
             upper_arc_idx = i + arc_len_idx_offset
@@ -475,26 +557,23 @@ def lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx):
                 ii_range = np.concatenate((np.arange(lower_arc_idx, sz[0], 1), np.arange(0, upper_arc_idx+1 ,1)), axis=0)
             else:
                 ii_range = np.arange(lower_arc_idx, upper_arc_idx+1)
-                #  print
             #define jj range
             jj_range = np.arange(j-rng_saxis+1, j+rng_saxis)
-            #  print('made it past jj range')
             #perform calculations according to Miller et al., (2013)
-            topsum = 0
-            botsum = 0
+            topsum, botsum = 0, 0
             masked = False
             for ii in ii_range:         
                 for jj in jj_range:
                     if type_grad == 'az':
-                        dtheta = (theta_tilt[ii, jj] - theta_tilt[i, j])
+                        dtheta = (theta[ii, jj] - theta[i, j])
                         #ensure the angle difference doesnt wrap onto another tilt
                         if (abs(dtheta) > np.pi) and (dtheta > 0):
-                            dtheta = ((theta_tilt[ii, jj]-2*np.pi) - theta_tilt[i, j])
+                            dtheta = ((theta[ii, jj]-2*np.pi) - theta[i, j])
                         elif (abs(dtheta) > np.pi) and (dtheta < 0):
-                            dtheta=(theta_tilt[ii, jj]) - (theta_tilt[i, j]-2*np.pi)
-                        topsum = topsum + (r_tilt[ii, jj]*dtheta) * vrad_tilt[ii, jj]
-                        botsum = botsum + (r_tilt[ii, jj]*dtheta)**2
-                        if mask_tilt[ii, jj]:
+                            dtheta=(theta[ii, jj]) - (theta[i, j]-2*np.pi)
+                        topsum = topsum + (r_fromradar[ii, jj]*dtheta) * vrad[ii, jj]
+                        botsum = botsum + (r_fromradar[ii, jj]*dtheta)**2
+                        if mask[ii, jj]:
                             masked = True
                     elif type_grad == 'div':
                         pass
@@ -508,14 +587,16 @@ def lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx):
                 pass
             else:
                 azi_shear_tilt[i, j] = topsum/botsum
+            if i in range(300,400):
+                azi_shear_tilt[i, j] = 300 
 
-    #insert az shear tilt into volume array
     #init az_shear for the volume
-    azi_shear = np.zeros(vrad.shape)
+    azi_shear = np.zeros(refl_full.shape)
     #insert az shear tilt into volume array
     azi_shear[sweep_startidx:sweep_endidx+1] = azi_shear_tilt
 
     return azi_shear 
+'''
 ##############################################################
 ###############################
 ### Command line prompted Defns 
