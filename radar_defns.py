@@ -405,6 +405,7 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
     mask     = np.ma.getmask(vrad_ma)
     #call llsd compute function
     azi_shear_tilt = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx,refl_full,type_grad='az')
+    #  azi_shear_tilt = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx,refl_full,type_grad='az')
     #scale
     azi_shear_tilt = azi_shear_tilt*SCALING
     
@@ -452,6 +453,12 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
         rng_saxis = 1  #idx away from i  #notes: total range size = 2*rng_saxis
     elif type_grad == 'div':
         azi_saxis = 100#m              #notes: total azimuthal size = 2*azi_saxis
+        rng_saxis = 3  #idx away from i  #notes: total range size = 2*rng_saxis
+    elif type_grad =='div_19':
+        azi_saxis = 500#m              #notes: total azimuthal size = 2*azi_saxis
+        rng_saxis = 1  #idx away from i  #notes: total range size = 2*rng_saxis
+    elif type_grad =='az_19':
+        azi_saxis = 500#m              #notes: total azimuthal size = 2*azi_saxis
         rng_saxis = 3  #idx away from i  #notes: total range size = 2*rng_saxis
     
     #get size and init az_shear_tilt
@@ -523,6 +530,10 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                 topsum, botsum = 0, 0
                 masked = False
                 if type_grad == 'az':
+                    #  print(type(kernal_ranges))
+                    #  print(type(r_fromradar))
+                    #  print(type(kernal_thetas))
+                    #  print(type(theta))
                     dtheta = (kernal_thetas[:,i_min:i_max+1] - theta[c_ray, c_rangebin])
                     topsum = np.sum((kernal_ranges[:, i_min:i_max+1]*dtheta) * kernal_vrad[:, i_min:i_max+1])
                     botsum = np.sum((kernal_ranges[:, i_min:i_max+1]*dtheta)**2)
@@ -535,7 +546,28 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                     i =  i_range-c_rangebin 
                     topsum = np.sum(i * kernal_vrad[:, i_min:i_max+1])
                     botsum = drange*(np.sum((i)**2))
-            
+                elif type_grad in ['div_19', 'az_19']:
+                    dr= (kernal_ranges[:, i_min:i_max+1]-r_fromradar[c_ray, c_rangebin])
+                    dtheta = (kernal_thetas[:,i_min:i_max+1] - theta[c_ray, c_rangebin])
+                    u = kernal_vrad[:, i_min:i_max+1]
+
+                    detA=np.sum(dr**2)*np.sum(dtheta**2)
+                    detB=(-1)*(np.sum(dtheta**2)*np.sum(dr)*np.sum(dr))
+                    detC=(2)*(np.sum(dr*dtheta)*np.sum(dr)*np.sum(dtheta))
+                    detD=(-1)*(np.sum(dr*dtheta)*np.sum(dr*dtheta))
+                    det=(detA+detB+detC+detD)**(-1)
+
+                    if type_grad == 'div_19':
+                         inner_termA= (np.sum(dr)*np.sum(dtheta))-(np.sum(dr*dtheta))
+                         inner_termB= (np.sum(dr**2))-(np.sum(dr)*np.sum(dr))
+                         inner_termC= (np.sum(dr*dtheta)*np.sum(dr))-(np.sum(dtheta)*np.sum(dr**2))
+                    elif type_grad == 'az_19':
+                         inner_termA= (np.sum(dr**2)-(np.sum(dtheta*dtheta)))
+                         inner_termB= (np.sum(dr)*np.sum(dtheta))-(np.sum(dr*dtheta))
+                         inner_termC= (np.sum(dr*dtheta)*np.sum(dtheta**2))-(np.sum(dr)*np.sum(dtheta**2))
+                    termA= (np.sum(dr*u))*inner_termA
+                    termB= (np.sum(dtheta*u))*inner_termB
+                    termC= (np.sum(u))*inner_termC
                 #exclude regions which contain any masked pixels
                 if masked: pass
                 #exclude areas where there is only one point in each grid
@@ -547,7 +579,8 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                         azi_shear_tilt[c_ray, c_rangebin] = topsum/botsum
                     elif type_grad == 'div':
                         div_shear_tilt[c_ray, c_rangebin] = topsum/botsum
-                #  if i in range(300,400): #  azi_shear_tilt[j, i] = 300
+                #  if c_ray in range(300,400):
+                    #  azi_shear_tilt[c_ray, c_rangebin] = 300
     return azi_shear_tilt 
 
 
