@@ -14,21 +14,21 @@ from os.path import expanduser
 # ***********************
 #list; the radar moments to plot on the left and right subplots respectively (leave list empty to plot only timeseries) 
 #  r_mom=[]
-#  r_mom = ['refl','vel']
+r_mom = ['refl','vel_unfixed']
 #  r_mom = ['refl','vel', 'vel_savgol_grad','vel_savgol']
 #  r_mom = ['refl','vel', 'specw','vel_texture', 'vel_savgol_der', 'vel_savgol_grad']
 #  r_mom = ['refl','vel', 'refl_despeck', 'vel_despeck']
-r_mom = ['refl', 'vel', 'vel_unfixed', 'vel_texture', 'vel_texture_dea']
+#  r_mom = ['refl', 'vel', 'vel_unfixed', 'vel_texture', 'vel_texture_dea']
 #  r_mom = ['refl','vel', 'sim_vel']
-#  r_mom = ['refl','vel', 'vel_grad', 'vel_smooth']
-#  r_mom = ['vel', 'vel_smooth', 'vel_savgol_grad', 'vel_grad']
+#  r_mom = ['refl','vel', 'vel_smooth', 'az_shear']
+#  r_mom = ['vel', 'vel_savgol_der', 'vel_savgol_der2', 'az_shear']#, 'vel_savgol_grad', 'vel_grad']
 #  r_mom = ['vel', 'vel_unfixed', 'diff_dbz']
 #  r_mom = ['refl', 'vel','vel_texture','vel_grad1_1']
 #  r_mom = ['refl', 'vel','vel_texture','specw']
 
 #list; the timeseries to plot (leave list empty to plot only radar) 
-#  Time_Series = []
-Time_Series = ['histogram']
+Time_Series = []
+#  Time_Series = ['histogram']
 #  Time_Series = ['Wind', 'Thetav']
 #  Time_Series = ['Wind', R_Tvar]
 #  Time_Series = ['Thetav']
@@ -39,41 +39,37 @@ nCPU = 1#-2
 
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
 # what radar elevation tilt (deg) do you want to plot
-p_tilt=[1.0]
-#  p_tilt=[0.5, 1.0, 1.5]
+#  p_tilt=[1.0]
+p_tilt=[0.5, 1.0, 1.5]
 
 ## What type of radar do you want to plot 
 #  Radar_Plot_Type = 'NOXP_Plotting'
 Radar_Plot_Type = 'KA_Plotting'
 #  Radar_Plot_Type = 'WSR_Plotting'
 
-if Radar_Plot_Type == 'KA_Plotting':
-    R_Tvar = "Thetae" #which var to plot on the colorline overlay (current options; Thetae, Thetav)
-    offsetkm = 21 #size of the plot domain (times by 2): 21 is the best for KA
-    Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
+#size of the plot domain (times by 2): 21 is the best for KA
+if Radar_Plot_Type == 'KA_Plotting': offsetkm = 21 
+#  if Radar_Plot_Type == 'NOXP_Plotting': offsetkm = 30
+if Radar_Plot_Type == 'NOXP_Plotting': offsetkm = 30
+if Radar_Plot_Type == 'WSR_Plotting': offsetkm = 40 
 
-if Radar_Plot_Type == 'NOXP_Plotting':
-    R_Tvar = "Thetav" 
-    offsetkm = 30 
-    Centered_Pform = 'Prb1' 
-
-if Radar_Plot_Type == 'WSR_Plotting':
-    R_Tvar = "Thetav" #which var to plot (current options; Thetae, Thetav)
-    offsetkm = 40 #21 is the best for KA
-    Centered_Pform = 'Prb2' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
+Centered_Pform = 'P_Radar' #what should the radar subplots be centered on (for the plotting radar use 'P_Radar')
+R_Tvar = "Thetav" #which var to plot on the colorline overlay (current options; Thetae, Thetav)
 
 
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
 ## Timeframe
 # ***********
 ## list of days to plot
-day_list= ['20190517']
+day_list= ['20190524']
+#  day_list= ['20190528']
 #  day_list= ['20190517','20190518','20190520', '20190523', '20190524','20190525','20190526',
              #  '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
-#  day_list= ['20190525','20190526',
+#  day_list= ['20190518','20190520', '20190523', '20190524','20190525','20190526',
              #  '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
+#  day_list= [ '20190608', '20190611', '20190613', '20190615']
 ## Crop the start or end time to a time you specify (comment out to use datafrom the whole day)
-tstart = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 23, 40, 0)
+tstart = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 20, 30, 0)
 #  tend = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 21, 30, 0)
 
 
