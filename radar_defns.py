@@ -130,6 +130,9 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
         if m == 'vel_texture_dea':
             texture_feild= pyart.retrieve.calculate_velocity_texture(rfile, vel_field=vel_name, wind_size=3)
             rfile=mask(rfile, gatefilter, texture_feild['data'], m, masking=False)
+        if m == 'vel_unfixed':
+            texture_feild= pyart.retrieve.calculate_velocity_texture(rfile, vel_field=vel_name, wind_size=3)
+            rfile=mask(rfile, gatefilter, texture_feild['data'], 'vel_texture', masking=False)
 
         # * * *
         if m == 'sim_vel':
@@ -379,7 +382,7 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
         azimuthal shear calculated via the linear least squares derivitives method
     """
     FILLVALUE = -9999
-    SCALING = 1000
+    SCALING = 1000000
     
     #define the indices for the required sweep
     sweep_startidx = np.int64(radar.sweep_start_ray_index['data'][swp_id])
@@ -404,7 +407,7 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
     vrad     = np.ma.filled(vrad_ma, fill_value=0)
     mask     = np.ma.getmask(vrad_ma)
     #call llsd compute function
-    azi_shear_tilt = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx,refl_full,type_grad='az')
+    azi_shear_tilt = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx,refl_full,type_grad='div_19')
     #  azi_shear_tilt = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx,refl_full,type_grad='az')
     #scale
     azi_shear_tilt = azi_shear_tilt*SCALING

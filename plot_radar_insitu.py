@@ -9,10 +9,13 @@ import matplotlib.dates as mdates
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as PE
 from matplotlib.collections import PatchCollection
+from matplotlib.offsetbox import (AnchoredOffsetbox, DrawingArea, HPacker, TextArea)
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredAuxTransformBox
 from matplotlib import ticker
 from matplotlib.ticker import (LinearLocator, FixedLocator, MaxNLocator, MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 from matplotlib.ticker import FuncFormatter
 from matplotlib.colors import ListedColormap, Normalize
+import matplotlib.colors 
 from cycler import cycler
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_area_auto_adjustable
 import matplotlib.cm as cmx
@@ -89,30 +92,28 @@ totalcompT_start = time.time()
 ##########
 class Thermo_Plt_Vars:
     def __init__ (self, config, day, Data):
-        if len(config.Time_Series) != 0:
-            self.Te_lab, self.Tv_lab, self.Tf_lab = "Equi. Pot. Temp [K]", "Vir. Pot. Temp [K]", "Temp (fast) [K]"
-            self.Tv_GMin, self.Tv_GMax = self.find_global_max_min('Thetav', Data)
-            self.Te_GMin, self.Te_GMax = self.find_global_max_min('Thetae', Data)
-            self.Tf_GMin, self.Tf_GMax = self.find_global_max_min('tfast', Data)
-                
-            print(Data)
-            if config.R_Tvar == "Thetae":
-                lab, GMin, GMax = self.Te_lab, self.Te_GMin, self.Te_GMax
-            elif config.R_Tvar == "Thetav":
-                lab, GMin, GMax = self.Tv_lab, self.Tv_GMin, self.Tv_GMax
-            elif config.R_Tvar == "tfast":
-                lab, GMin, GMax = self.Tf_lab, self.Tf_GMin, self.Tf_GMax
-            self.Tvar_lab, self.Tvar_GMin, self.Tvar_GMax = lab, GMin, GMax
+        self.Te_lab, self.Tv_lab, self.Tf_lab = "Equi. Pot. Temp [K]", "Vir. Pot. Temp [K]", "Temp (fast) [K]"
+        self.Tv_GMin, self.Tv_GMax = self.find_global_max_min('Thetav', Data)
+        self.Te_GMin, self.Te_GMax = self.find_global_max_min('Thetae', Data)
+        self.Tf_GMin, self.Tf_GMax = self.find_global_max_min('tfast', Data)
+            
+        print(Data)
+        if config.R_Tvar == "Thetae":
+            lab, GMin, GMax = self.Te_lab, self.Te_GMin, self.Te_GMax
+        elif config.R_Tvar == "Thetav":
+            lab, GMin, GMax = self.Tv_lab, self.Tv_GMin, self.Tv_GMax
+        elif config.R_Tvar == "tfast":
+            lab, GMin, GMax = self.Tf_lab, self.Tf_GMin, self.Tf_GMax
+        self.Tvar_lab, self.Tvar_GMin, self.Tvar_GMax = lab, GMin, GMax
 
-            #settings for the thermo var being plotted on radar subplots
-            if len(config.r_mom) != 0:
-                ## Make a dummy plot to allow for ploting of colorbar
-                self.norm =plt.Normalize(GMin, GMax)
+        #settings for the thermo var being plotted on radar subplots
+        ## Make a dummy plot to allow for ploting of colorbar
+        self.norm =plt.Normalize(GMin, GMax)
 
-                Z = [[0,0],[0,0]]
-                levels = np.arange(GMin, GMax+1, 1)
-                self.CS3 = plt.contourf(Z, levels, cmap=cmocean.cm.thermal)
-                plt.clf()
+        Z = [[0,0],[0,0]]
+        levels = np.arange(GMin, GMax+1, 1)
+        self.CS3 = plt.contourf(Z, levels, cmap=cmocean.cm.thermal)
+        plt.clf()
 
     # * * *
     def find_global_max_min(self, var, Dict):
@@ -164,7 +165,8 @@ class Master_Plt:
            
             #***
             if len(config.r_mom) <=2: 
-                self.Radar_title_font= {'fontsize':40}
+                self.Radar_title_font= {'fontsize':15}
+                #  self.Radar_title_font= {'fontsize':40}
             else:
                 self.Radar_title_font={'fontsize':15}
             #***
@@ -200,14 +202,18 @@ class Master_Plt:
         # This is the layout for radar only
         if len(config.r_mom) != 0 and len(config.Time_Series) == 0:
             plt.rc('font', size= 10)      # controls default text sizes
-            plt.rc('figure', titlesize= 15, facecolor='white')  # fontsize of the figure title
+            plt.rc('figure', titlesize= 25, facecolor='white')  # fontsize of the figure title
             plt.rc('axes', labelsize= 10) # fontsize of the axes title, and x and y labels
-            self.Radar_title_font= {'fontsize':10}
             print('this is the layout for radar plots only')
-            self.fig= plt.figure(figsize=(15,25))
+            #  self.fig= plt.figure(figsize=(15,25))
 
             self.R_rows, self.R_cols = radar_layout(config)
-            self.r_gs = GridSpec(nrows=self.R_rows, ncols=self.R_cols)
+            if self.R_cols == 3: 
+                self.fig= plt.figure(figsize=(30,10))
+            if self.R_cols == 2: 
+                self.fig= plt.figure(figsize=(20,20.5))
+            self.Radar_title_font= {'fontsize':20}
+            self.r_gs = GridSpec(nrows=self.R_rows, ncols=self.R_cols, hspace=0)
 
         ## Establish some vars that will be helpful to the plot later on
         #### * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -442,8 +448,8 @@ class Master_Plt:
 
         ## SET UP VARS FOR EACH RADAR MOMENTS
         #####################################
-        if mom in ['refl', 'relf_despeck']:
-            c_label, c_scale = 'Radar Reflectivity [dbz]', 'pyart_HomeyerRainbow'
+        if mom in ['refl','refl_unmasked', 'refl_despeck']:
+            c_scale = 'pyart_HomeyerRainbow'
             if Data['P_Radar'].name == 'WSR88D':
                 sweep = Data['P_Radar'].swp[0]
                 vminb, vmaxb = -10., 75.
@@ -453,64 +459,77 @@ class Master_Plt:
                 elif Data['P_Radar'].name == 'NOXP': vminb, vmaxb= -10, 60
             #****
             if mom == 'refl':
-                p_title= 'Reflectivity' 
+                c_label= 'Reflectivity [dbz]' 
                 if Data['P_Radar'].name == 'WSR88D': field = 'reflectivity'
                 else: field= 'refl_fix'
+            if mom == 'refl_unmasked':
+                c_label= 'Reflectivity [dbz]' 
+                if Data['P_Radar'].name == 'WSR88D': field = 'reflectivity'
+                elif Data['P_Radar'].name in pform_names('KA'): field= 'reflectivity'
+                elif Data['P_Radar'].name =='NOXP': field= 'DBZ'
             elif mom == 'refl_despeck':
-                p_title= 'Reflectivity DS'
+                c_label= 'Reflectivity DS [dbz]'
                 field= 'refl_despeck'
 
         ###
-        elif mom in ['vel', 'vel_unfixed', 'vel_despeck', 'vel_smooth', 'vel_savgol']: 
-            c_label, c_scale = 'Velocity [m/s]', cmocean.cm.balance
+        elif mom in ['vel', 'vel_unmasked', 'vel_unfixed', 'vel_despeck', 'vel_smooth', 'vel_savgol']: 
+            c_scale = cmocean.cm.balance
             if Data['P_Radar'].name == 'WSR88D':
                vminb, vmaxb, sweep = -40., 40., Data['P_Radar'].swp[1]
             else:
                vminb, vmaxb, sweep = -30., 30., Data['P_Radar'].swp
             #****
             if mom == 'vel':
-                p_title = 'Radial Velocity'
+                c_label = 'Radial Velocity [m/s]'
                 if Data['P_Radar'].name == 'WSR88D': field= 'velocity'
                 else: field= 'vel_fix'
+            if mom == 'vel_unmasked':
+                c_label = 'Radial Velocity [m/s]'
+                if Data['P_Radar'].name == 'WSR88D': field= 'velocity'
+                elif Data['P_Radar'].name in pform_names('KA'): field= 'corrected_velocity'
+                elif Data['P_Radar'].name =='NOXP': field= 'corrected_velocity'
             elif mom == 'vel_unfixed':
-                p_title= 'Velocity Unfixed'
+                c_label= 'Velocity Unfixed [m/s]'
                 if Data['P_Radar'].name in pform_names('KA'): field= 'velocity'
                 elif Data['P_Radar'].name == 'NOXP': field = 'VEL' 
             elif mom == 'vel_despeck':
-                p_title= 'Radial Velocity DS'
+                c_label= 'Radial Velocity DS [m/s]'
                 field= 'vel_despeck'
             elif mom == 'vel_smooth':
-                p_title= 'Radial Velocity Smoothed'
+                c_label= 'Radial Velocity Smoothed [m/s]'
                 field= 'vel_smooth'
             elif mom == 'vel_savgol':
-                p_title= 'Radial Velocity Savgol'
+                c_label= 'Radial Velocity Savgol [m/s]'
                 field= 'vel_savgol'
         ###
         elif mom == 'specw':
-            p_title, c_label, c_scale = 'Spectrum Width', 'Spectrum Width' r' [$\frac{m}{s}$]', 'cubehelix_r'
+            c_label, c_scale = 'Spectrum Width 'r' [$\frac{m}{s}$]', 'cubehelix_r'
             field, vminb, vmaxb, sweep = 'specw_fix', 0., 4, Data['P_Radar'].swp
 
         ###
         elif mom in ['vel_texture', 'vel_texture_dea']:
-            c_label, c_scale = 'STD Dev', 'pyart_balance'#'Greys'#'pyart_balance'
+            c_scale = 'pyart_balance'#'Greys'#'pyart_balance'
             vminb, vmaxb, sweep =  0., 10, Data['P_Radar'].swp
             if mom == 'vel_texture':
-                p_title = 'Radial Velocity Texture (no DEA)' 
+                c_label = 'Radial Velocity Texture (no DEA) STD Dev' 
                 field = 'vel_texture'
             elif mom == 'vel_texture_dea':
-                p_title = 'Radial Velocity Texture (DEA) '
+                c_label = 'Radial Velocity Texture (DEA) STD Dev '
                 field= 'vel_texture_dea'
 
         ###
-        elif mom in ['vel_grad']:
+        elif mom in ['vel_grad', 'vel_savgol_der', 'vel_savgol_der2']:
             sweep = Data['P_Radar'].swp
             c_scale = cmocean.cm.balance  
             if mom == 'vel_grad':
                 p_title, c_label= 'Vel Gradient', 'Gradient m/s'
                 field, vminb, vmaxb= 'vel_gradient', -5., 5
             elif mom == 'vel_savgol_der':
-                p_title, c_label= 'Radial Acceleration poly(2)', 'm/s^2'
+                c_label= 'Radial Acceleration poly(2) axis1 m/s^2'
                 field, vminb, vmaxb= 'vel_savgol_der', -1., 1
+            elif mom == 'vel_savgol_der2':
+                c_label= 'Radial Acceleration poly(2) axis0 m/s^2'
+                field, vminb, vmaxb= 'vel_savgol_der2', -1., 1
             elif mom == 'vel_savgol_grad':
                 p_title, c_label= 'Radial Gradient (savgol smoothed)', 'm/s'
                 field, vminb, vmaxb= 'vel_savgol_grad', -5., 5
@@ -537,6 +556,13 @@ class Master_Plt:
                 field, vminb, vmaxb= 'difference', 0., 2.
 
         ###
+
+        elif mom in ['az_shear', 'div_shear']:
+            sweep = Data['P_Radar'].swp
+            if mom == 'az_shear':
+                c_label, c_scale = 'Azimulathal Shear (s$^{-1}$)', 'RdBu'
+                field, vminb, vmaxb = 'az_shear', -15, 15 
+        ###
         elif mom == 'diff':
             p_title, c_label, c_scale = 'Difference (fixed - original)', 'Difference', cmocean.cm.balance#'pyart_balance'
             field, sweep = 'difference', Data['P_Radar'].swp
@@ -546,10 +572,10 @@ class Master_Plt:
             vminb, vmaxb = np.min(diff_field), np.max(diff_field)
         else: print("Hey what just happened!\n Check the Radar moments for spelling")
         #####################################
+        #  print("This is the id for "+ field+' :'+str(id(Data['P_Radar'].rfile.get_field(Data['P_Radar'].swp, field, copy=False))))
 
         ## Plot the radar
-        ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
-
+        #  ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
         self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=self.config.offsetkm*2000,
                                   height=self.config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
         
@@ -757,25 +783,53 @@ class Master_Plt:
         # * * *
         ## DEAL WITH COLORBARS
         # Attach colorbar to each subplot
+        colormap = copy.copy(matplotlib.cm.get_cmap(name=c_scale))
+        colormap.set_under('aqua')
+        colormap.set_over('magenta')
+
         divider = make_axes_locatable(plt.gca())
-        c_ax = divider.append_axes("right", "5%", pad="2%", axes_class=plt.Axes)
-        sm = plt.cm.ScalarMappable(cmap=c_scale, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
+        c_ax = divider.append_axes("bottom", "5%", pad="2%", axes_class=plt.Axes)
+        sm = plt.cm.ScalarMappable(cmap=colormap, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
         sm._A = []
-        cb = plt.colorbar(sm, cax=c_ax, label=c_label)
+        cb = plt.colorbar(sm, cax=c_ax, orientation='horizontal', extend='both')
+        cb.set_label(label=c_label, size=self.Radar_title_font['fontsize']) #, weight='bold')
+
+        #set up the colorbar for the thermo colorline overlay
+        c_ax2 = divider.append_axes("right", "5%", pad="2%", axes_class=plt.Axes)
+        Thermo_cbar = plt.colorbar(TVARS.CS3, cax=c_ax2, label=TVARS.Tvar_lab, ticks=MaxNLocator(integer=True), use_gridspec=True)
+
+        #  patches = []
+        #  fancybox = mpatches.FancyBboxPatch((0,0),1.5,.5, boxstyle=mpatches.BoxStyle("Round", pad=0.02), color='red')
+        #  patches.append(fancybox)
+        #  collection = PatchCollection(patches)
+        #  ax_n.add_collection(collection)
+        #  box = AnchoredAuxTransformBox(ax_n.transData, loc='upper left')
+        #  box = HPacker(children=[box1, box2],
+              #  align="center",
+              #  pad=0, sep=5)
+        #  anchored_box = AnchoredOffsetbox(loc='lower left',
+                                 #  child=box, pad=0.,
+                                 #  frameon=True,
+                                 #  bbox_to_anchor=(0., 1.02),
+                                 #  bbox_transform=ax.transAxes,
+                                 #  borderpad=0.,
+                                 #  )
+        #  ax_n.add_artist(box)
+        #  ax_n.add_artist(anchored_box)
 
         # * * *
         ## SET UP LEGENDS
-        if len(self.config.Time_Series)!=0:
-            if leg == True: #this means you are currently making the left subplot
-                #add legend for platform markers
-                l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.07,.5),
-                                markerscale=1.2, labelspacing=.7, handletextpad=.9, handlelength=.1)#, title="Platforms")
-                l.set_title("Platforms", prop=self.leg_title_font)
-            if leg == False:  #this means you are currently making the right subplot
-                ## Plot platform colorbar
-                #set up colorbar axis that will be as tall and 5% as wide as the 'parent' radar subplot
-                cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.226, 0,1,1))
-                cbar = plt.colorbar(TVARS.CS3, cax=cbar_ax, orientation='vertical', label=TVARS.Tvar_lab, ticks=MaxNLocator(integer=True))
+        if leg == True: #this means you are currently making the left subplot
+
+            #add legend for platform markers
+            l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.07,.5),
+                            markerscale=1.2, labelspacing=.7, handletextpad=.9, handlelength=.1)#, title="Platforms")
+            l.set_title("Platforms", prop=self.leg_title_font)
+        #  if leg == False:  #this means you are currently making the right subplot
+            ## Plot platform colorbar
+            #set up colorbar axis that will be as tall and 5% as wide as the 'parent' radar subplot
+            #  cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.226, 0,1,1))
+            #  cbar = plt.colorbar(TVARS.CS3, cax=cbar_ax, orientation='vertical', label=TVARS.Tvar_lab, ticks=MaxNLocator(integer=True))
         ###################
         if self.config.print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 
@@ -846,7 +900,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
     ### Get outdir and outname (aka file path and file name) for the correct image setup
     #if radar is included in the image
     if len(config.r_mom) != 0: 
-        plt.suptitle(Data['P_Radar'].site_name+' '+str(tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer)
+        plt.suptitle(Data['P_Radar'].site_name+' '+str(tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer, ha='center')
 
         #if both radar and timeseries are included in the image
         if len(config.Time_Series) != 0:
@@ -930,7 +984,8 @@ def plot_radar(config, day, Data, TVARS):
 
         elif config.Radar_Plot_Type == 'NOXP_Plotting':
             ## Get radar files
-            path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/dealiased_ordered_*'
+            #  path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/dealiased_ordered_*'
+            path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/fixed*'
             r_files_path = sorted(glob.glob(path))
 
         elif config.Radar_Plot_Type == 'WSR_Plotting':
