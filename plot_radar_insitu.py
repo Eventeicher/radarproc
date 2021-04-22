@@ -3,7 +3,8 @@
 #import needed modules
 ######################
 import matplotlib
-matplotlib.use('agg')
+#  matplotlib.use('agg')
+#  matplotlib.use('GTK3Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.patches as mpatches
@@ -98,11 +99,11 @@ class Thermo_Plt_Vars:
         self.Tf_GMin, self.Tf_GMax = self.find_global_max_min('tfast', Data)
             
         print(Data)
-        if config.R_Tvar == "Thetae":
+        if config.overlays['Colorline']['Var'] == "Thetae":
             lab, GMin, GMax = self.Te_lab, self.Te_GMin, self.Te_GMax
-        elif config.R_Tvar == "Thetav":
+        elif config.overlays['Colorline']['Var'] == "Thetav":
             lab, GMin, GMax = self.Tv_lab, self.Tv_GMin, self.Tv_GMax
-        elif config.R_Tvar == "tfast":
+        elif config.overlays['Colorline']['Var'] == "tfast":
             lab, GMin, GMax = self.Tf_lab, self.Tf_GMin, self.Tf_GMax
         self.Tvar_lab, self.Tvar_GMin, self.Tvar_GMax = lab, GMin, GMax
 
@@ -112,7 +113,8 @@ class Thermo_Plt_Vars:
 
         Z = [[0,0],[0,0]]
         levels = np.arange(GMin, GMax+1, 1)
-        self.CS3 = plt.contourf(Z, levels, cmap=cmocean.cm.thermal)
+        self.CS3 = plt.contourf(Z, levels, cmap='gnuplot')
+        #  self.CS3 = plt.contourf(Z, levels, cmap=cmocean.cm.thermal)
         plt.clf()
 
     # * * *
@@ -149,34 +151,31 @@ class Master_Plt:
                edgecolor= 'black', shadow=True, fancybox=True, framealpha=1)# legend fontsize
         plt.rc('figure', titlesize= 50, facecolor='white')  # fontsize of the figure title
         self.leg_title_font={'size':25, 'weight':'bold'}
-        self.Radar_title_font= {'fontsize':40}
+        self.Radar_title_font= {'fontsize':15}
+        #  self.Radar_title_font= {'fontsize':40}
 
         ## Establish the Plot size and layout
         #### * * * * * * * * * * * * * * * * *
         def radar_layout(config):
             #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
-            try:  R_rows = config.numRrows
-            except: R_rows = math.trunc(len(config.r_mom) / 2)
-
-            try: R_cols = config.numRcols
-            except: 
-                if ((len(config.r_mom) / 2) % 2) ==0: R_cols = 2
-                else: R_cols = 3
-           
-            #***
-            if len(config.r_mom) <=2: 
-                self.Radar_title_font= {'fontsize':15}
-                #  self.Radar_title_font= {'fontsize':40}
+            if config.radar_controls['layout']['Rows'] == None:
+                R_rows = math.trunc(len(config.r_mom) / 2)
             else:
-                self.Radar_title_font={'fontsize':15}
-            #***
+                R_rows = config.radar_controls['layout']['Rows']
+
+            if config.radar_controls['layout']['Cols'] == None:
+                if ((len(config.r_mom) / 2) % 2) in [0,1]: R_cols = 2
+                else: R_cols = 3
+            else: R_cols = config.radar_controls['layout']['Cols']
+            
             return R_rows, R_cols
 
+        self.title_spacer=.93
         # This is the layout for radar and time series subplots
         if len(config.Time_Series) != 0 and len(config.r_mom) != 0:
             self.fig= plt.figure(figsize=(32,20))
             if len(config.Time_Series) == 1:
-                outer_hratio = [3,2] #the height ratio between the space alocated for radar imagaes and timeseries
+                outer_hratio = [4,2] #the height ratio between the space alocated for radar imagaes and timeseries
                 ts_hratio=[1] #the relative height alocated to each timeseries [within the space allocated for all timeseries]
             if len(config.Time_Series) == 2:
                 outer_hratio = [4,3] 
@@ -212,6 +211,10 @@ class Master_Plt:
                 self.fig= plt.figure(figsize=(30,10))
             if self.R_cols == 2: 
                 self.fig= plt.figure(figsize=(20,20.5))
+            if self.R_rows == 1: 
+                self.title_spacer=.68
+            if self.R_rows == 2: 
+                self.title_spacer=.8
             self.Radar_title_font= {'fontsize':20}
             self.r_gs = GridSpec(nrows=self.R_rows, ncols=self.R_cols, hspace=0)
 
@@ -220,7 +223,8 @@ class Master_Plt:
         #if we are plotting radar
         if len(config.r_mom) != 0:
             # The extent of the area to be plotted
-            self.Domain = Platform.getLocation(Data[config.Centered_Pform], scan_time=Data['P_Radar'].Scan_time, offsetkm= config.offsetkm)
+            self.Domain = Platform.getLocation(Data[config.radar_controls['Centered_Pform']], scan_time=Data['P_Radar'].Scan_time, 
+                                               offsetkm= config.radar_controls['offsetkm'][config.Radar_Plot_Type])
             #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
 
             # Define pyart display object for plotting radarfile
@@ -238,13 +242,13 @@ class Master_Plt:
         if ts != None:
             # Xaxis
             # if desired this subsets the timerange that is displayed in the timeseries
-            if scan_time != None and self.config.ts_extent != None:
-                ax.set_xlim(scan_time - timedelta(minutes=self.config.ts_extent),
-                            scan_time + timedelta(minutes=self.config.ts_extent))
+            if scan_time != None and self.config.tseries_control['Axis_Extents']['X'] != None:
+                ax.set_xlim(scan_time - timedelta(minutes=self.config.tseries_control['Axis_Extents']['X']),
+                            scan_time + timedelta(minutes=self.config.tseries_control['Axis_Extents']['X']))
 
             # Yaxis
             if ts in ['Thetav','Thetae']:
-                if self.config.man_ylim == True: ax.set_ylim(335,350)
+                if self.config.tseries_control['Axis_Extents']['Y'] != None: ax.set_ylim(335,350)
                 else: ax.set_ylim(TVARS.Tvar_GMin, TVARS.Tvar_GMax)
 
             #if plotting the wind time series and its the first ax being det
@@ -260,7 +264,7 @@ class Master_Plt:
             # Xaxis
             ax.xaxis.set_major_locator(mdates.AutoDateLocator())
             # set up minor ticks (should be a multiple of ten intervals (ie 10,20,30... min spans)
-            ax.xaxis.set_minor_locator(AutoMinorLocator(6))
+            ax.xaxis.set_minor_locator(AutoMinorLocator(5))
 
             # Yaxis
             if ts in ['Thetav','Thetae']:
@@ -351,12 +355,14 @@ class Master_Plt:
         ## MAKE THE TIMESERIES
         #### * * * * * * * * *
         if ts == 'histogram':
-            hist, bins = np.histogram(Data['P_Radar'].rfile.fields['vel_texture']['data'][~np.isnan(Data['P_Radar'].rfile.fields['vel_texture']['data'])], bins=150)
+            hist, bins = np.histogram(Data['P_Radar'].rfile.fields[self.config.tseries_control['H']['var']]['data'][~np.isnan(Data[
+                'P_Radar'].rfile.fields[self.config.tseries_control['H']['var']]['data'])], bins=150)
             bins = (bins[1:]+bins[:-1])/2.0
             ax_n.plot(bins, hist)
+            ax_n.set_xlim(self.config.tseries_control['H']['xmin'], self.config.tseries_control['H']['xmax'])
             #  ax_n.set_yscale('log')
-            ax_n.axvline(x=3,c='k')
-            ax_n.set_xlabel('Velocity texture')
+            #  ax_n.axvline(x=3,c='k')
+            ax_n.set_xlabel(self.config.tseries_control['H']['var'])
             ax_n.set_ylabel('Count')
 
         elif ts in ['Thetae', 'Thetav', 'Wind']:
@@ -364,8 +370,9 @@ class Master_Plt:
                 for p in Data.values():
                     if isinstance(p, Torus_Insitu):
                         if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
-                        ## If the platform matches a type listed in TS_masking use masked data for the time series; else use the unmasked data
-                        if p.type in self.config.TS_masking[:]:
+                        ## If the platform matches a type listed for masking it uses masked data for the time series; 
+                        #  else use the unmasked data
+                        if p.type in self.config.tseries_control['Mask'][:]:
                             if ts == "Thetae":   plotting_data= p.Thetae_ts_mask_df
                             elif ts == "Thetav":   plotting_data= p.Thetav_ts_mask_df
                         else: plotting_data= p.df[ts].values
@@ -388,7 +395,7 @@ class Master_Plt:
 
             # * * *
             if ts == 'Wind':
-                p = Data[self.config.Wind_Pform]
+                p = Data[self.config.tseries_control['Wind_Pform']]
                 if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
 
                 ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
@@ -408,7 +415,7 @@ class Master_Plt:
             ## Plot legend
             leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center left')
             if ts == 'Wind':
-                leg.set_title(self.config.Wind_Pform, prop=self.leg_title_font)
+                leg.set_title(self.config.tseries_control['Wind_Pform'], prop=self.leg_title_font)
                 leg.remove()
                 ax_2.add_artist(leg)
 
@@ -425,8 +432,9 @@ class Master_Plt:
             #  radar scan and the timerange ploted (via filled colorline) on the radar plots
             if len(self.config.r_mom) != 0:
                 ax_n.axvline(Data['P_Radar'].Scan_time, color='r', linewidth=4, alpha=.5)
-                ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.cline_extent),
-                             Data['P_Radar'].Scan_time + timedelta(minutes=self.config.cline_extent), facecolor='0.5', alpha=0.4)
+                ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.overlays['Colorline']['cline_extent']),
+                             Data['P_Radar'].Scan_time + timedelta(minutes=self.config.overlays['Colorline']['cline_extent']), 
+                             facecolor='0.5', alpha=0.4)
             ##Label Formatter
             # # # # # # # # #
             ax_n.set_xlabel('Time (UTC)')
@@ -446,8 +454,11 @@ class Master_Plt:
         '''
         if self.config.print_long == True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
 
+
         ## SET UP VARS FOR EACH RADAR MOMENTS
         #####################################
+        testing_testing= False
+        testing_bound=None
         if mom in ['refl','refl_unmasked', 'refl_despeck']:
             c_scale = 'pyart_HomeyerRainbow'
             if Data['P_Radar'].name == 'WSR88D':
@@ -472,18 +483,29 @@ class Master_Plt:
                 field= 'refl_despeck'
 
         ###
+        elif mom in ['vort', 'vort_smooth']:
+            if mom == 'vort_smooth':
+                c_label = 'Vort smooth 'r' [$\frac{1}{s}$]'
+                field = 'vort_smooth'
+            elif mom == 'vort':
+                c_label = 'Vort 'r' [$\frac{1}{s}$]'
+                field = 'vort'
+            c_scale =  cmocean.cm.curl
+            vminb,vmaxb, sweep = -.15, .15,  Data['P_Radar'].swp
+        ###
         elif mom in ['vel', 'vel_unmasked', 'vel_unfixed', 'vel_despeck', 'vel_smooth', 'vel_savgol']: 
             c_scale = cmocean.cm.balance
             if Data['P_Radar'].name == 'WSR88D':
                vminb, vmaxb, sweep = -40., 40., Data['P_Radar'].swp[1]
             else:
                vminb, vmaxb, sweep = -30., 30., Data['P_Radar'].swp
+               #  vminb, vmaxb, sweep = -30., 30., Data['P_Radar'].swp
             #****
             if mom == 'vel':
                 c_label = 'Radial Velocity [m/s]'
                 if Data['P_Radar'].name == 'WSR88D': field= 'velocity'
                 else: field= 'vel_fix'
-            if mom == 'vel_unmasked':
+            elif mom == 'vel_unmasked':
                 c_label = 'Radial Velocity [m/s]'
                 if Data['P_Radar'].name == 'WSR88D': field= 'velocity'
                 elif Data['P_Radar'].name in pform_names('KA'): field= 'corrected_velocity'
@@ -501,35 +523,49 @@ class Master_Plt:
             elif mom == 'vel_savgol':
                 c_label= 'Radial Velocity Savgol [m/s]'
                 field= 'vel_savgol'
+
         ###
         elif mom == 'specw':
             c_label, c_scale = 'Spectrum Width 'r' [$\frac{m}{s}$]', 'cubehelix_r'
             field, vminb, vmaxb, sweep = 'specw_fix', 0., 4, Data['P_Radar'].swp
 
         ###
-        elif mom in ['vel_texture', 'vel_texture_dea']:
-            c_scale = 'pyart_balance'#'Greys'#'pyart_balance'
-            vminb, vmaxb, sweep =  0., 10, Data['P_Radar'].swp
+        elif mom in ['vel_texture','vel_texture_smoothed', 'vel_texture_dea', 'vel_test']:
+            c_scale = 'bone_r'#'PuBuGn'#'BuPu'#cmocean.cm.dense#cmocean.cm.speed#Greys #'pyart_balance'
+            #  c_scale = 'Greys'#'pyart_balance'
+            vminb, vmaxb, sweep =  0., 3, Data['P_Radar'].swp
+            #  vminb, vmaxb, sweep =  0., 10, Data['P_Radar'].swp
             if mom == 'vel_texture':
                 c_label = 'Radial Velocity Texture (no DEA) STD Dev' 
                 field = 'vel_texture'
+            if mom == 'vel_texture_smoothed':
+                c_label = 'Radial Velocity Texture Smoothed STD Dev' 
+                field = 'vel_texture_smoothed'
+
             elif mom == 'vel_texture_dea':
                 c_label = 'Radial Velocity Texture (DEA) STD Dev '
                 field= 'vel_texture_dea'
+            elif mom == 'vel_test': 
+                #  testing_testing= False
+                #  testing_bound=None
+                testing_testing= True
+                testing_bound=[0,.5,1,1.5,2,2.5,3,3.5]
+                c_label= 'Radial Velocity masking test'
+                field= 'vel_test'
 
         ###
-        elif mom in ['vel_grad', 'vel_savgol_der', 'vel_savgol_der2']:
+        elif mom in ['vel_grad', 'vel_savgol_axis1', 'vel_savgol_axis0']:
             sweep = Data['P_Radar'].swp
             c_scale = cmocean.cm.balance  
             if mom == 'vel_grad':
                 p_title, c_label= 'Vel Gradient', 'Gradient m/s'
                 field, vminb, vmaxb= 'vel_gradient', -5., 5
-            elif mom == 'vel_savgol_der':
-                c_label= 'Radial Acceleration poly(2) axis1 m/s^2'
-                field, vminb, vmaxb= 'vel_savgol_der', -1., 1
-            elif mom == 'vel_savgol_der2':
-                c_label= 'Radial Acceleration poly(2) axis0 m/s^2'
-                field, vminb, vmaxb= 'vel_savgol_der2', -1., 1
+            elif mom == 'vel_savgol_axis1':
+                c_label= 'Vel Savgol axis1 '
+                field, vminb, vmaxb= 'vel_savgol_axis1', -1., 1
+            elif mom == 'vel_savgol_axis0':
+                c_label= 'Vel savgol axis0'
+                field, vminb, vmaxb= 'vel_savgol_axis0', -2., 2
             elif mom == 'vel_savgol_grad':
                 p_title, c_label= 'Radial Gradient (savgol smoothed)', 'm/s'
                 field, vminb, vmaxb= 'vel_savgol_grad', -5., 5
@@ -556,7 +592,6 @@ class Master_Plt:
                 field, vminb, vmaxb= 'difference', 0., 2.
 
         ###
-
         elif mom in ['az_shear', 'div_shear']:
             sweep = Data['P_Radar'].swp
             if mom == 'az_shear':
@@ -574,14 +609,22 @@ class Master_Plt:
         #####################################
         #  print("This is the id for "+ field+' :'+str(id(Data['P_Radar'].rfile.get_field(Data['P_Radar'].swp, field, copy=False))))
 
+        ## set colors to highlight where the max/min are exceded
+        colormap = copy.copy(matplotlib.cm.get_cmap(name=c_scale))
+        colormap.set_under('aqua')
+        colormap.set_over('magenta')
+
         ## Plot the radar
         #  ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
-        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=c_scale, vmin=vminb, vmax=vmaxb, width=self.config.offsetkm*2000,
-                                  height=self.config.offsetkm*2000, title_flag=False, colorbar_flag=False, embelish=False)
+        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=colormap, vmin=vminb, vmax=vmaxb,
+                                  width=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000,
+                                  height=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000, 
+                                  title_flag=False, colorbar_flag=False, embelish=False)
         
         # Has to be here or it doesn't work
         ax_n.set_extent(self.Domain)
-        self.tick_grid_settings(ax=ax_n, radar=True, scan_time=None, interval=10*1000)
+        self.tick_grid_settings(ax=ax_n, radar=True, scan_time=None, interval=.5*1000)
+        #  self.tick_grid_settings(ax=ax_n, radar=True, scan_time=None, interval=10*1000)
         ax_n.grid(True)
 
         # Do it again here to restore extent
@@ -612,18 +655,18 @@ class Master_Plt:
                         ax_n.text(x+lab_shift[0], y-lab_shift[1], lab, transform=self.Proj,
                                   path_effects=[PE.withStroke(linewidth=4, foreground=lab_c)])
 
-        def plot_TORUSpform(Data, p, border_c='xkcd:light grey'):
+        def plot_TORUSpform(self, Data, p, border_c='xkcd:light grey'):
             '''Plot the filled line that indicates the thermo values on the Rplt'''
             #grab the subset of data of +- interval around radar scan
-            p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=self.config.cline_extent)
+            p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=self.config.overlays['Colorline']['cline_extent'])
 
             #if there is data for the platform that falls within the time and location of interest
             if p_deploy == True:
                 ##READ in data from p_sub
-                x, y, C = p_sub['lon'].values, p_sub['lat'].values, p_sub[self.config.R_Tvar].values
+                x, y, C = p_sub['lon'].values, p_sub['lat'].values, p_sub[self.config.overlays['Colorline']['Var']].values
 
                 ##PLOT the line that extends +/- min from the platform location;
-                if self.config.overlays[p.type]['Colorline'] == True:
+                if self.config.overlays['Colorline'][p.type] == True:
                     #  The colorfill indicates values of the specifiec p_var (ie Thetae etc)
                     ax_n.scatter(x, y, c=C, cmap=cmocean.cm.thermal, norm=TVARS.norm, alpha=.7, marker='o',
                                  s=7.5, zorder=3, transform=self.Proj)
@@ -670,7 +713,7 @@ class Master_Plt:
             ######
             #Plot Inistu Torus Platforms (if desired and available)
             if isinstance(p, Torus_Insitu):
-                LON, LAT, valid_sites = plot_TORUSpform(Data, p, border_c='k')
+                LON, LAT, valid_sites = plot_TORUSpform(self, Data, p, border_c='k')
                 txt_label = p.name
                 
             #Plot Stationary Inistu Platforms (aka mesonets and ASOS) if desired and available
@@ -717,8 +760,7 @@ class Master_Plt:
         if self.config.overlays['Tracks']['Marker']== True:
             # to Download Data -> https://apps.dat.noaa.gov/StormDamage/DamageViewer/
             # enter dates, and zoom into wanted tracks
-            # click "extract toolbox" and follow instructions
-            # click shapefile
+            # click "extract toolbox" and follow instructions # click shapefile
             # download the created shapefile file
 
             # once you download data, you should have 4 files with the same name but with endings .dbf, .prj, .shp, .shx
@@ -756,7 +798,6 @@ class Master_Plt:
                 #  ax_n.plot(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], transform=self.Proj)
             #  ax_n.legend()
             #  print(shapeRecs[4].record[2])
-            #  print(shapeRecs[4].record[2])
             #shapeRecs[4]['lats']
             #  tortrack = pickle.loadopen('20190314.p', 'rb'))
             #  tor_num=4
@@ -773,7 +814,19 @@ class Master_Plt:
                         #  xs.append(temp[0])
                         #  ys.append(temp[1])
                     #  plt.plot(np.asarray(xs)/1000, np.asarray(ys)/1000, color=colors[icol], label=tor_event)
-                #  icol+=1
+                #  icol+=spyi1
+        #  print('HHHHHHHHHHHHHHHHH')
+        if self.config.overlays['Contour']['Lines']==True:
+            unsmoothed_contourdata = Data['P_Radar'].rfile.get_field(sweep, self.config.overlays['Contour']['Var'])
+            # smooth out the lines
+            contourdata = ndimage.gaussian_filter(unsmoothed_contourdata, sigma=2)
+
+            lat, lon, _ = Data['P_Radar'].rfile.get_gate_lat_lon_alt(sweep)
+            levels = np.arange(-40, 40, self.config.overlays['Contour']['Interval'])
+            contours=ax_n.contour(lon, lat, contourdata, levels, linewidths=1, antialiased=True, alpha=1, colors='k',
+                                  linestyles='solid', transform=self.Proj)
+            if self.config.overlays['Contour']['Label']== True: 
+                ax_n.clabel(contours, levels,  fmt='%r', inline=True, fontsize=10)
 
         # * * *
         ## PLOT BACKGROUND FEATURES
@@ -783,15 +836,11 @@ class Master_Plt:
         # * * *
         ## DEAL WITH COLORBARS
         # Attach colorbar to each subplot
-        colormap = copy.copy(matplotlib.cm.get_cmap(name=c_scale))
-        colormap.set_under('aqua')
-        colormap.set_over('magenta')
-
         divider = make_axes_locatable(plt.gca())
         c_ax = divider.append_axes("bottom", "5%", pad="2%", axes_class=plt.Axes)
         sm = plt.cm.ScalarMappable(cmap=colormap, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
         sm._A = []
-        cb = plt.colorbar(sm, cax=c_ax, orientation='horizontal', extend='both')
+        cb = plt.colorbar(sm, cax=c_ax, orientation='horizontal', extend='both', drawedges=testing_testing, boundaries=testing_bound)
         cb.set_label(label=c_label, size=self.Radar_title_font['fontsize']) #, weight='bold')
 
         #set up the colorbar for the thermo colorline overlay
@@ -804,32 +853,20 @@ class Master_Plt:
         #  collection = PatchCollection(patches)
         #  ax_n.add_collection(collection)
         #  box = AnchoredAuxTransformBox(ax_n.transData, loc='upper left')
-        #  box = HPacker(children=[box1, box2],
-              #  align="center",
-              #  pad=0, sep=5)
-        #  anchored_box = AnchoredOffsetbox(loc='lower left',
-                                 #  child=box, pad=0.,
-                                 #  frameon=True,
-                                 #  bbox_to_anchor=(0., 1.02),
-                                 #  bbox_transform=ax.transAxes,
-                                 #  borderpad=0.,
-                                 #  )
+        #  box = HPacker(children=[box1, box2], align="center", pad=0, sep=5)
+        #  anchored_box = AnchoredOffsetbox(loc='lower left',child=box, pad=0.,frameon=True,bbox_to_anchor=(0., 1.02),
+                                 #  bbox_transform=ax.transAxes,borderpad=0.)
         #  ax_n.add_artist(box)
         #  ax_n.add_artist(anchored_box)
 
         # * * *
         ## SET UP LEGENDS
         if leg == True: #this means you are currently making the left subplot
-
             #add legend for platform markers
             l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.07,.5),
-                            markerscale=1.2, labelspacing=.7, handletextpad=.9, handlelength=.1)#, title="Platforms")
+                            markerscale=1.1, labelspacing=.7, handletextpad=.9, handlelength=.1)#, title="Platforms")
             l.set_title("Platforms", prop=self.leg_title_font)
-        #  if leg == False:  #this means you are currently making the right subplot
-            ## Plot platform colorbar
-            #set up colorbar axis that will be as tall and 5% as wide as the 'parent' radar subplot
-            #  cbar_ax = inset_axes(ax_n, width= '5%', height= '100%', loc='center left', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-.226, 0,1,1))
-            #  cbar = plt.colorbar(TVARS.CS3, cax=cbar_ax, orientation='vertical', label=TVARS.Tvar_lab, ticks=MaxNLocator(integer=True))
+
         ###################
         if self.config.print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 
@@ -865,7 +902,8 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
             display = singledop.AnalysisDisplay(sd_test)
             #  display = singledop.AnalysisDisplay(Data['P_Radar'].rfile.fields[sd_test])
             display.four_panel_plot(scale=400, legend=20, return_flag=False, thin=6,
-                        levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix', dz_cmap='pyart_HomeyerRainbow' , xlim=[-21,21], ylim=[-21,21])
+                        levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix', dz_cmap='pyart_HomeyerRainbow' ,
+                                    xlim=[-21,21], ylim=[-21,21])
         else:
             mom_index=0
             for row in range(PLT.R_rows):
@@ -895,23 +933,24 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
 
     ## Finish plot
     #### * * * * *
-    #  title_spacer=.93
-    title_spacer=.9
     ### Get outdir and outname (aka file path and file name) for the correct image setup
     #if radar is included in the image
     if len(config.r_mom) != 0: 
-        plt.suptitle(Data['P_Radar'].site_name+' '+str(tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=title_spacer, ha='center')
-
+        plt.suptitle(Data['P_Radar'].site_name+' '+str(tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=PLT.title_spacer, ha='center')
         #if both radar and timeseries are included in the image
         if len(config.Time_Series) != 0:
             file_string = '_'.join(config.Time_Series)
             if ('Thetae' in config.Time_Series) and ('Thetav' in config.Time_Series): plt_type = 'both_Thetas'
-            elif (len(config.Time_Series) != 1) and ('Wind' in config.Time_Series): plt_type = config.R_Tvar+'/Wind'
-            else: plt_type = config.R_Tvar
+            elif (len(config.Time_Series) != 1) and ('Wind' in config.Time_Series): plt_type = config.overlays['Colorline']['Var']+'/Wind'
+            else: plt_type = config.overlays['Colorline']['Var']
         #if only radar is included in the image (aka no platform info overlayed)
         else:
             file_string = 'r_only'
-            plt_type='Radar_only/ppi'
+            if config.overlays['Contour']['Lines']== True:
+                plt_type='Radar_only/ppi/contour'
+            else:
+                plt_type='Radar_only/ppi'
+
 
         #add the file name
         if Data['P_Radar'].name in pform_names('KA'):
@@ -920,7 +959,8 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
             output_name = Data['P_Radar'].Scan_time.strftime('%m%d_%H%M')+'_'+file_string+'_'+Data['P_Radar'].site_name+'.png'
         #path to file 
         rmom_string= '_'.join(config.r_mom)
-        plt_dir=Data['P_Radar'].dir_name+'/'+plt_type+'/'+rmom_string+'/'+str(tilt)+'_deg/'+config.Centered_Pform+'/'+str(config.offsetkm)+'km/'
+        plt_dir=Data['P_Radar'].dir_name+'/'+plt_type+'/'+rmom_string+'/'+str(tilt )+'_deg/'+config.radar_controls['Centered_Pform']+'/'+str(
+                    config.radar_controls['offsetkm'][config.Radar_Plot_Type])+'km/'
 
     #if only timeseries are included in the image
     elif len(config.Time_Series) != 0 and len(config.r_mom) == 0:
@@ -933,6 +973,97 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
         output_name= day+'_TS_'+file_string+file_ender
         #path to file 
         plt_dir='TSeries/'
+    
+    pts = [np.nan]
+    if config.clicker == True:
+        def tellme(s):
+            print(s)
+            plt.title(s, fontsize=16)
+            plt.draw()
+
+        ##################################################
+        # Define a triangle by clicking three points
+
+
+        plt.clf()
+        plt.setp(plt.gca(), autoscale_on=False)
+
+        tellme('You will define a triangle, click to begin')
+
+        plt.waitforbuttonpress()
+
+        while True:
+            pts = []
+            while len(pts) < 3:
+                tellme('Select 3 corners with mouse')
+                pts = np.asarray(plt.ginput(3, timeout=-1))
+                if len(pts) < 3:
+                    tellme('Too few points, starting over')
+                    time.sleep(1)  # Wait a second
+
+            ph = plt.fill(pts[:, 0], pts[:, 1], 'r', lw=2)
+
+            tellme('Happy? Key click for yes, mouse click for no')
+
+            if plt.waitforbuttonpress():
+                break
+
+            # Get rid of fill
+            for p in ph:
+                p.remove()
+
+
+        ##################################################
+        # Now contour according to distance from triangle
+        # corners - just an example
+
+        # Define a nice function of distance from individual pts
+        def f(x, y, pts):
+            z = np.zeros_like(x)
+            for p in pts:
+                z = z + 1/(np.sqrt((x - p[0])**2 + (y - p[1])**2))
+            return 1/z
+
+
+        X, Y = np.meshgrid(np.linspace(-1, 1, 51), np.linspace(-1, 1, 51))
+        Z = f(X, Y, pts)
+
+        CS = plt.contour(X, Y, Z, 20)
+
+        tellme('Use mouse to select contour label locations, middle button to finish')
+        CL = plt.clabel(CS, manual=True)
+
+        ##################################################
+        # Now do a zoom
+
+        tellme('Now do a nested zoom, click to begin')
+        plt.waitforbuttonpress()
+
+        while True:
+            tellme('Select two corners of zoom, middle mouse button to finish')
+            pts = plt.ginput(2, timeout=-1)
+            if len(pts) < 2:
+                break
+            (x0, y0), (x1, y1) = pts
+            xmin, xmax = sorted([x0, x1])
+            ymin, ymax = sorted([y0, y1])
+            plt.xlim(xmin, xmax)
+            plt.ylim(ymin, ymax)
+
+        tellme('All Done!')
+        plt.show()
+
+        print('hello')
+
+        plt.setp(plt.gca(), autoscale_on=False)
+        print('hello2')
+        plt.draw()
+        print('hello3')
+        #  plt.waitforbuttonpress()
+        print('hello4')
+        pts = plt.ginput(n=40,timeout=0) # look up ginput docs for some good guidance
+        print('hello5')
+        print(pts)
     
     ## * * *     
     #This is the directory path for the output file
@@ -984,12 +1115,12 @@ def plot_radar(config, day, Data, TVARS):
 
         elif config.Radar_Plot_Type == 'NOXP_Plotting':
             ## Get radar files
-            #  path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/dealiased_ordered_*'
-            path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/fixed*'
+            path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/dealiased_ordered_*'
+            #  path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/fixed*'
             r_files_path = sorted(glob.glob(path))
 
         elif config.Radar_Plot_Type == 'WSR_Plotting':
-            r_files_path = det_nearest_WSR(Data[config.Centered_Pform].df)
+            r_files_path = det_nearest_WSR(Data[config.radar_controls['Centered_Pform']].df)
         return r_files_path
     
     ####
@@ -1011,7 +1142,7 @@ def plot_radar(config, day, Data, TVARS):
             valid_time = time_in_range(time_start, time_end, rtime)
 
         # * * * 
-        for tilt in config.p_tilt:
+        for tilt in config.radar_controls['p_tilt']:
             if valid_time == True:
                 #open file using pyart
                 radar = read_from_radar_file(r_file, is_WSR)
@@ -1047,8 +1178,8 @@ def plot_radar(config, day, Data, TVARS):
         for rad, times in WSR_info.items():
             print("Radar_Site: {}\n Start: {}\n End: {} \n***".format(rad, times[0], times[1]))
             radar_files = get_WSR_from_AWS(config, day, times[0], times[1], rad)
-            radar_files_paths.append(radar_files)
-            #radar_files_paths= radar_files_paths+radar_files
+            #  radar_files_paths.append(radar_files)
+            radar_files_paths= radar_files_paths+radar_files
     else:
         radar_files_paths = find_radar_files(config, day, Data)
 
@@ -1095,4 +1226,41 @@ timer(totalcompT_start, time.time(), total_runtime=True)
 print("ALL FINISHED")
 
 tracemalloc.stop()
+
+var_list = ['T2', 'T3']
+Num_of_members=2
+Data={}
+for var in var_list:
+    ES_top=0
+    for mem_num in arange(1,Num_of_members):
+        file_name='filename...'+str(mem_nm)
+
+        ds =np.Dataset(file_name)
+        fcst=ds[var][:]
+        if ES_top ==0:
+            ES_top
+
+        ES_top=ES_top+fcst
+
+    ES_mean = ES_top/Num_of_members
+    Data.update({var:ES_mean})
+
+print(Data['T2'])
+
+def example(species, real_name, asker='Ellie'):
+    if species=='dog':
+        name= real_name
+    elif species == 'cat':
+       if asker=='Ellie': 
+           name= 'Humphrey'
+       else:
+           name= real_name
+    else: 
+        name= 'Try again'
+    return name 
+real_n='Chester'
+A= 'Jillian'
+what_called= example('dog', real_n)
+what_called_2= example('dog', real_n, A)
+print(what_called)
 
