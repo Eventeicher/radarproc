@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #import needed modules
@@ -29,8 +30,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.collections import LineCollection
 from cycler import cycler
-import datetime as dt
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 import cartopy
 import cartopy.crs as ccrs
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
@@ -47,15 +47,19 @@ from pandas.plotting import register_matplotlib_converters
 import numpy as np
 import xarray as xr
 from netCDF4 import num2date
-import argparse, cProfile, logging, time, os, os.path
-from os.path import expanduser
+import logging
+import csv 
+import os
+import os.path
+import time
 from pathlib import Path
 from joblib import Memory, Parallel, delayed
 from scipy import ndimage, interpolate
-from operator import attrgetter
-from collections import namedtuple
-import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
-import fnmatch
+import cmocean
+import gc
+import glob
+import nexradaws
+import pyart
 import gc
 from pympler.asizeof import asizeof
 #this is the file with the plotting controls to access any of the vars in that file use config.var
@@ -65,7 +69,6 @@ import singledop
 import pynimbus as pyn 
 import tracemalloc
 import shapefile
-import pickle
 import math 
 tracemalloc.start()
 
@@ -86,6 +89,7 @@ if plot_config.overlays['GEO']['OX'] == True: import osmnx as ox
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
 from read_pforms import error_printing, timer, time_in_range, time_range
 from radar_defns import read_from_radar_file, det_nearest_WSR, sweep_index, get_WSR_from_AWS, info_radar_files
+from clicker import clicker_defn, make_csv
 
 totalcompT_start = time.time()
 ################################################################################################
@@ -148,11 +152,14 @@ class Master_Plt:
         #  print(plt.rcParams)
         plt.rc('font', size= 15)      # controls default text sizes
         plt.rc('axes', labelsize= 21) # fontsize of the axes title, and x and y labels
-        plt.rc('legend', fontsize= 23, borderpad=.5, facecolor='white', 
+        #  plt.rc('legend', fontsize= 23, borderpad=.5, facecolor='white',
+        plt.rc('legend', fontsize= 13, borderpad=.5, facecolor='white', 
                edgecolor= 'black', shadow=True, fancybox=True, framealpha=1)# legend fontsize
         plt.rc('figure', titlesize= 50, facecolor='white')  # fontsize of the figure title
-        self.leg_title_font={'size':25, 'weight':'bold'}
-        self.Radar_title_font= {'fontsize':15}
+        self.leg_title_font={'size':15, 'weight':'bold'}
+        #  self.leg_title_font={'size':25, 'weight':'bold'}
+        #  self.Radar_title_font= {'fontsize':15}
+        self.Radar_title_font= {'fontsize':10}
         #  self.Radar_title_font= {'fontsize':40}
 
         ## Establish the Plot size and layout
@@ -202,20 +209,24 @@ class Master_Plt:
         # This is the layout for radar only
         if len(config.r_mom) != 0 and len(config.Time_Series) == 0:
             plt.rc('font', size= 10)      # controls default text sizes
-            plt.rc('figure', titlesize= 25, facecolor='white')  # fontsize of the figure title
+            plt.rc('figure', titlesize= 15, facecolor='white')  # fontsize of the figure title
+            #  plt.rc('figure', titlesize= 25, facecolor='white')  # fontsize of the figure title
             plt.rc('axes', labelsize= 10) # fontsize of the axes title, and x and y labels
             print('this is the layout for radar plots only')
-            #  self.fig= plt.figure(figsize=(15,25))
 
             self.R_rows, self.R_cols = radar_layout(config)
             if self.R_cols == 3: 
-                self.fig= plt.figure(figsize=(30,10))
+                xfigsize=30
+                #  self.fig= plt.figure(figsize=(30,10))
             if self.R_cols == 2: 
-                self.fig= plt.figure(figsize=(20,20.5))
+                xfigsize=15
             if self.R_rows == 1: 
-                self.title_spacer=.68
+                yfigsize=8
+                self.title_spacer=.9
             if self.R_rows == 2: 
+                yfigsize=15
                 self.title_spacer=.8
+            self.fig= plt.figure(figsize=(xfigsize,yfigsize))
             self.Radar_title_font= {'fontsize':20}
             self.r_gs = GridSpec(nrows=self.R_rows, ncols=self.R_cols, hspace=0)
 
@@ -975,20 +986,22 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
         #path to file 
         plt_dir='TSeries/'
     
-    pts = [np.nan]
-    if config.clicker == True:
-        print('hello')
-
-        plt.setp(plt.gca(), autoscale_on=False)
-        print('hello2')
-        plt.draw()
-        print('hello3')
-        #  plt.waitforbuttonpress()
-        print('hello4')
-        pts = plt.ginput(n=40,timeout=0) # look up ginput docs for some good guidance
-        print('hello5')
-        print(pts)
     
+    if config.clicker == True:
+        csv_name= day+'surge_pnts.csv'
+        Does_csv_exist=os.path.isfile(csv_name)
+        surge_name= 'NA'
+        while surge_name != 'DONE':
+            print('####')
+            surge_name=input('If you are done adding points type DONE \nOtherwise type name of surge you are adding points for (1,2,etc):\n')
+            print('####')
+
+            if surge_name== 'DONE':
+                break
+            else:
+                #  plt.setp(plt.gca(), autoscale_on=False)
+                pts=clicker_defn(plt)
+                make_csv(Data, pts, surge_name, csv_name, Does_csv_exist)
     ## * * *     
     #This is the directory path for the output file
     outdir = config.g_TORUS_directory+day+'/plots/'+plt_dir
@@ -1128,13 +1141,11 @@ def tellme(s):
 
 ##################################################
 # Define a triangle by clicking three points
-
-
+'''
 plt.clf()
 plt.setp(plt.gca(), autoscale_on=False)
 
 tellme('You will define a triangle, click to begin')
-
 plt.waitforbuttonpress()
 
 while True:
@@ -1180,7 +1191,6 @@ CL = plt.clabel(CS, manual=True)
 
 ##################################################
 # Now do a zoom
-
 tellme('Now do a nested zoom, click to begin')
 plt.waitforbuttonpress()
 
@@ -1198,6 +1208,7 @@ while True:
 tellme('All Done!')
 plt.show()
 
+'''
 #############################################################################################
 for day in plot_config.day_list:
     #####################################################
@@ -1227,7 +1238,7 @@ timer(totalcompT_start, time.time(), total_runtime=True)
 print("ALL FINISHED")
 
 tracemalloc.stop()
-
+'''
 var_list = ['T2', 'T3']
 Num_of_members=2
 Data={}
@@ -1264,4 +1275,5 @@ A= 'Jillian'
 what_called= example('dog', real_n)
 what_called_2= example('dog', real_n, A)
 print(what_called)
+'''
 
