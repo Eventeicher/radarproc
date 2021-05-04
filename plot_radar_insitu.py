@@ -70,6 +70,7 @@ import pynimbus as pyn
 import tracemalloc
 import shapefile
 import math 
+from shapely.geometry import LineString
 tracemalloc.start()
 
 import pprint
@@ -89,7 +90,7 @@ if plot_config.overlays['GEO']['OX'] == True: import osmnx as ox
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
 from read_pforms import error_printing, timer, time_in_range, time_range
 from radar_defns import read_from_radar_file, det_nearest_WSR, sweep_index, get_WSR_from_AWS, info_radar_files
-from clicker import clicker_defn, make_csv
+from clicker import clicker_defn, make_csv, return_pnt_index, subset_surge_df
 
 totalcompT_start = time.time()
 ################################################################################################
@@ -245,7 +246,155 @@ class Master_Plt:
             # Set the projection of the radar plot, and transformations
             self.R_Proj = self.display.grid_projection
             self.Proj = ccrs.PlateCarree()
+            
 
+            #  lats = radar.gate_latitude
+            #  now for someting quantitative.. WARNING.. NEXRAD Z-R dont use for MtSt :)
+            #  rain_z = radar.fields['reflectivity']['data'].copy()
+            #  z_lin = 10.0**(radar.fields['reflectivity']['data']/10.)
+            #  rain_z = (z_lin/300.0)**(1./1.4)  #Z=300 R1.4
+            #  radar.add_field_like('reflectivity', 'rain_z',  rain_z, replace_existing = True)
+            #  radar.fields['rain_z']['units'] = 'mm/h'
+            #  radar.fields['rain_z']['standard_name'] = 'rainfall_rate'
+            #  radar.fields['rain_z']['long_name'] = 'rainfall_rate_from_z'
+            #  radar.fields['rain_z']['valid_min'] = 0
+            #  radar.fields['rain_z']['valid_max'] = 500
+            #
+            #  display.ax.annotate('High Reflectivity', xy=(152.6, -27.8), xytext=(152.0, -27.8),
+            #  arrowprops=dict(facecolor='gray',
+                            #  arrowstyle="simple",
+                            #  connectionstyle="arc3,rad=-0.2"),
+            #  xycoords=transform,
+            #  ha='right', va='top', fontsize=20)
+
+            #  display.ax.annotate('Hail contamination', xy=(152.6, -27.8), xytext=(152.0, -27.8),
+                    #  arrowprops=dict(facecolor='gray',
+                                    #  arrowstyle="simple",
+                                    #  connectionstyle="arc3,rad=-0.2"),
+                    #  xycoords=transform,
+                    #  ha='right', va='top', fontsize=20)
+            #  x, y, z = radar.get_gate_x_y_z(sweep, edges=False)
+            #  display.plot_point(lon_0*-1, lat_0, label_text='Radar')
+            #  rlat = radar.latitude['data'][0]
+            #  rlon = radar.longitude['data'][0]
+            #  Mark the radar
+            #  display.plot_point(lon_0*-1, lat_0, label_text='Radar')
+            #  coords, proj_radar = georef.spherical_to_xyz(coord[..., 0],
+                                                         #  coord[..., 1],
+                                                         #  coord[..., 2], sitecoords,
+                                                         #  squeeze=True)
+            #  lonlatalt = georef.spherical_to_proj(coord[..., 0],
+                                                 #  coord[..., 1],
+                                                 #  coord[..., 2], sitecoords)
+            #  range : dict
+             #  |      Range to the center of each gate (bin).
+              #  georefs_applied : dict or None
+             #  |      Indicates whether the variables have had georeference calculation
+             #  |      applied.  Leading to Earth-centric azimuth and elevation angles.
+            #  extract_sweeps(self, sweeps)
+             #  |      Create a new radar contains only the data from select sweeps.
+             #  |
+             #  |      Parameters
+             #  |      ----------
+             #  |      sweeps : array_like
+             #  |          Sweeps (0-based) to include in new Radar object.
+             #  |
+             #  |      Returns
+             #  |      -------
+             #  |      radar : Radar
+             #  |          Radar object which contains a copy of data from the selected
+             #  |          sweeps.
+             #  |
+             #  |  get_azimuth(self, sweep, copy=False)
+             #  |      Return an array of azimuth angles for a given sweep.
+             #  |
+             #  |      Parameters
+             #  |      ----------
+             #  |      sweep : int
+             #  |          Sweep number to retrieve data for, 0 based.
+             #  |      copy : bool, optional
+             #  |          True to return a copy of the azimuths. False, the default, returns
+             #  |          a view of the azimuhs (when possible), changing this data will
+             #  |          change the data in the underlying Radar object.
+             #  |
+             #  |      Returns
+             #  |      -------
+             #  |      azimuths : array
+             #  |          Array containing the azimuth angles for a given sweep.t
+            #  get_slice(self, sweep)
+             #  |      Return a slice for selecting rays for a given sweep.
+             #  |
+             #  |  get_start(self, sweep)
+             #  |      Return the starting ray index for a given sweep.
+             #  |
+             #  |  get_start_end(self, sweep)
+             #  |      Return the starting and ending ray for a given sweep.
+             #  iter_azimuth(self)
+             #  |      Return an iterator which returns sweep azimuth data.
+             #  |  iter_slice(self)
+             #  |      Return an iterator which returns sweep slice objects.
+             #  |
+             #  |  iter_start(self)
+             #  |      Return an iterator over the sweep start indices.
+             #  |
+             #  |  iter_start_end(self)
+             #  |      Return an iterator over the sweep start and end indices.
+             #  |  print radar.fields['reflectivity']['coordinates']
+             #  n, bins = np.histogram(filtered_data.flatten(), bins = 150)
+            #  peaks = signal.find_peaks_cwt(n, np.array([10]))
+            #  centers = bins[0:-1] + (bins[1] - bins[0])
+            #  search_data = n[peaks[0]:peaks[1]]
+            #  search_centers = centers[peaks[0]:peaks[1]]
+            #  locs = search_data.argsort()
+            #  location_of_minima = locs[0]
+            #  zmax = n.max()
+            #  plt.plot([centers[peaks[0]], centers[peaks[0]]], [0, zmax])
+            #  plt.plot([centers[peaks[1]], centers[peaks[1]]], [0, zmax])
+            #  plt.plot([search_centers[location_of_minima], search_centers[location_of_minima]], [0, zmax])
+            #  noise_threshold = search_centers[locs[0]]
+            #  print(noise_threshold)
+            #  hist, bins = np.histogram(radar.fields['texture']['data'], bins=150)
+            #  bins = (bins[1:]+bins[:-1])/2.0
+            #  plt.plot(bins, hist)
+            #  plt.xlabel('Velocity texture')
+            #  plt.ylabel('Count')
+            #  def do_grid_map_to_grid(radar):
+                #  grids = pyart.map.map_to_grid(
+                    #  (radar, ), grid_shape=(1, 241, 241),
+                    #  grid_limits=((2000, 12000), (-123000.0, 123000.0),
+                                #  (-123000.0, 123000.0)),
+                    #  fields=['reflectivity'],
+                    #  weighting_function='BARNES')
+                #  return grids
+             #  def get_gate_area(self, sweep):
+                    #  """
+                    #  Return the area of each gate in a sweep. Units of area will be the
+                    #  same as those of the range variable, squared.
+                    #  Assumptions:
+                        #  1. Azimuth data is in degrees
+                    #  Parameters
+                    #  ----------
+                    #  sweep : int
+                        #  Sweep number to retrieve gate locations from, 0 based.
+            #
+                    #  Returns
+                    #  -------
+                    #  area : 2D array of size (ngates - 1, nrays - 1)
+                        #  Array containing the area (in m * m) of each gate in the sweep.
+                    #  """
+                    #  s = self.get_slice(sweep)
+                    #  azimuths = self.azimuth['data'][s]
+                    #  ranges = self.range['data']
+            #
+                    #  circular_area = np.pi * ranges ** 2
+                #  annular_area = np.diff(circular_area)
+        #
+                #  d_azimuths = np.diff(azimuths) / 360. # Fraction of a full circle
+        #
+                #  dca, daz = np.meshgrid(annular_area,d_azimuths)
+        #
+                #  area = dca * daz
+                #  return area
     # * * * * * * *
     def tick_grid_settings(self, ax, scan_time, radar=None, ts=None, interval=None, twinax=False):
         ##Axis Limits
@@ -376,6 +525,42 @@ class Master_Plt:
             #  ax_n.axvline(x=3,c='k')
             ax_n.set_xlabel(self.config.tseries_control['H']['var'])
             ax_n.set_ylabel('Count')
+
+        elif ts == 'clicker':
+            gate_x, gate_y, _ = Data['P_Radar'].rfile.get_gate_x_y_z(Data['P_Radar'].swp)
+            data_field=Data['P_Radar'].rfile.fields[self.config.tseries_control['H']['var']]['data']
+
+            surge_pd=pd.read_csv(self.config.g_TORUS_directory+day+'/data/'+day+'_surge_pnts.csv')
+            surges=surge_pd.Surge_ID.unique()
+            for j in surges: 
+                single_surge_df=subset_surge_df(surge_pd, Data, j)
+                if len(single_surge_df.point_x) == 0:
+                    pass
+                else:
+                    for i in single_surge_df.index.tolist():
+                    #  for i in np.arange(0, len(single_surge_df.point_x)):
+                        y_ind, x_ind, extra_bins = return_pnt_index(self, Data, single_surge_df, gate_x, gate_y, Data['P_Radar'].swp, i)
+                        test=data_field[y_ind,x_ind-extra_bins:x_ind+extra_bins]
+
+                        g_x=gate_x[y_ind,x_ind-extra_bins:x_ind+extra_bins]
+                        range_bin = Data['P_Radar'].rfile.range['data']
+                        r_bin_sub=range_bin[x_ind-extra_bins:x_ind+extra_bins]
+                        
+                        plt.plot(r_bin_sub, test, label=i)
+                        #  plt.plot(g_x, test, label=i)
+                        #  print(test, r_bin_sub)
+                        
+                        plt.scatter(range_bin[x_ind],data_field[y_ind,x_ind],c='red')
+                        plt.scatter(range_bin[x_ind+extra_bins],data_field[y_ind,x_ind+extra_bins], c='green')
+                        plt.scatter(range_bin[x_ind-extra_bins],data_field[y_ind,x_ind-extra_bins], c='blue')
+                        #  plt.scatter(gate_x[y_ind,x_ind],data_field[y_ind,x_ind],c='red')
+                        #  plt.scatter(gate_x[y_ind,x_ind+extra_bins],data_field[y_ind,x_ind+extra_bins], c='green')
+                        #  plt.scatter(gate_x[y_ind,x_ind-extra_bins],data_field[y_ind,x_ind-extra_bins], c='blue')
+                        
+                        plt.legend()
+                        ax_n.grid(axis='y')
+                        ax_n.axhline(0, color='black', linewidth=1, alpha=.5)
+
 
         elif ts in ['Thetae', 'Thetav', 'Wind']:
             if ts in ['Thetav', 'Thetae']:
@@ -799,14 +984,11 @@ class Master_Plt:
                 track_info['lons'] = [shapeRecs[track].shape.points[i][0] for i in np.arange(0,len(shapeRecs[track].shape.points))]
                 track_info['lats'] = [shapeRecs[track].shape.points[i][1] for i in np.arange(0,len(shapeRecs[track].shape.points))]
                 tor_tracks = tor_tracks.append(track_info, ignore_index=True)
-            #  print(shapeRecs[0].record)
-            #  print(shapeRecs)
-            #  print(len(shapeRecs))  #  print(shapeRecs.record)
+            #  print(shapeRecs[0].record) #  print(shapeRecs) #  print(len(shapeRecs))  #  print(shapeRecs.record)
             #  print('999999999')
             # quick example plot to make sure data pulled correctly 
             for tor in np.arange(0, len(tor_tracks)):
                 ax_n.scatter(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], label=tor_tracks.loc[tor]['rating'], transform=self.Proj)
-                #  ax_n.plot(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], label=tor_tracks.loc[tor]['rating'], transform=self.Proj)
                 #  ax_n.plot(tor_tracks.loc[tor]['lons'], tor_tracks.loc[tor]['lats'], transform=self.Proj)
             #  ax_n.legend()
             #  print(shapeRecs[4].record[2])
@@ -823,11 +1005,43 @@ class Master_Plt:
                     #  xs, ys = [],[]
                     #  for i,val in enumerate(lats):
                         #  temp = get_dist(lons[i], lats[i],snlon, snlat)
-                        #  xs.append(temp[0])
-                        #  ys.append(temp[1])
+                        #  xs.append(temp[0]) #  ys.append(temp[1])
                     #  plt.plot(np.asarray(xs)/1000, np.asarray(ys)/1000, color=colors[icol], label=tor_event)
                 #  icol+=spyi1
         #  print('HHHHHHHHHHHHHHHHH')
+        if self.config.overlays['surge_lines']['Marker']== True:
+            #  plt.scatter(surge_pd.point_x, surge_pd.point_y, c='red')
+            #  self.display.plot_line_xy(surge_pd.point_x, surge_pd.point_y)
+            gate_x, gate_y, _ = Data['P_Radar'].rfile.get_gate_x_y_z(sweep)
+
+            surge_pd=pd.read_csv(self.config.g_TORUS_directory+day+'/data/'+day+'_surge_pnts.csv')
+            surges=surge_pd.Surge_ID.unique()
+            print('999')
+            for j in surges: 
+                single_surge_df=subset_surge_df(surge_pd, Data, j)
+                if len(single_surge_df.point_x) == 0:
+                    print('8888')
+                    pass
+                else:
+                    #  for i in np.arange(0, len(single_surge_df.point_x)):
+                    for i in single_surge_df.index.tolist():
+                        print(single_surge_df)
+                        y_ind, x_ind, extra_bins = return_pnt_index(self, Data, single_surge_df, gate_x, gate_y, Data['P_Radar'].swp, i)
+                        #  y_ind, x_ind, extra_bins = return_pnt_index(self, Data, surge_pd, gate_x, gate_y, sweep, i)
+                        plt.scatter(gate_x[y_ind,x_ind], gate_y[y_ind,x_ind])#, c='red')
+                        plt.scatter(gate_x[y_ind,x_ind+extra_bins], gate_y[y_ind,x_ind+extra_bins], c='green')
+                        plt.scatter(gate_x[y_ind,x_ind-extra_bins], gate_y[y_ind,x_ind-extra_bins], c='blue')
+            
+            #  surge_points= surge_pd.loc[:,'point_x':'point_y']
+            #  records = surge_points.to_records(index=False)
+            #  line= LineString(list(records))
+            #  plt.plot(*line.xy)
+            #  buf=line.buffer(5000, cap_style=3)
+            #  plt.plot(*buf.exterior.xy)
+            #  r= Data['P_Radar'].rfile.range
+            #  r= Data['P_Radar'].rfile.range['data']
+
+
         if self.config.overlays['Contour']['Lines']==True:
             unsmoothed_contourdata = Data['P_Radar'].rfile.get_field(sweep, self.config.overlays['Contour']['Var'])
             # smooth out the lines
@@ -914,8 +1128,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
             display = singledop.AnalysisDisplay(sd_test)
             #  display = singledop.AnalysisDisplay(Data['P_Radar'].rfile.fields[sd_test])
             display.four_panel_plot(scale=400, legend=20, return_flag=False, thin=6,
-                        levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix', dz_cmap='pyart_HomeyerRainbow' ,
-                                    xlim=[-21,21], ylim=[-21,21])
+                        levels=-30.0+2.0*np.arange(31), name_vr='vel_fix', name_dz='refl_fix', dz_cmap='pyart_HomeyerRainbow', xlim=[-21,21], ylim=[-21,21])
         else:
             mom_index=0
             for row in range(PLT.R_rows):
@@ -940,7 +1153,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
         for (subrow,), ts in np.ndenumerate(config.Time_Series):
             print('Time Series plot: '+ ts +', Outer GridSpec Pos: [1, :], SubGridSpec Pos: ['+str(subrow)+', :]')
             if subrow==0: ax_n= PLT.fig.add_subplot(PLT.ts_gs[subrow,:])
-            else:  ax_n=PLT.fig.add_subplot(PLT.ts_gs[subrow,:], sharex=ax_n)
+            else:  ax_n=PLT.fig.add_subplot(PLT.ts_gs[subrow,:], sharx=ax_n)
             PLT.time_series(ts, ax_n, PLT.fig, TVARS, Data)
 
     ## Finish plot
@@ -952,9 +1165,14 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
         #if both radar and timeseries are included in the image
         if len(config.Time_Series) != 0:
             file_string = '_'.join(config.Time_Series)
-            if ('Thetae' in config.Time_Series) and ('Thetav' in config.Time_Series): plt_type = 'both_Thetas'
-            elif (len(config.Time_Series) != 1) and ('Wind' in config.Time_Series): plt_type = config.overlays['Colorline']['Var']+'/Wind'
-            else: plt_type = config.overlays['Colorline']['Var']
+            if 'clicker' in config.Time_Series:
+                plt_type = 'clicker'
+            elif 'histogram' in config.Time_Series:
+                plt_type = 'hist'
+            else: 
+                if ('Thetae' in config.Time_Series) and ('Thetav' in config.Time_Series): plt_type = 'both_Thetas'
+                elif (len(config.Time_Series) != 1) and ('Wind' in config.Time_Series): plt_type = config.overlays['Colorline']['Var']+'/Wind'
+                else: plt_type = config.overlays['Colorline']['Var']
         #if only radar is included in the image (aka no platform info overlayed)
         else:
             file_string = 'r_only'
@@ -988,7 +1206,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
     
     
     if config.clicker == True:
-        csv_name= day+'surge_pnts.csv'
+        csv_name= config.g_TORUS_directory+day+'/data/'+day+'_surge_pnts.csv'
         Does_csv_exist=os.path.isfile(csv_name)
         surge_name= 'NA'
         while surge_name != 'DONE':
