@@ -212,7 +212,7 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
     gatefilter.include_above(refl_name, refl_thresh)
 
     vel_field = rfile.fields['corrected_velocity']['data']
-    smooth_data = scipy.ndimage.filters.median_filter(vel_field, 6)
+    smooth_data = scipy.ndimage.filters.median_filter(vel_field, 3)
     #  smooth_data = scipy.ndimage.filters.median_filter(vel_field, 3)
     #  smooth_data_ma = np.ma.masked_where(np.ma.getmask(vel_field), smooth_data)
     rfile=mask(rfile, gatefilter, smooth_data, 'vel_smooth', masking =True)

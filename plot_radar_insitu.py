@@ -46,6 +46,7 @@ import pandas as pd
 from pandas.plotting import register_matplotlib_converters
 import numpy as np
 import xarray as xr
+import itertools
 from netCDF4 import num2date
 import logging
 import csv 
@@ -92,7 +93,7 @@ if plot_config.overlays['GEO']['OX'] == True: import osmnx as ox
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
 from read_pforms import error_printing, timer, time_in_range, time_range
 from radar_defns import read_from_radar_file, det_nearest_WSR, sweep_index, get_WSR_from_AWS, info_radar_files
-from clicker import clicker_defn, make_csv, return_pnt_index, surge_csv_reader, surge_radarbins 
+from surge_defns import clicker_defn, make_csv, surge_csv_reader, surge_radarbins
 
 totalcompT_start = time.time()
 ################################################################################################
@@ -153,14 +154,16 @@ class Master_Plt:
         ## Set some parameters for the plot such as fontsize etc
         #### * * * * * * * * * * * * * * * * * * * * * * * * * *
         #  print(plt.rcParams)
-        plt.rc('font', size= 10)      # controls default text sizes
-        plt.rc('axes', labelsize= 10) # fontsize of the axes title, and x and y labels
-        plt.rc('legend', fontsize= 13, borderpad=.5, facecolor='white', 
+        plt.rc('font', size= 13)      # controls default text sizes
+        plt.rc('axes', labelsize= 12) # fontsize of the axes title, and x and y labels
+        plt.rc('xtick', labelsize= 10) # fontsize of the xtick labels
+        plt.rc('ytick', labelsize= 10) # fontsize of the ytick labels
+        plt.rc('legend', fontsize= 13, borderpad=.45, facecolor='white', 
                edgecolor= 'black', shadow=True, fancybox=True, framealpha=1)# legend fontsize
-        plt.rc('figure', titlesize= 15, facecolor='white')  # fontsize of the figure title
+        plt.rc('figure', titlesize= 20, titleweight='semibold',facecolor='white')  # fontsize of the figure title
         self.leg_title_font={'size':15, 'weight':'bold'}
-        self.Radar_title_font= {'fontsize':10}
-
+        self.Radar_title_font= {'fontsize':13}
+        self.Contour_label_font= {'fontsize':10}
 
 
         ## Establish the Plot size and layout
@@ -174,79 +177,92 @@ class Master_Plt:
             #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
             if config.radar_controls['layout']['Rows'] == None:
                 R_rows = math.trunc(Num_of_rplts / 2)
-            else:
-                R_rows = config.radar_controls['layout']['Rows']
-
             if config.radar_controls['layout']['Cols'] == None:
                 if ((Num_of_rplts / 2) % 2) in [0,1]: R_cols = 2
                 else: R_cols = 3
-            else: R_cols = config.radar_controls['layout']['Cols']
+
+            if config.radar_controls['layout']['Rows'] != None:
+                R_rows = config.radar_controls['layout']['Rows']
+                R_cols = round(Num_of_rplts / R_rows) 
+
+            if config.radar_controls['layout']['Cols'] != None:
+                R_cols = config.radar_controls['layout']['Cols']
+                R_rows = round(Num_of_rplts / R_cols) 
             
             return R_rows, R_cols
 
         # * * * 
         def lineplot_layout(config):
-            if 'clicker' in config.Time_Series: 
+            if 'clicker' in config.Line_Plot: 
                 if self.num_of_surges ==0:
-                    L_Rows= len(config.Time_Series)
+                    L_Rows= len(config.Line_Plot)
                 else:
-                    L_Rows= len(config.Time_Series)+self.num_of_surges-1
-                L_wratio = [2,2,1]
-                L_Cols=3
+                    L_Rows= len(config.Line_Plot)+self.num_of_surges-1
+                L_wratio = [.25,2,2,1]
+                L_Cols=4
             else:
-                L_Rows= len(config.Time_Series)
+                L_Rows= len(config.Line_Plot)
                 L_wratio = [1]
                 L_Cols=1
             
             if L_Rows == 1:
                 L_hratio=[1] #the relative height alocated to each timeseries [within the space allocated for all timeseries]
+                h_space=0
             elif L_Rows == 2:
-                if 'Wind' in config.Time_Series: L_hratio=[2,3]
+                if 'Wind' in config.Line_Plot: L_hratio=[2,3]
                 else: L_hratio=[1,1]
 
-            return L_Rows, L_Cols, L_hratio, L_wratio
+                if 'clicker' in config.Line_Plot: h_space=.2
+                else: h_space= 0
+
+            return L_Rows, L_Cols, L_hratio, L_wratio, h_space
 
         # * * * 
         def outer_layout(config): 
-            if len(config.Time_Series) == 1:
+            if len(config.Line_Plot) == 1:
                 outer_hratio = [4,2] #the height ratio between the space alocated for radar imagaes and timeseries
-            if len(config.Time_Series) == 2:
+            if len(config.Line_Plot) == 2 or self.num_of_surges > 1:
                 outer_hratio = [4,3] 
             return outer_hratio
 
         # * * * 
         def figsize_options(config):
             #, r_rows):
-            self.title_spacer=.9
+            self.title_spacer=.93
             #  xfigsize= 15
-            xfigsize= 20 
-            yfigsize= self.R_rows*11#9
+            #  xfigsize= 20
+            xfigsize=self.R_cols*7
+            yfigsize= self.R_rows*12#9
+            if self.L_Rows > 1:
+                yfigsize = yfigsize+ ((self.L_Rows-1)*3)
             self.fig= plt.figure(figsize=(xfigsize,yfigsize))
             
 
         #######
-        if config.surge_stuff == True: 
+        if config.Surge_controls['Read_surge_stuff'] == True: 
             self.num_of_surges, self.surge_ids, self.valid_surges = surge_csv_reader(config, Data, day)
             
             self.Surges, self.gate_x, self.gate_y, self.gate_lon, self.gate_lat = surge_radarbins(self, config, Data, Data['P_Radar'].swp)  
+        else: 
+            self.num_of_surges=0
 
-
+        #######
         #both ts and r
-        if len(config.Time_Series) != 0 and len(config.r_mom) != 0:
+        if len(config.Line_Plot) != 0 and len(config.r_mom) != 0:
             R_and_L_plt=True
             outer_hratio=outer_layout(config)
-            self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=outer_hratio, hspace=.15)
+            self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=outer_hratio, hspace=.17)
         else:
             R_and_L_plt=False
 
            #######
 
-        if len(config.Time_Series) != 0:
-            self.L_Rows, self.L_Cols, L_hratio, L_wratio = lineplot_layout(config)
+        if len(config.Line_Plot) != 0:
+            self.L_Rows, self.L_Cols, L_hratio, L_wratio, h_space = lineplot_layout(config)
             if R_and_L_plt == True:
-                self.l_gs = GridSpecFromSubplotSpec(self.L_Rows, self.L_Cols, subplot_spec=self.outer_gs[1, :], height_ratios=L_hratio, width_ratios=L_wratio, hspace=0)
+                self.l_gs = GridSpecFromSubplotSpec(self.L_Rows, self.L_Cols, subplot_spec=self.outer_gs[1, :], height_ratios=L_hratio, width_ratios=L_wratio, hspace=h_space)
             else:
-                self.l_gs = GridSpec(self.L_Rows, self.L_Cols, height_ratios=L_hratio, width_ratios=L_wratio, hspace=0)
+                self.l_gs = GridSpec(self.L_Rows, self.L_Cols, height_ratios=L_hratio, width_ratios=L_wratio, hspace=h_space)
         
         #if we are plotting radar
         if len(config.r_mom) != 0:
@@ -273,103 +289,6 @@ class Master_Plt:
 
         figsize_options(config)
 
-        '''
-        ## Establish some vars that will be helpful to the plot later on
-        #### * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-        #if we are plotting radar
-        if len(config.r_mom) != 0:
-            # The extent of the area to be plotted
-            self.Domain = Platform.getLocation(Data[config.radar_controls['Centered_Pform']], scan_time=Data['P_Radar'].Scan_time, 
-                                               offsetkm= config.radar_controls['offsetkm'][config.Radar_Plot_Type])
-            #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
-
-            # Define pyart display object for plotting radarfile
-            self.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile)
-
-            # Set the projection of the radar plot, and transformations
-            self.R_Proj = self.display.grid_projection
-            self.Proj = ccrs.PlateCarree()
-        #######
-            #  self.fig= plt.figure(figsize=(30,17))
-        #######
-            self.title_spacer=.93
-            # This is the layout for radar and time series subplots
-            if len(config.Time_Series) != 0 and len(config.r_mom) != 0:
-                self.fig= plt.figure(figsize=(30,17))
-                #  self.fig= plt.figure(figsize=(32,20))
-                if len(config.Time_Series) == 1:
-                    outer_hratio = [4,2] #the height ratio between the space alocated for radar imagaes and timeseries
-                    ts_hratio=[1] #the relative height alocated to each timeseries [within the space allocated for all timeseries]
-                if len(config.Time_Series) == 2:
-                    outer_hratio = [4,3] 
-                    if 'Wind' in config.Time_Series: ts_hratio=[2,3]
-                    else: ts_hratio=[1,1]
-                self.outer_gs= GridSpec(nrows=2, ncols=1, height_ratios=outer_hratio, hspace=.1)
-
-                if 'clicker' in config.Time_Series:
-                    ts_wratio = [2,1]
-                    TS_Cols=2
-                else:
-                    ts_wratio = [1,1]
-                    TS_Cols=1
-
-
-                self.ts_gs = GridSpecFromSubplotSpec(len(config.Time_Series), TS_Cols, subplot_spec=self.outer_gs[1, :], height_ratios=ts_hratio, width_ratios=ts_wratio, hspace=0)
-                self.R_rows, self.R_cols = radar_layout(config)
-                self.r_gs = GridSpecFromSubplotSpec(self.R_rows, self.R_cols, subplot_spec=self.outer_gs[0, :])
-
-            # This is the layout for time series only
-            if len(config.Time_Series) != 0 and len(config.r_mom) == 0:
-                print('this is the layout for time series only')
-                #  self.fig= plt.figure(figsize=(32,5))
-                self.fig= plt.figure(figsize=(32,10))
-                if len(config.Time_Series) == 1:  ts_hratio=[1]
-                if len(config.Time_Series) == 2:
-                    if 'Wind' in config.Time_Series: ts_hratio=[2,3]
-                    else: ts_hratio=[1,1]
-                self.ts_gs = GridSpec(len(config.Time_Series), 1, height_ratios=ts_hratio, hspace=0)
-
-            # This is the layout for radar only
-            if len(config.r_mom) != 0 and len(config.Time_Series) == 0:
-                plt.rc('font', size= 10)      # controls default text sizes
-                plt.rc('figure', titlesize= 15, facecolor='white')  # fontsize of the figure title
-                #  plt.rc('figure', titlesize= 25, facecolor='white')  # fontsize of the figure title
-                plt.rc('axes', labelsize= 10) # fontsize of the axes title, and x and y labels
-                print('this is the layout for radar plots only')
-
-                self.R_rows, self.R_cols = radar_layout(config)
-                if self.R_cols == 3: 
-                    xfigsize=30
-                    #  self.fig= plt.figure(figsize=(30,10))
-                if self.R_cols == 2: 
-                    xfigsize=15
-                if self.R_rows == 1: 
-                    yfigsize=8
-                    self.title_spacer=.9
-                if self.R_rows == 2: 
-                    yfigsize=15
-                    self.title_spacer=.8
-                self.fig= plt.figure(figsize=(xfigsize,yfigsize))
-                self.Radar_title_font= {'fontsize':20}
-                self.r_gs = GridSpec(nrows=self.R_rows, ncols=self.R_cols, hspace=0)
-
-            ## Establish some vars that will be helpful to the plot later on
-            #### * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-            #if we are plotting radar
-            if len(config.r_mom) != 0:
-                # The extent of the area to be plotted
-                self.Domain = Platform.getLocation(Data[config.radar_controls['Centered_Pform']], scan_time=Data['P_Radar'].Scan_time, 
-                                                   offsetkm= config.radar_controls['offsetkm'][config.Radar_Plot_Type])
-                #  self.Domain_Bbox = Bbox.from_extents(self.Domain.xmin, self.Domain.ymin, self.Domain.xmax, self.Domain.ymax)
-
-                # Define pyart display object for plotting radarfile
-                self.display = pyart.graph.RadarMapDisplay(Data['P_Radar'].rfile)
-
-                # Set the projection of the radar plot, and transformations
-                self.R_Proj = self.display.grid_projection
-                self.Proj = ccrs.PlateCarree()
-        #  '''
-
     # * * * * * * *
     # * * * * * * *
     def tick_grid_settings(self, ax, scan_time, radar=None, ts=None, interval=None, twinax=False):
@@ -379,13 +298,13 @@ class Master_Plt:
         if ts != None:
             # Xaxis
             # if desired this subsets the timerange that is displayed in the timeseries
-            if scan_time != None and self.config.tseries_control['Axis_Extents']['X'] != None:
-                ax.set_xlim(scan_time - timedelta(minutes=self.config.tseries_control['Axis_Extents']['X']),
-                            scan_time + timedelta(minutes=self.config.tseries_control['Axis_Extents']['X']))
+            if scan_time != None and self.config.lineplt_control['Axis_Extents']['X'] != None:
+                ax.set_xlim(scan_time - timedelta(minutes=self.config.lineplt_control['Axis_Extents']['X']),
+                            scan_time + timedelta(minutes=self.config.lineplt_control['Axis_Extents']['X']))
 
             # Yaxis
             if ts in ['Thetav','Thetae']:
-                if self.config.tseries_control['Axis_Extents']['Y'] != None: ax.set_ylim(335,350)
+                if self.config.lineplt_control['Axis_Extents']['Y'] != None: ax.set_ylim(335,350)
                 else: ax.set_ylim(TVARS.Tvar_GMin, TVARS.Tvar_GMax)
 
             #if plotting the wind time series and its the first ax being det
@@ -437,12 +356,13 @@ class Master_Plt:
             #set the calculated ticks on the graph
             plt.setp(ax.get_xticklabels(), visible=True)
             plt.setp(ax.get_yticklabels(), visible=True)
+            #  plt.setp(ax.get_yticklabels(), labellocation='Center')
 
         # + + + + + + + + + + + + ++ + +
         ##Tick Display Characteristics
         # # # # # # # # # # # # # # # #
-        ax.tick_params(which='minor', axis='both', width=2, length=7, color='grey')
-        ax.tick_params(which='major', axis='both', width=2, length=10, color='black')
+        ax.tick_params(which='minor', axis='both', direction='in', width=2, length=7, color='grey')
+        ax.tick_params(which='major', axis='both', direction='in', width=2, length=10, color='black')
         if radar != None:
             ax.tick_params(which='both', axis='both', direction='in', top=True, bottom=False, labeltop=True, labelbottom=False)
             ax.tick_params(which='both', axis='y', labelrotation=90)
@@ -478,202 +398,10 @@ class Master_Plt:
             ax.yaxis.set_major_formatter(FuncFormatter(km))
             ax.xaxis.set_major_formatter(FuncFormatter(km))
         # + + + + + + + + + + + + ++ + +
-
-    # * * * * * * *
-    def line_plot(self, ts, ax_n, fig, TVARS, Data, Surge_ID, testing=False):
-        ''' Plot a time series (sub)plot; could be of pvar info from various intstruments or of wind info
-        ----
-        INPUTS: ts: ........fill in
-                Data: dict as described in plotting defn
-                print_long & e_test: bool str as described in the ppi defn '''
-        if self.config.print_long == True: print('~~~~~~~~~~~Made it into line_plot~~~~~~~~~~~~~~~~~')
-        #  t_TS.T_Plt_settings(ts,ax_n)
-        TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
-        ## MAKE THE TIMESERIES
-        #### * * * * * * * * *
-        if ts == 'histogram':
-            hist, bins = np.histogram(Data['P_Radar'].rfile.fields[self.config.tseries_control['H']['var']]['data'][~np.isnan(Data[
-                'P_Radar'].rfile.fields[self.config.tseries_control['H']['var']]['data'])], bins=150)
-            bins = (bins[1:]+bins[:-1])/2.0
-            ax_n.plot(bins, hist)
-            ax_n.set_xlim(self.config.tseries_control['H']['xmin'], self.config.tseries_control['H']['xmax'])
-            #  ax_n.set_yscale('log')
-            #  ax_n.axvline(x=3,c='k')
-            ax_n.set_xlabel(self.config.tseries_control['H']['var'])
-            ax_n.set_ylabel('Count')
-
-        elif ts == 'clicker':
-            if self.num_of_surges== 0:
-                pass
-            else:
-                WL=19
-                if testing ==False:
-                    for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
-                        data_subset = scipy.signal.savgol_filter(self.Surges[Surge_ID]['radar_data']['subset'][pnt,:], window_length=WL, polyorder=2)#, deriv=1)#, axis=A)
-                        plt.plot(self.Surges[Surge_ID]['range_bins']['subset'][pnt,:], data_subset)#, label=i)
-                        plt.scatter(self.Surges[Surge_ID]['range_bins']['center'][pnt],
-                                    self.Surges[Surge_ID]['radar_data']['center'][pnt], s=40)#c='red')
-                    plt.scatter(self.Surges[Surge_ID]['range_bins']['plus_offset'],
-                                self.Surges[Surge_ID]['radar_data']['plus_offset'], s=40, c='green')
-                    plt.scatter(self.Surges[Surge_ID]['range_bins']['minus_offset'],
-                                self.Surges[Surge_ID]['radar_data']['minus_offset'], s=40, c='blue')
-                else:
-                    for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
-                        grad_data_subset = scipy.signal.savgol_filter(self.Surges[Surge_ID]['radar_data']['subset'][pnt,:], window_length=WL, polyorder=2, deriv=1)#, axis=A)
-                        #  grad_data_subset=np.gradient(data_subset)
-                        plt.plot(self.Surges[Surge_ID]['range_bins']['subset'][pnt,:], grad_data_subset)
-
-                #  plt.legend()
-                ax_n.grid(axis='both')
-                plt.xlabel('Range from Radar (along ray) (m)')
-                if testing ==False:
-                    ax_n.axhline(0, color='black', linewidth=1, alpha=.5)
-                    plt.ylabel('Radial Velocity (m/s)')
-                else:
-                    #  ax_n.set_ylim(-1,1)
-                    plt.ylabel('Radial Gradient Velocity (m/s)')
-
-
-        elif ts in ['Thetae', 'Thetav', 'Wind']:
-            if ts in ['Thetav', 'Thetae']:
-                for p in Data.values():
-                    if isinstance(p, Torus_Insitu):
-                        if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
-                        ## If the platform matches a type listed for masking it uses masked data for the time series; 
-                        #  else use the unmasked data
-                        if p.type in self.config.tseries_control['Mask'][:]:
-                            if ts == "Thetae":   plotting_data= p.Thetae_ts_mask_df
-                            elif ts == "Thetav":   plotting_data= p.Thetav_ts_mask_df
-                        else: plotting_data= p.df[ts].values
-
-                        ## Plot
-                        #assigning label= is what allows the legend to work
-                        ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str)
-
-                        TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
-                        TSleg_elements.append(TSleg_entry)
-                ## Set up XY axes tick locations and Labels
-                if len(self.config.r_mom) != 0: scan= Data['P_Radar'].Scan_time
-                else: scan= None 
-                self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=scan)
-
-                if ts == "Thetae":   ylab = TVARS.Te_lab
-                elif ts == "Thetav":   ylab = TVARS.Tv_lab
-                ax_n.set_ylabel(ylab)
-
-            # * * *
-            if ts == 'Wind':
-                p = Data[self.config.tseries_control['Wind_Pform']]
-                if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
-
-                ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
-                ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
-                ax_n.set_ylabel('Wind Speed (kn)')
-                self.tick_grid_settings(ax=ax_n, ts=ts,scan_time=Data['P_Radar'].Scan_time)
-                TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
-                TSleg_elements.append(TSleg_entry)
-
-                ax_2 = ax_n.twinx()
-                ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05, label='Wind Dir')
-                ax_2.set_ylabel('Wind Dir ($^{\circ}$)')
-                self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True, scan_time=Data['P_Radar'].Scan_time)
-                TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
-                TSleg_elements.append(TSleg_entry)
-
-            ## Plot legend
-            leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center left')
-            if ts == 'Wind':
-                leg.set_title(self.config.tseries_control['Wind_Pform'], prop=self.leg_title_font)
-                leg.remove()
-                ax_2.add_artist(leg)
-
-            #if plotting more than one timeseries only include the xaxis label & ticks to the bottom timeseries
-            ax_n.label_outer()
-
-            #if you are not making the bottom timeseries
-            if ax_n.get_subplotspec().rowspan.stop != len(self.config.Time_Series):
-                ax_n.spines['bottom'].set_linewidth(5)
-                # if you are doing two thermo plots while also plotting radar remove one of the legends (for space)
-                if (len(self.config.r_mom) != 0) & (ts in ['Thetav', 'Thetae']): leg.remove()
-
-            ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
-            #  radar scan and the timerange ploted (via filled colorline) on the radar plots
-            if len(self.config.r_mom) != 0:
-                ax_n.axvline(Data['P_Radar'].Scan_time, color='r', linewidth=4, alpha=.5)
-                ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.overlays['Colorline']['cline_extent']),
-                             Data['P_Radar'].Scan_time + timedelta(minutes=self.config.overlays['Colorline']['cline_extent']), 
-                             facecolor='0.5', alpha=0.4)
-            ##Label Formatter
-            # # # # # # # # #
-            ax_n.set_xlabel('Time (UTC)')
-            ax_n.yaxis.set_label_coords(-.03, .5)
-            #  make_axes_area_auto_adjustable(ax_n)
-
-            ###################
-        if self.config.print_long == True: print('~~~~~~~~~~~Made it through line_plot~~~~~~~~~~~~~~')
     
-    # * * * * * *  *
-    def clicker_stats(self, ax_n, fig, TVARS, Data, Surge_ID):
-        data_field=Data['P_Radar'].rfile.fields[self.config.tseries_control['H']['var']]['data']
-
-        if self.num_of_surges== 0:
-            pass
-        else:
-            data_field=Data['P_Radar'].rfile.fields[self.config.tseries_control['H']['var']]['data']
-            range_bin = Data['P_Radar'].rfile.range['data']
-
-            ax_n.text(.05, .9, 'Surge ID: '+str(Surge_ID), transform=ax_n.transAxes, ha="left", va="top")
-            
-            init_point = Point(self.Surges[Surge_ID]['x']['center'][0], self.Surges[Surge_ID]['y']['center'][0])
-            final_point = Point(self.Surges[Surge_ID]['x']['center'][-1], self.Surges[Surge_ID]['y']['center'][-1])
-            straight_dist=init_point.distance(final_point)
-            ax_n.text(.05, .8, 'Straight length of the line: '+str(round(straight_dist)), transform=ax_n.transAxes, ha="left", va="top")
-            
-            points_combined=[]
-            for i in range(len(self.Surges[Surge_ID]['x']['center'])):
-                points_combined.append((self.Surges[Surge_ID]['x']['center'][i],self.Surges[Surge_ID]['y']['center'][i]))
-            line= LineString(points_combined)
-            #  line.boundary #  line.centroid #  line.centroid.wkt #  line.interpolate(.75, normalized=True).wkt
-            ax_n.text(.05, .7, 'length of the line: '+str(round(line.length)), transform=ax_n.transAxes, ha="left", va="top")
-            
-            single_surge_df= self.valid_surges[self.valid_surges['Surge_ID'] == Surge_ID]
-            offset_surge_xy_sep=pd.DataFrame()
-            offset_surge_xy=pd.DataFrame()
-            for i in single_surge_df.index.tolist():
-                y_ind, x_ind, extra_bins = return_pnt_index(self, Data, single_surge_df, self.gate_x, self.gate_y, Data['P_Radar'].swp, point=i)
-                #  test=data_field[y_ind,x_ind-extra_bins:x_ind+extra_bins]
-                
-                new_row={ 'point_x_plusoffset':self.gate_x[y_ind, x_ind+extra_bins], 'point_x_negoffset':self.gate_x[y_ind, x_ind-extra_bins], 
-                          'point_y_plusoffset':self.gate_y[y_ind, x_ind+extra_bins], 'point_y_negoffset':self.gate_y[y_ind, x_ind-extra_bins] }
-                new_row_plus={ 'point_x':self.gate_x[y_ind, x_ind+extra_bins],  'point_y':self.gate_y[y_ind, x_ind+extra_bins]} 
-                new_row_neg= { 'point_x':self.gate_x[y_ind, x_ind-extra_bins],  'point_y':self.gate_y[y_ind, x_ind-extra_bins]}
-
-                row_to_add = pd.Series(new_row)
-                row_to_add_plus = pd.Series(new_row_plus)
-                row_to_add_neg = pd.Series(new_row_neg)
-                offset_surge_xy_sep = offset_surge_xy_sep.append(row_to_add, ignore_index=True)
-                offset_surge_xy= offset_surge_xy.append(row_to_add_plus, ignore_index=True)
-                offset_surge_xy= offset_surge_xy.append(row_to_add_neg, ignore_index=True)
-            
-            records_offsets = offset_surge_xy.to_records(index=False)
-            poly=Polygon(list(records_offsets))
-            print('yyyyy')
-            print(list(records_offsets))
-            ax_n.text(.05, .6, 'area of the polygon: '+str(round(poly.area)), transform=ax_n.transAxes, ha="left", va="top")
-                #  poly.minimum_rotated_rectangle
-            #  ax_n.set_xlabels(None)
-            ax_n.tick_params(which='both', axis='both', left=False, bottom=False, labelleft=False, labelbottom=False)
-            ax_n._frameon=False
-                
-            #  print(vars(ax_n))
-               
-
-                #  plt.plot(*line.xy)
-                #  buf=line.buffer(5000, cap_style=3)
-                #  plt.plot(*buf.exterior.xy)
-
-    # * * * * * *  *
-    def radar_subplots(self, mom, day, ax_n, fig, TVARS, Data, leg, Surge_ID):
+    # * * * * * * * * * * * * * * * * * * * * * * * *
+    # * * * * * * * * * * * * * * * * * * * * * * * *
+    def radar_subplots(self, mom, day, ax_n, fig, TVARS, Data, leg, Surge_ID, ZOOM=False):
         ''' Plots each of the radar subplots including the marker overlays corresponding to the additional platforms
         ----
         INPUTS: mom: str, indicates which radar moment you would like to plot (ie Reflectivity, Velocity, Spectrum Width etc)
@@ -687,6 +415,8 @@ class Master_Plt:
         #####################################
         testing_testing= False
         testing_bound=None
+        #  if mom == 'refl':
+            #  mom = 'Ray_angle'
         if mom in ['refl','refl_unmasked', 'refl_despeck']:
             c_scale = 'pyart_HomeyerRainbow'
             if Data['P_Radar'].name == 'WSR88D':
@@ -847,10 +577,22 @@ class Master_Plt:
             diff_field = Data['P_Radar'].rfile.get_field(Data['P_Radar'].swp, 'difference', copy=False)
             #  diff_field = Data['P_Radar'].rfile.fields['difference']['data']
             vminb, vmaxb = np.min(diff_field), np.max(diff_field)
-        else: print("Hey what just happened!\n Check the Radar moments for spelling")
-        #####################################
-        #  print("This is the id for "+ field+' :'+str(id(Data['P_Radar'].rfile.get_field(Data['P_Radar'].swp, field, copy=False))))
 
+        ###
+        elif mom == 'Ray_angle':
+            vminb, vmaxb, sweep =  -90., 90, Data['P_Radar'].swp
+            field= mom 
+            c_scale='twilight_shifted'
+            c_label= 'Angle of Ray rel to Surge (deg)' 
+        elif mom == 'Surge_subset_'+str(Surge_ID):
+            vminb, vmaxb, sweep = -30., 30., Data['P_Radar'].swp
+            field= mom 
+            c_scale = cmocean.cm.balance
+            c_label = 'Vort smooth 'r' [$\frac{1}{s}$]'
+        ###
+        else: print("Hey what just happened!\n Check the Radar moments for spelling")
+        ##############################################################################
+        #  print("This is the id for "+ field+' :'+str(id(Data['P_Radar'].rfile.get_field(Data['P_Radar'].swp, field, copy=False))))
         ## set colors to highlight where the max/min are exceded
         colormap = copy.copy(matplotlib.cm.get_cmap(name=c_scale))
         colormap.set_under('aqua')
@@ -861,19 +603,31 @@ class Master_Plt:
         #  ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
         self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=colormap, vmin=vminb, vmax=vmaxb,
                                   width=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000,
-                                  height=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000, 
+                                  height=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000,
                                   title_flag=False, colorbar_flag=False, embelish=False)
+        ## Plot Contours  
+        if self.config.overlays['Contour']['Lines']==True:
+            unsmoothed_contourdata = Data['P_Radar'].rfile.get_field(sweep, self.config.overlays['Contour']['Var'])
+            # smooth out the lines
+            contourdata = ndimage.gaussian_filter(unsmoothed_contourdata, sigma=2)
+
+            lat, lon, _ = Data['P_Radar'].rfile.get_gate_lat_lon_alt(sweep)
+            levels = np.arange(-40, 40, self.config.overlays['Contour']['Interval'])
+            contours=ax_n.contour(lon, lat, contourdata, levels, linewidths=1, antialiased=True, alpha=1, colors='k',
+                                  linestyles='solid', transform=self.Proj)
+            if self.config.overlays['Contour']['Label']== True: 
+                ax_n.clabel(contours, levels,  fmt='%r', inline=True, fontsize=self.Contour_label_font['fontsize'])
         
         ## PLOT SPATIAL INDICATORS 
         ##########################
         # Det the domain (spacial extent) to be plotted on this axes 
-        if mom != 'zoom':
-            ax_n.set_extent(self.Domain)
-        else: 
+        if mom == 'zoom' or ZOOM == True: 
             ax_n.set_extent(self.Surges[Surge_ID]['zoom_Domain'])
+        else:
+            ax_n.set_extent(self.Domain)
 
         # if the zoom will be plotted elsewhere in the fig but the current axes is the 'full' domain show a box that outlines the zoom area
-        if ('zoom' in self.config.r_mom[:]) and (mom != 'zoom'):
+        if ('zoom' in self.config.r_mom[:]) and (mom != 'zoom') and (ZOOM == False):
             if self.config.overlays['surge_lines']['zoom_boxes']== True:
                 for Surge_ID in self.surge_ids[:]:
                     zoom_Domain= self.Surges[Surge_ID]['zoom_Domain']
@@ -886,16 +640,48 @@ class Master_Plt:
             if mom == 'zoom':
                 RANGE=np.repeat([Data['P_Radar'].rfile.range['data']], np.shape(self.gate_x)[0], axis=0) 
                 levels = np.arange(-20000, 20000, self.config.radar_controls['distance_indicator']['ring_int'])
-                contours=ax_n.contour(self.gate_lon, self.gate_lat, RANGE, levels, linewidths=1, antialiased=True, 
-                                      alpha=1, colors='k', linestyles='solid', transform=self.Proj)
-                ax_n.clabel(contours, levels,  fmt='%r', inline=True, fontsize=10)
-
+                contours=ax_n.contour(self.gate_lon, self.gate_lat, RANGE, levels, linewidths=2, linestyle=':',antialiased=True, 
+                                      alpha=.6, colors='k', linestyles=':', transform=self.Proj)
+                ax_n.clabel(contours, levels, fmt='%r', inline=True, fontsize=self.Contour_label_font['fontsize'])
+        
         # Plot square grid on non-zoomed image
         if self.config.radar_controls['distance_indicator']['square_grid']== True:
-            if mom != 'zoom':
+            if mom != 'zoom' and ZOOM == False:
                 self.tick_grid_settings(ax=ax_n, radar=True, scan_time=None, interval=.5*1000) # interval=10*1000)
                 ax_n.grid(True)
 
+        ## PLOT SURGE FEATURES 
+        #######################
+        ## Plot points along the surge boundary  
+        if self.config.overlays['surge_lines']['Marker']== True:
+            if Surge_ID == None: pass
+            else:
+                if self.config.overlays['surge_lines']['zoom_only']== True and mom != 'zoom':
+                    pass
+                else:
+                    ax_n.plot(self.Surges[Surge_ID]['Center_pnts']['x'],
+                              self.Surges[Surge_ID]['Center_pnts']['y'],
+                              marker='.',mec='k',mfc='k',markersize=10, zorder=9, color='yellow',
+                              path_effects=[PE.withStroke(linewidth=6, foreground='k')])#, c='red')
+                    for o_dist in self.config.Surge_controls['offset_dist']:
+                        for o_dir in ['Plus', 'Minus']:
+                            if o_dir == 'Plus': Mark='^' 
+                            elif o_dir == 'Minus': Mark='D' 
+                            ax_n.plot(self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['x'],
+                                      self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['y'],
+                                      marker=Mark, mec='k', mfc='grey', ms=6, color='grey', linestyle='solid', lw=1, zorder=10, 
+                                      path_effects=[PE.withStroke(linewidth=3, foreground='k')])#, c='red')
+                    for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
+                        plt.scatter(self.Surges[Surge_ID]['Center_pnts']['x'][pnt],
+                                    self.Surges[Surge_ID]['Center_pnts']['y'][pnt],
+                                    zorder=10, s=40, 
+                                    path_effects=[PE.withStroke(linewidth=5, foreground='k')])#, c='red')
+
+                """Plot a line from slope and intercept"""
+                x_vals = np.array(ax_n.get_xlim())
+                y_vals = self.Surges[Surge_ID]['line']['intercept'] + self.Surges[Surge_ID]['line']['slope'] * x_vals
+                plt.plot(x_vals, y_vals, '--', linewidth=2, color='k')
+        
         ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
         ###############################################################
         def plot_markers(p, lon, lat, txt_label, lab_shift=(.009,.002), lab_c='xkcd:pale blue'):
@@ -1079,46 +865,8 @@ class Master_Plt:
         #  print('HHHHHHHHHHHHHHHHH')
 
         # * * *
-        ## Plot points along the surge boundary  
-        if self.config.overlays['surge_lines']['Marker']== True:
-            if self.num_of_surges== 0:
-                pass
-            else:
-                if self.config.overlays['surge_lines']['zoom_only']== True and mom != 'zoom':
-                    pass
-                else:
-                    ax_n.plot(self.Surges[Surge_ID]['x']['center'],
-                              self.Surges[Surge_ID]['y']['center'], 
-                              marker='.',mec='k',mfc='k',markersize=10, zorder=9,path_effects=[PE.withStroke(linewidth=4, foreground='k')])#, c='red')
-                    ax_n.plot(self.Surges[Surge_ID]['x']['plus_offset'],
-                              self.Surges[Surge_ID]['y']['plus_offset'], 
-                              zorder=10,path_effects=[PE.withStroke(linewidth=4, foreground='k')])#, c='red')
-                    ax_n.plot(self.Surges[Surge_ID]['x']['minus_offset'],
-                              self.Surges[Surge_ID]['y']['minus_offset'], 
-                              zorder=10,path_effects=[PE.withStroke(linewidth=4, foreground='k')])#, c='red')
-                    for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
-                        plt.scatter(self.Surges[Surge_ID]['x']['center'][pnt],
-                                    self.Surges[Surge_ID]['y']['center'][pnt], zorder=10, 
-                                    s=40, path_effects=[PE.withStroke(linewidth=4, foreground='k')])#, c='red')
-
-        # * * *
-        ## Plot Contours  
-        if self.config.overlays['Contour']['Lines']==True:
-            unsmoothed_contourdata = Data['P_Radar'].rfile.get_field(sweep, self.config.overlays['Contour']['Var'])
-            # smooth out the lines
-            contourdata = ndimage.gaussian_filter(unsmoothed_contourdata, sigma=2)
-
-            lat, lon, _ = Data['P_Radar'].rfile.get_gate_lat_lon_alt(sweep)
-            levels = np.arange(-40, 40, self.config.overlays['Contour']['Interval'])
-            contours=ax_n.contour(lon, lat, contourdata, levels, linewidths=1, antialiased=True, alpha=1, colors='k',
-                                  linestyles='solid', transform=self.Proj)
-            if self.config.overlays['Contour']['Label']== True: 
-                ax_n.clabel(contours, levels,  fmt='%r', inline=True, fontsize=10)
-
-        # * * *
         ## PLOT BACKGROUND FEATURES
-        if self.config.overlays['GEO']['OX'] == True:
-            Data['P_Radar'].plot_topo(Master_Plt, ax_n)
+        if self.config.overlays['GEO']['OX'] == True: Data['P_Radar'].plot_topo(Master_Plt, ax_n)
 
         # * * *
         ## DEAL WITH COLORBARS
@@ -1126,6 +874,7 @@ class Master_Plt:
         if self.config.radar_controls['colorbars']['mom'] == True:
             divider = make_axes_locatable(plt.gca())
             c_ax = divider.append_axes("bottom", "5%", pad="2%", axes_class=plt.Axes)
+            #  sm = plt.cm.ScalarMappable(cmap=c_scale, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
             sm = plt.cm.ScalarMappable(cmap=colormap, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
             sm._A = []
             cb = plt.colorbar(sm, cax=c_ax, orientation='horizontal', extend='both', drawedges=testing_testing, boundaries=testing_bound)
@@ -1141,14 +890,210 @@ class Master_Plt:
         if leg == True: #this means you are currently making the left subplot
             #add legend for platform markers
             l = ax_n.legend(loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.07,.5),
-                            markerscale=1.1, labelspacing=.7, handletextpad=.9, handlelength=.1)#, title="Platforms")
+                            markerscale=1.1, labelspacing=.7, handletextpad=1.1, handlelength=.1)#, title="Platforms")
             l.set_title("Platforms", prop=self.leg_title_font)
+            #  l._in_layout=False
+            #  print(vars(l))
 
+        ax_n.label_outer()
         ###################
         if self.config.print_long == True: print('~~~~~~~~~~~Made it through radar_subplots~~~~~~~~~~~')
 
+    # * * * * * * * * * * * * * * * * * * * * * * * *
+    # * * * * * * * * * * * * * * * * * * * * * * * *
+    def line_plot(self, ts, ax_n, fig, TVARS, Data, Surge_ID, testing=False):
+        ''' Plot a time series (sub)plot; could be of pvar info from various intstruments or of wind info
+        ----
+        INPUTS: ts: ........fill in
+                Data: dict as described in plotting defn
+                print_long & e_test: bool str as described in the ppi defn '''
+        if self.config.print_long == True: print('~~~~~~~~~~~Made it into line_plot~~~~~~~~~~~~~~~~~')
+        #  t_TS.T_Plt_settings(ts,ax_n)
+        TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
+        ## MAKE THE TIMESERIES
+        #### * * * * * * * * *
+        if ts == 'histogram':
+            hist, bins = np.histogram(Data['P_Radar'].rfile.fields[self.config.lineplt_control['H']['var']]['data'][~np.isnan(Data[
+                'P_Radar'].rfile.fields[self.config.lineplt_control['H']['var']]['data'])], bins=150)
+            bins = (bins[1:]+bins[:-1])/2.0
+            ax_n.plot(bins, hist)
+            ax_n.set_xlim(self.config.lineplt_control['H']['xmin'], self.config.lineplt_control['H']['xmax'])
+            #  ax_n.set_yscale('log')
+            #  ax_n.axvline(x=3,c='k')
+            ax_n.set_xlabel(self.config.lineplt_control['H']['var'])
+            ax_n.set_ylabel('Count')
 
-##########################################################################
+        elif ts == 'clicker':
+            WL=19
+            if testing ==False:
+                for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
+                    data_subset = scipy.signal.savgol_filter(self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt,:], window_length=WL, polyorder=2)#, deriv=1)#, axis=A)
+                    plt.plot(self.Surges[Surge_ID]['Subsets']['Range_bins'][pnt,:], data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+                    
+                    plt.scatter(self.Surges[Surge_ID]['Center_pnts']['range_value'][pnt],
+                                self.Surges[Surge_ID]['Center_pnts']['radar_value'][pnt],
+                                s=40)#c='red')
+                for o_dist in self.config.Surge_controls['offset_dist']:
+                    for o_dir in ['Plus', 'Minus']:
+                        if o_dir == 'Plus': Mark='^' 
+                        elif o_dir == 'Minus': Mark='D' 
+                        plt.scatter(self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['range_value'],
+                                    self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['radar_value'],
+                                    s=40, marker=Mark, c='grey')
+            else:
+                for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
+                    data_subset = scipy.signal.savgol_filter(self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt,:], window_length=WL, polyorder=2, deriv=1)#, axis=A)
+                    #  grad_data_subset=np.gradient(data_subset)
+                    plt.plot(self.Surges[Surge_ID]['Subsets']['Range_bins'][pnt,:], data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+
+            #  plt.legend()
+            ax_n.grid(axis='both')
+            ax_n.tick_params(which='both', axis='y', direction='in')
+            ax_n.tick_params(which='major', axis='both', direction='in', width=2, length=7, color='grey')
+            ax_n.tick_params(which='both', axis='y', labelrotation=90)
+            #  ax.tick_params(which='minor', axis='both', direction='in', width=2, length=7, color='grey')
+            plt.xlabel('Range from Radar (along ray) (m)')
+            #  ax_n.yaxis._in_layout=False
+            #  print(vars(ax_n.yaxis._in_layout=False)
+            if testing ==False:
+                plt.ylabel('Radial Velocity (m/s)')
+            else:
+                #  ax_n.set_ylim(-1,1)
+                plt.ylabel('Radial Gradient Velocity (m/s)')
+            ax_n.axhline(0, color='grey', linewidth=3, alpha=.5, zorder=1)
+            ax_n.invert_xaxis()
+
+
+        elif ts in ['Thetae', 'Thetav', 'Wind']:
+            if ts in ['Thetav', 'Thetae']:
+                for p in Data.values():
+                    if isinstance(p, Torus_Insitu):
+                        if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
+                        ## If the platform matches a type listed for masking it uses masked data for the time series; 
+                        #  else use the unmasked data
+                        if p.type in self.config.lineplt_control['Mask'][:]:
+                            if ts == "Thetae":   plotting_data= p.Thetae_ts_mask_df
+                            elif ts == "Thetav":   plotting_data= p.Thetav_ts_mask_df
+                        else: plotting_data= p.df[ts].values
+
+                        ## Plot
+                        #assigning label= is what allows the legend to work
+                        ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str)
+
+                        TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
+                        TSleg_elements.append(TSleg_entry)
+                ## Set up XY axes tick locations and Labels
+                if len(self.config.r_mom) != 0: scan= Data['P_Radar'].Scan_time
+                else: scan= None 
+                self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=scan)
+
+                if ts == "Thetae":   ylab = TVARS.Te_lab
+                elif ts == "Thetav":   ylab = TVARS.Tv_lab
+                ax_n.set_ylabel(ylab)
+
+            # * * *
+            if ts == 'Wind':
+                p = Data[self.config.lineplt_control['Wind_Pform']]
+                if self.config.print_long == True: print('Plotting '+str(p.name)+' on time series')
+
+                ax_n.plot(p.df['datetime'], p.df['spd'], label= 'Wind Spd')
+                ax_n.fill_between(p.df['datetime'], p.df['spd'], 0)
+                ax_n.set_ylabel('Wind Speed (kn)')
+                self.tick_grid_settings(ax=ax_n, ts=ts,scan_time=Data['P_Radar'].Scan_time)
+                TSleg_entry = Line2D([], [], label='Wind Spd', linewidth=12, color='tab:blue')
+                TSleg_elements.append(TSleg_entry)
+
+                ax_2 = ax_n.twinx()
+                ax_2.plot(p.df['datetime'], p.df['dir'], '.k', linewidth=.05, label='Wind Dir')
+                ax_2.set_ylabel('Wind Dir ($^{\circ}$)')
+                self.tick_grid_settings(ax=ax_2, ts=ts, twinax=True, scan_time=Data['P_Radar'].Scan_time)
+                TSleg_entry = Line2D([], [], marker='.', color='black', label='Wind Dir', markersize=26)
+                TSleg_elements.append(TSleg_entry)
+
+            ## Plot legend
+            leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center left')
+            if ts == 'Wind':
+                leg.set_title(self.config.lineplt_control['Wind_Pform'], prop=self.leg_title_font)
+                leg.remove()
+                ax_2.add_artist(leg)
+
+            #if plotting more than one timeseries only include the xaxis label & ticks to the bottom timeseries
+            ax_n.label_outer()
+
+            #if you are not making the bottom timeseries
+            if ax_n.get_subplotspec().rowspan.stop != len(self.config.Line_Plot):
+                ax_n.spines['bottom'].set_linewidth(5)
+                # if you are doing two thermo plots while also plotting radar remove one of the legends (for space)
+                if (len(self.config.r_mom) != 0) & (ts in ['Thetav', 'Thetae']): leg.remove()
+
+            ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
+            #  radar scan and the timerange ploted (via filled colorline) on the radar plots
+            if len(self.config.r_mom) != 0:
+                ax_n.axvline(Data['P_Radar'].Scan_time, color='r', linewidth=4, alpha=.5)
+                ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.overlays['Colorline']['cline_extent']),
+                             Data['P_Radar'].Scan_time + timedelta(minutes=self.config.overlays['Colorline']['cline_extent']), 
+                             facecolor='0.5', alpha=0.4)
+            ##Label Formatter
+            # # # # # # # # #
+            ax_n.set_xlabel('Time (UTC)')
+            ax_n.yaxis.set_label_coords(-.03, .5)
+            #  make_axes_area_auto_adjustable(ax_n)
+
+            ###################
+        if self.config.print_long == True: print('~~~~~~~~~~~Made it through line_plot~~~~~~~~~~~~~~')
+    
+    # * * * * * * * * * * * * * * * * * * * * * * * *
+    # * * * * * * * * * * * * * * * * * * * * * * * *
+    def clicker_stats(self, ax_n, fig, TVARS, Data, Surge_ID):
+
+        if Surge_ID == None: pass
+        else:
+            ax_n.text(-2.4, .98, 'Surge ID: '+str(Surge_ID), transform=ax_n.transAxes, ha="left", va="top", weight='bold', size=self.leg_title_font['size'] )
+            ax_n.text(-2.4, .88, 'Points Selected: '+str(len(self.Surges[Surge_ID]['point_labels'])), transform=ax_n.transAxes, ha="left", va="top")
+            
+            init_point = Point(self.Surges[Surge_ID]['Center_pnts']['x'][0], self.Surges[Surge_ID]['Center_pnts']['y'][0])
+            final_point = Point(self.Surges[Surge_ID]['Center_pnts']['x'][-1], self.Surges[Surge_ID]['Center_pnts']['y'][-1])
+            straight_dist=init_point.distance(final_point)
+            ax_n.text(-2.4, .78, 'Straight length: '+str(round(straight_dist)), transform=ax_n.transAxes, ha="left", va="top")
+            
+            comb_xy_center=list(zip(self.Surges[Surge_ID]['Center_pnts']['x'], self.Surges[Surge_ID]['Center_pnts']['y']))
+            Max_offset_dist=self.Surges[Surge_ID]['Offset_pnts']['Max']['dist']
+            comb_xy_plusoffset= list(zip(self.Surges[Surge_ID]['Offset_pnts'][Max_offset_dist]['Plus']['x'],
+                                         self.Surges[Surge_ID]['Offset_pnts'][Max_offset_dist]['Plus']['y']))
+            comb_xy_minusoffset=list(zip(self.Surges[Surge_ID]['Offset_pnts'][Max_offset_dist]['Minus']['x'],
+                                         self.Surges[Surge_ID]['Offset_pnts'][Max_offset_dist]['Minus']['y']))
+
+            line= LineString(comb_xy_center)
+            ax_n.text(-2.4, .68, 'length: '+str(round(line.length)), transform=ax_n.transAxes, ha="left", va="top")
+                #  line.boundary #  line.centroid #  line.centroid.wkt #  line.interpolate(.75, normalized=True).wkt
+            
+            poly=Polygon(comb_xy_plusoffset+comb_xy_minusoffset)
+            ax_n.text(-2.4, .58, 'area: '+str(round(poly.area)), transform=ax_n.transAxes, ha="left", va="top")
+                #  poly.minimum_rotated_rectangle
+
+            slope= self.Surges[Surge_ID]['line']['slope']
+            intercept= self.Surges[Surge_ID]['line']['intercept']
+            ax_n.text(-2.4, .48, 'Slope: '+str(round(slope,3)), transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.4, .38, 'Intercept: '+str(round(intercept)), transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.4, .28, 'Max Vel: '+str(round(self.Surges[Surge_ID]['Surge_Subset']['Max']['value'])), transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.4, .18, 'Min Vel: '+str(round(self.Surges[Surge_ID]['Surge_Subset']['Min']['value'])), transform=ax_n.transAxes, ha="left", va="top")
+            ### 
+
+            bb = Bbox([[-2.5, 0], [.9, .99]])
+            fancy = mpatches.FancyBboxPatch((bb.xmin, bb.ymin), bb.width, bb.height, boxstyle=mpatches.BoxStyle('Round', pad=.02), fc='white', clip_on=False, path_effects=[PE.withSimplePatchShadow(alpha=.8)])
+            ax_n.add_patch(fancy)
+
+            #  ax_n.set_xlabels(None)
+            ax_n.tick_params(which='both', axis='both', left=False, bottom=False, labelleft=False, labelbottom=False)
+            ax_n._frameon=False
+
+                
+            #  print(vars(ax_n))
+                #  plt.plot(*line.xy)
+                #  buf=line.buffer(5000, cap_style=3)
+                #  plt.plot(*buf.exterior.xy)
+
+    ##########################################################################
 ###########################
 ## PLOTTING DEFINTIONS  ###
 ###########################
@@ -1187,9 +1132,10 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                 for col in range(PLT.R_cols):
                     try:
                         mom=config.r_mom[mom_index]
+                        if PLT.num_of_surges== 0: Surge_ID = None 
+                        else: Surge_ID = PLT.surge_ids[surge_id_index]
                     except:
                         mom = 'pass'
-
                     
                     print('Radar plot: '+ mom +', Outer GridSpec Pos: [0, :], SubGridSpec Pos: ['+str(row)+', '+str(col)+']')
                     
@@ -1197,7 +1143,9 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                         ax_n= PLT.fig.add_subplot(PLT.r_gs[row, col], projection= PLT.R_Proj)
                         if row==0 and col==0: leg = True
                         else: leg = False
-                        PLT.radar_subplots(mom, day, ax_n, PLT.fig, TVARS, Data, leg, PLT.surge_ids[surge_id_index])
+
+
+                        PLT.radar_subplots(mom, day, ax_n, PLT.fig, TVARS, Data, leg, Surge_ID)
                         if mom == 'zoom': 
                             surge_id_index=surge_id_index+1
                             if surge_id_index >= (len(PLT.surge_ids)): 
@@ -1209,31 +1157,44 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
 
     ## Make the Times Series Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
-    if len(config.Time_Series) != 0:
-        #  for (subrow,), ts in np.ndenumerate(config.Time_Series):
+    if len(config.Line_Plot) != 0:
+        #  for (subrow,), ts in np.ndenumerate(config.Line_Plot):
         lineplot_index=0
         surge_id_index=0
         for row in range(PLT.L_Rows):
             #  for col in range(PLT.L_Cols):
-            print('Line plot: '+ config.Time_Series[lineplot_index]+', Outer GridSpec Pos: [1, :], SubGridSpec Pos: ['+str(row)+', :]')
-            if row != 0 and config.Time_Series[lineplot_index] != 'clicker': 
-                ax_n=PLT.fig.add_subplot(PLT.l_gs[row,0], sharx=ax_n)
+            print('Line plot: '+ config.Line_Plot[lineplot_index]+', Outer GridSpec Pos: [1, :], SubGridSpec Pos: ['+str(row)+', :]')
+            if PLT.num_of_surges== 0: Surge_ID = None 
+            else: Surge_ID = PLT.surge_ids[surge_id_index]
+
+            if row != 0 and config.Line_Plot[lineplot_index] != 'clicker': 
+                ax_n=PLT.fig.add_subplot(PLT.l_gs[row,1], sharx=ax_n)
             else:
-                ax_n= PLT.fig.add_subplot(PLT.l_gs[row, 0])
-            PLT.line_plot(config.Time_Series[lineplot_index], ax_n, PLT.fig, TVARS, Data, PLT.surge_ids[surge_id_index])
-            
-            if 'clicker' in config.Time_Series: 
-                ax_n=PLT.fig.add_subplot(PLT.l_gs[row,1])
-                PLT.line_plot(config.Time_Series[lineplot_index], ax_n, PLT.fig, TVARS, Data, PLT.surge_ids[surge_id_index], testing=True)
+                if Surge_ID==None: 
+                    Make_Line_plt= False
+                else: 
+                    Make_Line_plt= True 
+                    ax_n= PLT.fig.add_subplot(PLT.l_gs[row, 1])
 
-                ax_n=PLT.fig.add_subplot(PLT.l_gs[row,2])
-                PLT.clicker_stats(ax_n, PLT.fig, TVARS, Data, PLT.surge_ids[surge_id_index])
+            if Make_Line_plt == True: 
+                PLT.line_plot(config.Line_Plot[lineplot_index], ax_n, PLT.fig, TVARS, Data, Surge_ID)
 
-                surge_id_index=surge_id_index+1
-                if surge_id_index >=(len(PLT.surge_ids)): 
+                if 'clicker' in config.Line_Plot: 
+                    ax_n=PLT.fig.add_subplot(PLT.l_gs[row,2])
+                    PLT.line_plot(config.Line_Plot[lineplot_index], ax_n, PLT.fig, TVARS, Data, Surge_ID, testing=True)
+
+                    ax_n=PLT.fig.add_subplot(PLT.l_gs[row,0])
+                    PLT.clicker_stats(ax_n, PLT.fig, TVARS, Data, Surge_ID)
+
+                    ax_n= PLT.fig.add_subplot(PLT.l_gs[row, 3], projection= PLT.R_Proj)
+                    leg=False
+                    PLT.radar_subplots('Surge_subset_'+str(Surge_ID), day, ax_n, PLT.fig, TVARS, Data, leg, Surge_ID, ZOOM=True)
+
+                    surge_id_index=surge_id_index+1
+                    if surge_id_index >=(len(PLT.surge_ids)): 
+                        lineplot_index= lineplot_index + 1
+                else: 
                     lineplot_index= lineplot_index + 1
-            else: 
-                lineplot_index= lineplot_index + 1
 
     ## Finish plot
     #### * * * * *
@@ -1242,15 +1203,15 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
     if len(config.r_mom) != 0: 
         plt.suptitle(Data['P_Radar'].site_name+' '+str(tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=PLT.title_spacer, ha='center')
         #if both radar and timeseries are included in the image
-        if len(config.Time_Series) != 0:
-            file_string = '_'.join(config.Time_Series)
-            if 'clicker' in config.Time_Series:
+        if len(config.Line_Plot) != 0:
+            file_string = '_'.join(config.Line_Plot)
+            if 'clicker' in config.Line_Plot:
                 plt_type = 'clicker'
-            elif 'histogram' in config.Time_Series:
+            elif 'histogram' in config.Line_Plot:
                 plt_type = 'hist'
             else: 
-                if ('Thetae' in config.Time_Series) and ('Thetav' in config.Time_Series): plt_type = 'both_Thetas'
-                elif (len(config.Time_Series) != 1) and ('Wind' in config.Time_Series): plt_type = config.overlays['Colorline']['Var']+'/Wind'
+                if ('Thetae' in config.Line_Plot) and ('Thetav' in config.Line_Plot): plt_type = 'both_Thetas'
+                elif (len(config.Line_Plot) != 1) and ('Wind' in config.Line_Plot): plt_type = config.overlays['Colorline']['Var']+'/Wind'
                 else: plt_type = config.overlays['Colorline']['Var']
         #if only radar is included in the image (aka no platform info overlayed)
         else:
@@ -1272,11 +1233,11 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                     config.radar_controls['offsetkm'][config.Radar_Plot_Type])+'km/'
 
     #if only timeseries are included in the image
-    elif len(config.Time_Series) != 0 and len(config.r_mom) == 0:
+    elif len(config.Line_Plot) != 0 and len(config.r_mom) == 0:
         plt.suptitle(day+' Time Series', y=title_spacer)
         
         #add the file name
-        file_string = '_'.join(config.Time_Series)
+        file_string = '_'.join(config.Line_Plot)
         if config.ts_extent ==None: file_ender='_full.png'
         else: file_ender='.png'
         output_name= day+'_TS_'+file_string+file_ender
@@ -1284,7 +1245,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
         plt_dir='TSeries/'
     
     
-    if config.clicker == True:
+    if config.Surge_controls['Make_new_pnts'] == True:
         csv_name= config.g_TORUS_directory+day+'/data/'+day+'_surge_pnts.csv'
         Does_csv_exist=os.path.isfile(csv_name)
         surge_name= 'NA'
@@ -1431,10 +1392,6 @@ def plot_time_series(config, day, Data, TVARS):
     start_comptime = time.time()
     plotting(config, day, Data, TVARS, start_comptime)
 
-def tellme(s):
-    print(s)
-    plt.title(s, fontsize=16)
-    plt.draw()
 
 #############################################################################################
 for day in plot_config.day_list:
@@ -1454,7 +1411,7 @@ for day in plot_config.day_list:
     ################################
     # Create Timeseries only plot ##
     ################################
-    elif len(plot_config.Time_Series) != 0:
+    elif len(plot_config.Line_Plot) != 0:
         # Create Timeseries only plot ##
         #Only plot timeseries (this code isn't fully fleshed out but in theroy this code is built in such a way to allow for this)
         plot_time_series(plot_config, day, Data, TVARS)
