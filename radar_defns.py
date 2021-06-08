@@ -188,7 +188,10 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
         vel_name , refl_name, specw_name = 'corrected_velocity', 'DBZ','WIDTH' 
         ncp_name, ncp_thresh = 'SQI', .6 
         refl_name, refl_thresh = 'DBZ', 15
-    
+    if radar_type == 'WSR':
+        vel_name , refl_name, specw_name = 'corrected_velocity', 'reflecitivty','spectrum_width' 
+        ncp_name, ncp_thresh = 'normalized_coherent_power', .5 
+        refl_thresh =15
     #creating the mask for attenuation
         #  range_mask = np.zeros(np.shape(reflectivity))
         #  for i in range(0, len(range_mask[:,0])): range_mask[i,:] = rfile.range['data'] > (rfile.range['data'][-1]-1000.)
@@ -304,6 +307,7 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
         if m == 'Meso': 
             start_time = time.time()
             az_shear_meta = llsd.main(rfile,refl_name,vel_name)
+            print(az_shear_meta)
             print("LLSD COMPUTE --- %s seconds ---" % (time.time() - start_time))
             rfile.add_field('Meso', az_shear_meta, replace_existing=True)
 
