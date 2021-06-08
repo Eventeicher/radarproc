@@ -35,10 +35,10 @@ r_mom = ['refl','vel_smooth', 'zoom']
 #list; the timeseries to plot (can include multiple) (leave list empty to plot only radar) 
     #  histogram, wind, Thetae, Thetav, tfast
 #  Line_Plot= []
-Line_Plot= ['clicker']
+#  Line_Plot= ['clicker']
 #  Line_Plot= ['histogram']
 #  Line_Plot= ['wind','Thetav']
-#  Line_Plot= ['Thetav']
+Line_Plot= ['Thetav']
 
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
 ## What type of radar do you want to plot 
@@ -51,9 +51,9 @@ Radar_Plot_Type = 'KA_Plotting'
 ## Timeframe
 # ***********
 ## List of days to plot
-day_list= ['20190608']
+#  day_list= ['20190608']
 #  day_list= ['20190523']
-#  day_list= ['20190524']
+day_list= ['20190524']
 #  day_list= ['20190517','20190518','20190520']# '20190523', '20190524','20190525','20190526',
 #  day_list= ['20190520', '20190523', '20190524','20190525','20190526',
 #  day_list= ['20190517','20190518','20190520', '20190523', '20190524','20190525','20190526',
@@ -65,7 +65,7 @@ day_list= ['20190608']
 #  day_list= ['20190608', '20190611', '20190613', '20190615']
 
 ## Crop the start or end time to a time you specify (comment out to use datafrom the whole day)
-tstart = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8])+1, 1, 30, 0)
+#  tstart = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8])+1, 1, 32, 0)
 #  tend = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 23, 40, 0)
 
 
@@ -88,6 +88,7 @@ lineplt_control = { 'Axis_Extents':{'X':30, 'Y':None}, #either x or y can be set
                     'Wind_Pform':'Prb2',
                     #  'Wind_Pform':'CoMeT3',
                     'Mask': ['NSSL'],
+                    'Deriv': True,
                     #  'H':{'var':'vort', 'xmin':-1, 'xmax':1}
                     'H':{'var':'vel_smooth', 'xmin':False, 'xmax':False}
                     }
@@ -95,7 +96,7 @@ lineplt_control = { 'Axis_Extents':{'X':30, 'Y':None}, #either x or y can be set
 Surge_controls= { 'ray_selection': 10, #degrees off of 90
                   'offset_dist': [500, 1000, 2000], #dist in m
                   'Make_new_pnts': False,
-                  'Read_surge_stuff': True
+                  'Read_surge_stuff':True 
                  }
 #Radar plot controls
     # p_tilt: what radar elevation tilt (deg) do you want to plot
@@ -113,7 +114,7 @@ radar_controls= {'layout':{"Rows":1, "Cols":None},
                  'offsetkm':{'KA_Plotting':21, 'NOXP_Plotting':20, 'WSR_Plotting':40, 'Zoom':'Fitted'},
                  #  'offsetkm':{'KA_Plotting':15, 'NOXP_Plotting':10, 'WSR_Plotting':40},
                  'distance_indicator':{'square_grid':True, 'range_rings':True, 'ring_int':1000}, 
-                 'colorbars':{'thermo':False, 'mom':True},
+                 'colorbars':{'thermo':True, 'mom':True},
                  'smooth':13
                  }
 
@@ -130,9 +131,9 @@ overlays = {'KA': {'Marker': True, 'Label': False, 'RHI_ring': True, 'RHI_Lab': 
             'UNL': {'Marker': True, 'Label': False},
             'STN_I': {'Marker': True, 'Label': False},
             'UAS': {'Marker': False, 'Label': False},
-            'Colorline': {'NSSL':False, 'UNL':False, 'UAS':False, 'cline_extent':5, 'Var':"Thetav"},
+            'Colorline': {'NSSL':True, 'UNL':True, 'UAS':False, 'cline_extent':5, 'Var':"Thetav", 'Pert':True},
             'LSR': {'Marker': False, 'Label': False},
-            'Tracks': {'Marker': True, 'Label': False},
+            'Tracks': {'Marker': False, 'Label': False},
             'Contour':{'Lines': False, 'Interval':5, 'Label':True, 'Var':'vel_fix'},
             'surge_lines':{'Marker': True, 'Lines':True, 'zoom_boxes':True, 'zoom_only':True},
             'GEO': { 'OX': False, 'country_roads': False, 'hwys': False, 'county_lines': False, 'state_lines': False}
