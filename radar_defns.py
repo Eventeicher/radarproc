@@ -21,6 +21,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from cycler import cycler
 import cartopy
+import time
 import cartopy.crs as ccrs
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from cartopy.feature import ShapelyFeature, NaturalEarthFeature
@@ -72,6 +73,7 @@ import matplotlib.patheffects as PathEffects
 import pandas as pd
 
 import warnings
+import llsd
 warnings.filterwarnings("ignore")
 
 # this script is used to plot RHIs, open the plots in an external window, and record the points of "clicks" in a csv
@@ -298,6 +300,12 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
 
             vort_data=vort(rfile,sweep_id, vel_field)
             rfile=mask(rfile, gatefilter, vort_data, m)
+
+        if m == 'Meso': 
+            start_time = time.time()
+            az_shear_meta = llsd.main(rfile,refl_name,vel_name)
+            print("LLSD COMPUTE --- %s seconds ---" % (time.time() - start_time))
+            rfile.add_field('Meso', az_shear_meta, replace_existing=True)
 
         if m == 'az_shear':
             vel_field = rfile.fields['corrected_velocity']['data']

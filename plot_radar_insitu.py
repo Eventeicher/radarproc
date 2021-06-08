@@ -514,6 +514,10 @@ class Master_Plt:
         elif mom == 'specw':
             c_label, c_scale = 'Spectrum Width 'r' [$\frac{m}{s}$]', 'cubehelix_r'
             field, vminb, vmaxb, sweep = 'specw_fix', 0., 4, Data['P_Radar'].swp
+        ###
+        elif mom == 'Meso':
+            c_label, c_scale = 'Azimuthal Shear 'r' (s$^{-1}$)', 'RdBu'
+            field, vminb, vmaxb, sweep = 'Meso', -10, 10, Data['P_Radar'].swp
 
         ###
         elif mom in ['vel_texture','vel_texture_smoothed', 'vel_texture_dea', 'vel_test']:
@@ -1027,13 +1031,14 @@ class Master_Plt:
                             print(p.df)
                             der_plt_data=[]
                             for i,j in p.df.iterrows():
-                                p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=.5)
+                                p.df.loc(i,'datetime')
+                                #  p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=.5)
                                 #  der_plt_data.append()
-                                print(len(p_sub[ts]))
-                                test=calc_slope(p_sub[ts])
-                                print(i)
-                                print(test)
-
+                                #  print(len(p_sub[ts]))
+                                #  test=calc_slope(p_sub[ts])
+                                #  print(i)
+                                #  print(test)
+#
                         ## Plot
                         #assigning label= is what allows the legend to work
                         ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str)
