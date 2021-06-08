@@ -53,6 +53,7 @@ import csv
 import os
 import os.path
 import time
+import datetime as dt
 import scipy
 from pathlib import Path
 from joblib import Memory, Parallel, delayed
@@ -74,8 +75,15 @@ import tracemalloc
 import shapefile
 import math 
 from shapely.geometry import LineString, Point, Polygon
+import seaborn as sns
+#appnope is here to prevent slow down of pop up gui
+import appnope
+appnope.nope()
+#  sns.set()
 tracemalloc.start()
-
+print(matplotlib.get_backend())
+import matplotlib.style as mplstyle
+mplstyle.use('fast')
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -114,6 +122,12 @@ class Thermo_Plt_Vars:
             lab, GMin, GMax = self.Tv_lab, self.Tv_GMin, self.Tv_GMax
         elif config.overlays['Colorline']['Var'] == "tfast":
             lab, GMin, GMax = self.Tf_lab, self.Tf_GMin, self.Tf_GMax
+
+        if config.overlays['Colorline']['Pert'] == True: 
+            lab, GMin, GMax = lab+' Pert', -10, 10
+            CSCALE= 'RdBu_r'
+        else: 
+            CSCALE= 'gnuplot'
         self.Tvar_lab, self.Tvar_GMin, self.Tvar_GMax = lab, GMin, GMax
 
         #settings for the thermo var being plotted on radar subplots
@@ -122,7 +136,7 @@ class Thermo_Plt_Vars:
 
         Z = [[0,0],[0,0]]
         levels = np.arange(GMin, GMax+1, 1)
-        self.CS3 = plt.contourf(Z, levels, cmap='gnuplot')
+        self.CS3 = plt.contourf(Z, levels, cmap=CSCALE)
         #  self.CS3 = plt.contourf(Z, levels, cmap=cmocean.cm.thermal)
         plt.clf()
 
@@ -202,8 +216,8 @@ class Master_Plt:
                 L_Cols=4
             else:
                 L_Rows= len(config.Line_Plot)
-                L_wratio = [1]
-                L_Cols=1
+                if config.lineplt_control['Deriv']== True: L_Cols, L_wratio = 2, [2,1]
+                else:  L_Cols, L_wratio = 1, [1]
             
             if L_Rows == 1:
                 L_hratio=[1] #the relative height alocated to each timeseries [within the space allocated for all timeseries]
@@ -401,7 +415,7 @@ class Master_Plt:
     
     # * * * * * * * * * * * * * * * * * * * * * * * *
     # * * * * * * * * * * * * * * * * * * * * * * * *
-    def radar_subplots(self, mom, day, ax_n, fig, TVARS, Data, leg, Surge_ID, ZOOM=False):
+    def radar_subplots(self, mom, day, ax_n, fig, TVARS, Data, leg, thermo_cbar, Surge_ID, ZOOM=False):
         ''' Plots each of the radar subplots including the marker overlays corresponding to the additional platforms
         ----
         INPUTS: mom: str, indicates which radar moment you would like to plot (ie Reflectivity, Velocity, Spectrum Width etc)
@@ -707,19 +721,35 @@ class Master_Plt:
                                   path_effects=[PE.withStroke(linewidth=4, foreground=lab_c)])
 
         def plot_TORUSpform(self, Data, p, border_c='xkcd:light grey'):
+            def get_timeave_previous(p, Data, time_offset):
+                lower_tbound = (Data['P_Radar'].Scan_time-dt.timedelta(minutes=time_offset)) 
+                upper_tbound = (Data['P_Radar'].Scan_time)
+                df_sub = p.df.loc[(p.df['datetime'] >= lower_tbound) & (p.df['datetime'] <= upper_tbound)]
+                mean = df_sub[self.config.overlays['Colorline']['Var']].mean()
+                return mean
+
+            #########
             '''Plot the filled line that indicates the thermo values on the Rplt'''
             #grab the subset of data of +- interval around radar scan
             p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=self.config.overlays['Colorline']['cline_extent'])
-
+            
             #if there is data for the platform that falls within the time and location of interest
             if p_deploy == True:
                 ##READ in data from p_sub
-                x, y, C = p_sub['lon'].values, p_sub['lat'].values, p_sub[self.config.overlays['Colorline']['Var']].values
+                x, y = p_sub['lon'].values, p_sub['lat'].values
+
+                if self.config.overlays['Colorline']['Pert'] == True: 
+                    base_state =get_timeave_previous(p, Data, 60)
+                    C = p_sub[self.config.overlays['Colorline']['Var']].values - base_state
+                    CSCALE='RdBu_r'
+                else: 
+                    C = p_sub[self.config.overlays['Colorline']['Var']].values
+                    CSCALE=cmocean.cm.thermal
 
                 ##PLOT the line that extends +/- min from the platform location;
                 if self.config.overlays['Colorline'][p.type] == True:
                     #  The colorfill indicates values of the specifiec p_var (ie Thetae etc)
-                    ax_n.scatter(x, y, c=C, cmap=cmocean.cm.thermal, norm=TVARS.norm, alpha=.7, marker='o',
+                    ax_n.scatter(x, y, c=C, cmap=CSCALE, norm=TVARS.norm, alpha=.7, marker='o',
                                  s=7.5, zorder=3, transform=self.Proj)
                     #  background of the colorline
                     ax_n.plot(x, y, c=border_c, lw=9, transform=self.Proj)
@@ -880,10 +910,10 @@ class Master_Plt:
             cb = plt.colorbar(sm, cax=c_ax, orientation='horizontal', extend='both', drawedges=testing_testing, boundaries=testing_bound)
             cb.set_label(label=c_label, size=self.Radar_title_font['fontsize']) #, weight='bold')
 
-        if self.config.radar_controls['colorbars']['thermo'] == True:
+        if self.config.radar_controls['colorbars']['thermo'] == True and thermo_cbar == True:
             #set up the colorbar for the thermo colorline overlay
             c_ax2 = divider.append_axes("right", "5%", pad="2%", axes_class=plt.Axes)
-            Thermo_cbar = plt.colorbar(TVARS.CS3, cax=c_ax2, label=TVARS.Tvar_lab, ticks=MaxNLocator(integer=True), use_gridspec=True)
+            Thermo_cbar = plt.colorbar(TVARS.CS3, cax=c_ax2, label=TVARS.Tvar_lab, ticks=MaxNLocator(integer=True))#use_gridspec=True)
 
         # * * *
         ## SET UP LEGENDS
@@ -901,12 +931,22 @@ class Master_Plt:
 
     # * * * * * * * * * * * * * * * * * * * * * * * *
     # * * * * * * * * * * * * * * * * * * * * * * * *
-    def line_plot(self, ts, ax_n, fig, TVARS, Data, Surge_ID, testing=False):
+    def line_plot(self, ts, ax_n, fig, TVARS, Data, Surge_ID, testing=False, deriv=False):
         ''' Plot a time series (sub)plot; could be of pvar info from various intstruments or of wind info
         ----
         INPUTS: ts: ........fill in
                 Data: dict as described in plotting defn
                 print_long & e_test: bool str as described in the ppi defn '''
+        def get_timeave_previous(p, Data, time_offset):
+            lower_tbound = (Data['P_Radar'].Scan_time-dt.timedelta(minutes=time_offset)) 
+            upper_tbound = (Data['P_Radar'].Scan_time)
+            df_sub = p.df.loc[(p.df['datetime'] >= lower_tbound) & (p.df['datetime'] <= upper_tbound)]
+            mean = df_sub[self.config.overlays['Colorline']['Var']].mean()
+            return mean
+        def calc_slope(x):
+            slope = np.polyfit(range(len(x)), x, 1)[0]
+            return slope
+
         if self.config.print_long == True: print('~~~~~~~~~~~Made it into line_plot~~~~~~~~~~~~~~~~~')
         #  t_TS.T_Plt_settings(ts,ax_n)
         TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
@@ -964,6 +1004,7 @@ class Master_Plt:
             ax_n.invert_xaxis()
 
 
+                
         elif ts in ['Thetae', 'Thetav', 'Wind']:
             if ts in ['Thetav', 'Thetae']:
                 for p in Data.values():
@@ -975,6 +1016,23 @@ class Master_Plt:
                             if ts == "Thetae":   plotting_data= p.Thetae_ts_mask_df
                             elif ts == "Thetav":   plotting_data= p.Thetav_ts_mask_df
                         else: plotting_data= p.df[ts].values
+                        
+                        if self.config.overlays['Colorline']['Pert'] == True: 
+                            base_state =get_timeave_previous(p, Data, 60)
+                            plotting_data= plotting_data[:] - base_state 
+                            ax_n.axhline(0, color='grey', linewidth=3, alpha=.5, zorder=1)
+                        
+                        if deriv == True:  
+                            plotting_data= np.gradient(plotting_data)
+                            print(p.df)
+                            der_plt_data=[]
+                            for i,j in p.df.iterrows():
+                                p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=.5)
+                                #  der_plt_data.append()
+                                print(len(p_sub[ts]))
+                                test=calc_slope(p_sub[ts])
+                                print(i)
+                                print(test)
 
                         ## Plot
                         #assigning label= is what allows the legend to work
@@ -1011,7 +1069,7 @@ class Master_Plt:
                 TSleg_elements.append(TSleg_entry)
 
             ## Plot legend
-            leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center left')
+            leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.04,.5))
             if ts == 'Wind':
                 leg.set_title(self.config.lineplt_control['Wind_Pform'], prop=self.leg_title_font)
                 leg.remove()
@@ -1033,6 +1091,10 @@ class Master_Plt:
                 ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.overlays['Colorline']['cline_extent']),
                              Data['P_Radar'].Scan_time + timedelta(minutes=self.config.overlays['Colorline']['cline_extent']), 
                              facecolor='0.5', alpha=0.4)
+
+            if deriv == True:
+                leg.remove()
+                ax_n.set_ylim(-.5,.5)
             ##Label Formatter
             # # # # # # # # #
             ax_n.set_xlabel('Time (UTC)')
@@ -1045,7 +1107,6 @@ class Master_Plt:
     # * * * * * * * * * * * * * * * * * * * * * * * *
     # * * * * * * * * * * * * * * * * * * * * * * * *
     def clicker_stats(self, ax_n, fig, TVARS, Data, Surge_ID):
-
         if Surge_ID == None: pass
         else:
             ax_n.text(-2.4, .98, 'Surge ID: '+str(Surge_ID), transform=ax_n.transAxes, ha="left", va="top", weight='bold', size=self.leg_title_font['size'] )
@@ -1143,9 +1204,11 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                         ax_n= PLT.fig.add_subplot(PLT.r_gs[row, col], projection= PLT.R_Proj)
                         if row==0 and col==0: leg = True
                         else: leg = False
+                        
+                        if col == PLT.R_cols-1:  thermo_cbar = True
+                        else: thermo_cbar = False
 
-
-                        PLT.radar_subplots(mom, day, ax_n, PLT.fig, TVARS, Data, leg, Surge_ID)
+                        PLT.radar_subplots(mom, day, ax_n, PLT.fig, TVARS, Data, leg, thermo_cbar, Surge_ID)
                         if mom == 'zoom': 
                             surge_id_index=surge_id_index+1
                             if surge_id_index >= (len(PLT.surge_ids)): 
@@ -1170,14 +1233,21 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
             if row != 0 and config.Line_Plot[lineplot_index] != 'clicker': 
                 ax_n=PLT.fig.add_subplot(PLT.l_gs[row,1], sharx=ax_n)
             else:
-                if Surge_ID==None: 
+                if 'clicker' in config.Line_Plot and Surge_ID ==None: 
                     Make_Line_plt= False
                 else: 
                     Make_Line_plt= True 
-                    ax_n= PLT.fig.add_subplot(PLT.l_gs[row, 1])
+                    if config.Line_Plot[lineplot_index] == 'clicker': col =1
+                    else: col= 0 
+                    
 
             if Make_Line_plt == True: 
+                ax_n= PLT.fig.add_subplot(PLT.l_gs[row, col])
                 PLT.line_plot(config.Line_Plot[lineplot_index], ax_n, PLT.fig, TVARS, Data, Surge_ID)
+                if config.lineplt_control['Deriv'] == True:  
+                    print(PLT.L_Cols)
+                    ax_n= PLT.fig.add_subplot(PLT.l_gs[row, 1])
+                    PLT.line_plot(config.Line_Plot[lineplot_index], ax_n, PLT.fig, TVARS, Data, Surge_ID, deriv=True)
 
                 if 'clicker' in config.Line_Plot: 
                     ax_n=PLT.fig.add_subplot(PLT.l_gs[row,2])
@@ -1188,7 +1258,8 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
 
                     ax_n= PLT.fig.add_subplot(PLT.l_gs[row, 3], projection= PLT.R_Proj)
                     leg=False
-                    PLT.radar_subplots('Surge_subset_'+str(Surge_ID), day, ax_n, PLT.fig, TVARS, Data, leg, Surge_ID, ZOOM=True)
+                    PLT.radar_subplots('Ray_angle', day, ax_n, PLT.fig, TVARS, Data, leg, Surge_ID, ZOOM=True)
+                    #  PLT.radar_subplots('Surge_subset_'+str(Surge_ID), day, ax_n, PLT.fig, TVARS, Data, leg, Surge_ID, ZOOM=True)
 
                     surge_id_index=surge_id_index+1
                     if surge_id_index >=(len(PLT.surge_ids)): 
@@ -1213,6 +1284,10 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                 if ('Thetae' in config.Line_Plot) and ('Thetav' in config.Line_Plot): plt_type = 'both_Thetas'
                 elif (len(config.Line_Plot) != 1) and ('Wind' in config.Line_Plot): plt_type = config.overlays['Colorline']['Var']+'/Wind'
                 else: plt_type = config.overlays['Colorline']['Var']
+
+                if config.overlays['Colorline']['Pert'] == True:
+                    plt_type = plt_type+str('_pert')
+
         #if only radar is included in the image (aka no platform info overlayed)
         else:
             file_string = 'r_only'
@@ -1257,8 +1332,10 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
             if surge_name== 'DONE':
                 break
             else:
+                print(vars(PLT.fig))
+                print(PLT.fig.get_axes())
                 #  plt.setp(plt.gca(), autoscale_on=False)
-                pts=clicker_defn(plt)
+                pts=clicker_defn(PLT)
                 make_csv(Data, pts, surge_name, csv_name, Does_csv_exist)
     ## * * *     
     #This is the directory path for the output file
