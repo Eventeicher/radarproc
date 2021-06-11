@@ -611,6 +611,7 @@ class Master_Plt:
         else: print("Hey what just happened!\n Check the Radar moments for spelling")
         ##############################################################################
         #  print("This is the id for "+ field+' :'+str(id(Data['P_Radar'].rfile.get_field(Data['P_Radar'].swp, field, copy=False))))
+        #  print(Data['P_Radar'].rfile.info(level='compact'))
         ## set colors to highlight where the max/min are exceded
         colormap = copy.copy(matplotlib.cm.get_cmap(name=c_scale))
         colormap.set_under('aqua')
@@ -725,13 +726,6 @@ class Master_Plt:
                                   path_effects=[PE.withStroke(linewidth=4, foreground=lab_c)])
 
         def plot_TORUSpform(self, Data, p, border_c='xkcd:light grey'):
-            def get_timeave_previous(p, Data, time_offset):
-                lower_tbound = (Data['P_Radar'].Scan_time-dt.timedelta(minutes=time_offset)) 
-                upper_tbound = (Data['P_Radar'].Scan_time)
-                df_sub = p.df.loc[(p.df['datetime'] >= lower_tbound) & (p.df['datetime'] <= upper_tbound)]
-                mean = df_sub[self.config.overlays['Colorline']['Var']].mean()
-                return mean
-
             #########
             '''Plot the filled line that indicates the thermo values on the Rplt'''
             #grab the subset of data of +- interval around radar scan
@@ -743,8 +737,7 @@ class Master_Plt:
                 x, y = p_sub['lon'].values, p_sub['lat'].values
 
                 if self.config.overlays['Colorline']['Pert'] == True: 
-                    base_state =get_timeave_previous(p, Data, 60)
-                    C = p_sub[self.config.overlays['Colorline']['Var']].values - base_state
+                    C = p_sub[self.config.overlays['Colorline']['Var']+'_pert'].values 
                     CSCALE='RdBu_r'
                 else: 
                     C = p_sub[self.config.overlays['Colorline']['Var']].values
@@ -941,16 +934,6 @@ class Master_Plt:
         INPUTS: ts: ........fill in
                 Data: dict as described in plotting defn
                 print_long & e_test: bool str as described in the ppi defn '''
-        def get_timeave_previous(p, Data, time_offset):
-            lower_tbound = (Data['P_Radar'].Scan_time-dt.timedelta(minutes=time_offset)) 
-            upper_tbound = (Data['P_Radar'].Scan_time)
-            df_sub = p.df.loc[(p.df['datetime'] >= lower_tbound) & (p.df['datetime'] <= upper_tbound)]
-            mean = df_sub[self.config.overlays['Colorline']['Var']].mean()
-            return mean
-        def calc_slope(x):
-            slope = np.polyfit(range(len(x)), x, 1)[0]
-            return slope
-
         if self.config.print_long == True: print('~~~~~~~~~~~Made it into line_plot~~~~~~~~~~~~~~~~~')
         #  t_TS.T_Plt_settings(ts,ax_n)
         TSleg_elements = [] #empty list to append the legend entries to for each subplot that is actually plotted
@@ -1022,23 +1005,20 @@ class Master_Plt:
                         else: plotting_data= p.df[ts].values
                         
                         if self.config.overlays['Colorline']['Pert'] == True: 
-                            base_state =get_timeave_previous(p, Data, 60)
-                            plotting_data= plotting_data[:] - base_state 
+                            var=ts+'_pert'
+                            plotting_data=p.df[var].values
+                            #  base_state =get_timeave_previous(p, Data, 60)
+                            #  plotting_data= plotting_data[:] - base_state
                             ax_n.axhline(0, color='grey', linewidth=3, alpha=.5, zorder=1)
                         
                         if deriv == True:  
-                            plotting_data= np.gradient(plotting_data)
-                            print(p.df)
-                            der_plt_data=[]
-                            for i,j in p.df.iterrows():
-                                p.df.loc(i,'datetime')
-                                #  p_sub, p_deploy = p.grab_pform_subset(p, Data, time_offset=.5)
-                                #  der_plt_data.append()
-                                #  print(len(p_sub[ts]))
-                                #  test=calc_slope(p_sub[ts])
-                                #  print(i)
-                                #  print(test)
-#
+                            if self.config.overlays['Colorline']['Pert'] == True: 
+                                var=ts+'_pert_der'
+                            else:
+                                var=ts+'_der'
+                            plotting_data=p.df[var].values
+                            ax_n.axhline(0, color='grey', linewidth=3, alpha=.5, zorder=1)
+                        
                         ## Plot
                         #assigning label= is what allows the legend to work
                         ax_n.plot(p.df['datetime'], plotting_data, linewidth=3, color=p.l_color, label=p.leg_str)
@@ -1099,7 +1079,7 @@ class Master_Plt:
 
             if deriv == True:
                 leg.remove()
-                ax_n.set_ylim(-.5,.5)
+                ax_n.set_ylim(-.2,.2)
             ##Label Formatter
             # # # # # # # # #
             ax_n.set_xlabel('Time (UTC)')
@@ -1122,25 +1102,14 @@ class Master_Plt:
             straight_dist=init_point.distance(final_point)
             ax_n.text(-2.4, .78, 'Straight length: '+str(round(straight_dist)), transform=ax_n.transAxes, ha="left", va="top")
             
-            comb_xy_center=list(zip(self.Surges[Surge_ID]['Center_pnts']['x'], self.Surges[Surge_ID]['Center_pnts']['y']))
-            Max_offset_dist=self.Surges[Surge_ID]['Offset_pnts']['Max']['dist']
-            comb_xy_plusoffset= list(zip(self.Surges[Surge_ID]['Offset_pnts'][Max_offset_dist]['Plus']['x'],
-                                         self.Surges[Surge_ID]['Offset_pnts'][Max_offset_dist]['Plus']['y']))
-            comb_xy_minusoffset=list(zip(self.Surges[Surge_ID]['Offset_pnts'][Max_offset_dist]['Minus']['x'],
-                                         self.Surges[Surge_ID]['Offset_pnts'][Max_offset_dist]['Minus']['y']))
-
-            line= LineString(comb_xy_center)
-            ax_n.text(-2.4, .68, 'length: '+str(round(line.length)), transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.4, .68, 'length: '+str(round(self.Surges[Surge_ID]['Center_pnts']['line_object'].length)), transform=ax_n.transAxes, ha="left", va="top")
                 #  line.boundary #  line.centroid #  line.centroid.wkt #  line.interpolate(.75, normalized=True).wkt
             
-            poly=Polygon(comb_xy_plusoffset+comb_xy_minusoffset)
-            ax_n.text(-2.4, .58, 'area: '+str(round(poly.area)), transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.4, .58, 'area: '+str(round(self.Surges[Surge_ID]['Polygon'].area)), transform=ax_n.transAxes, ha="left", va="top")
                 #  poly.minimum_rotated_rectangle
 
-            slope= self.Surges[Surge_ID]['line']['slope']
-            intercept= self.Surges[Surge_ID]['line']['intercept']
-            ax_n.text(-2.4, .48, 'Slope: '+str(round(slope,3)), transform=ax_n.transAxes, ha="left", va="top")
-            ax_n.text(-2.4, .38, 'Intercept: '+str(round(intercept)), transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.4, .48, 'Slope: '+str(round(self.Surges[Surge_ID]['line']['slope'],3)), transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.4, .38, 'Intercept: '+str(round(self.Surges[Surge_ID]['line']['intercept'])), transform=ax_n.transAxes, ha="left", va="top")
             ax_n.text(-2.4, .28, 'Max Vel: '+str(round(self.Surges[Surge_ID]['Surge_Subset']['Max']['value'])), transform=ax_n.transAxes, ha="left", va="top")
             ax_n.text(-2.4, .18, 'Min Vel: '+str(round(self.Surges[Surge_ID]['Surge_Subset']['Min']['value'])), transform=ax_n.transAxes, ha="left", va="top")
             ### 
@@ -1152,7 +1121,6 @@ class Master_Plt:
             #  ax_n.set_xlabels(None)
             ax_n.tick_params(which='both', axis='both', left=False, bottom=False, labelleft=False, labelbottom=False)
             ax_n._frameon=False
-
                 
             #  print(vars(ax_n))
                 #  plt.plot(*line.xy)

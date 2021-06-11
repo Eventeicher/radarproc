@@ -20,11 +20,36 @@ from shapely.geometry import LineString, Point, Polygon, MultiPoint
 import config as plot_config
 from read_pforms import Platform
 
-def clicker_defn(plt):
-    pts = [np.nan]
-    plt.setp(plt.gca(), autoscale_on=False)
+def tellme(s):
+    print(s)
+    plt.title(s, fontsize=16)
     plt.draw()
+
+def clicker_defn(PLT):
+    pts = [np.nan]
+    #  plt.setp(plt.gca(), autoscale_on=False)
+    #  plt.setp(plt.gcf())
+    #  plt.ion()
+    #  plt.draw()
+    # Now do a zoom
+    tellme('Now do a nested zoom, click to begin')
     plt.waitforbuttonpress()
+
+    while True:
+        tellme('Select two corners of zoom, middle mouse button to finish')
+        pts = plt.ginput(2, timeout=-1)
+        if len(pts) < 2:
+            break
+        (x0, y0), (x1, y1) = pts
+        xmin, xmax = sorted([x0, x1])
+        ymin, ymax = sorted([y0, y1])
+        AXES=PLT.fig.get_axes()
+        for a in AXES[::2]: 
+                plt.sca(a)
+                plt.xlim(xmin, xmax)
+                plt.ylim(ymin, ymax)
+    tellme('I SWEAR YOU BETTER WORK THIS TIME....  OR THIS RELATIONSHIP IS OVER!!!')
+    #  plt.waitforbuttonpress()
     pts = plt.ginput(n=40,timeout=0) # look up ginput docs for some good guidance
     #  plt.waitforbuttonpress()
     return pts

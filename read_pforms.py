@@ -3,7 +3,7 @@
 #import needed modules
 ######################
 import matplotlib
-matplotlib.use('agg')
+#  matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.patches as mpatches
@@ -21,7 +21,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from cycler import cycler
 import datetime as dt
-from datetime import datetime, date, timedelta
+from datetime import datetime
 import cartopy
 import cartopy.crs as ccrs
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
@@ -39,18 +39,23 @@ from pandas.plotting import register_matplotlib_converters
 import numpy as np
 import xarray as xr
 #from netCDF4 import num2date
-import argparse, cProfile, logging, time, os, os.path
-from os.path import expanduser
-from pathlib import Path
+import logging
+import os
+import os.path
 from joblib import Memory, Parallel, delayed
 from scipy import ndimage, interpolate
-from operator import attrgetter
 from collections import namedtuple
-import pyart, nexradaws, sys, traceback, shutil, glob, gc, cmocean
+import cmocean
+import gc
+import glob
+import nexradaws
+import pyart
+import shutil
+import sys
+import traceback
 import cftime # for num2pydate
 import pprint
 import math
-import copy
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -127,7 +132,8 @@ def pform_attr(pname):
     ##assign the atributes for each platform
     if pname in pform_names('TInsitu'): 
         #  marker_style, marker_size = '$\U0001F766$', 20 #u20B9 u03F0 u03A8 u273D 204E 0359 002A 20BA 2723
-        marker_style, marker_size = '$\u2724$', 20 #u20B9 u03F0 u03A8 u273D 204E 0359 002A 20BA 2723
+        marker_style, marker_size = '$\u2724$', 10 #u20B9 u03F0 u03A8 u273D 204E 0359 002A 20BA 2723
+        #  marker_style, marker_size = '$\u2724$', 20 #u20B9 u03F0 u03A8 u273D 204E 0359 002A 20BA 2723
         if pname == "Prb1": marker_color, line_color, legend_str= 'xkcd:lightblue', 'steelblue', 'Prb1'
         elif pname == "Prb2": marker_color, line_color, legend_str= 'xkcd:watermelon', 'xkcd:dusty red', 'Prb2'
         elif pname == "FFld": marker_color, line_color, legend_str= 'xkcd:bubblegum pink', 'xkcd:pig pink', 'FFld'
@@ -140,23 +146,27 @@ def pform_attr(pname):
     if pname in pform_names('STN_I'):
         marker_color, line_color = 'black', 'black'
         if pname in pform_names('MESO'):
-            marker_size = 23 #U+1278, #u20a9
+            marker_size = 13 #U+1278, #u20a9
+            #  marker_size = 23 #U+1278, #u20a9
             if pname == "WTx_M": marker_style,  legend_str= '$\u0166$', 'WTxM'
             elif pname == "OK_M": marker_style, legend_str= '$\u00C5$', 'OKM' ##00F0 2644 26B7  26A8 0516 2114
             elif pname == "IA_M": marker_style, legend_str= '$\uABA0$', 'IAM'
             elif pname == "KS_M": marker_style, legend_str= '$\u0199$', 'KSM'#0199 A741 0198 01E9 03CF ##0198 0199
         else:
-            marker_size = 25
+            marker_size = 15
+            #  marker_size = 25
             if pname == "ASOS": marker_style, legend_str= '$\u0466$', 'ASOS' #0466 212B 00C4 20B3 00C6 0102 01E0 01CD 01DE
 
     if pname in pform_names('RADAR'):
         if pname in pform_names('KA'): ##2643
-            marker_style, marker_size = '$\u264E$', 35
+            marker_style, marker_size = '$\u264E$', 20
+            #  marker_style, marker_size = '$\u264E$', 35
             #  marker_style, marker_size = '$\u14C7$', 35
             if pname == 'Ka2': marker_color, line_color, legend_str= 'xkcd:crimson', 'xkcd:crimson', 'Ka2'
             elif pname == 'Ka1': marker_color, line_color, legend_str= 'mediumseagreen', 'mediumseagreen', 'Ka1'
         else:
-            line_color, marker_size = 'black', 35
+            line_color, marker_size = 'black', 20
+            #  line_color, marker_size = 'black', 35
             if pname == 'NOXP': marker_style, marker_color, legend_str= '$\u2116$', 'yellow', "NOXP"
             #  if pname == 'NOXP': marker_style, marker_color, legend_str= '$\u306E$', 'green', "NOXP"
             elif pname == 'WSR88D':  
@@ -178,7 +188,6 @@ def pform_attr(pname):
 #  * * * * *
 def Add_to_DATA(config, day, DType, Data, subset_pnames, MR_file=None, swp=None):
     if config.print_long == True: print('Made it into Add_to_DATA')
-
     if DType == 'TInsitu':
         #for these pforms mainly interested if we have any valid data for the day not worried about spatial/temporal subset yet
         #  To save computing time this data will only be read in once and anyfurther subsetting will be done later
@@ -190,7 +199,8 @@ def Add_to_DATA(config, day, DType, Data, subset_pnames, MR_file=None, swp=None)
                 if data_avail == True:
                     subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load data for the pform (aka initialize an object of the appropriate class); place in dict with key of pname
-                    Data.update({pname: Torus_Insitu(config, day, pname)})
+                    pform_data= Torus_Insitu(config, day, pname)
+                    Data.update({pname: pform_data})
                     if config.print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
                     if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
@@ -210,7 +220,8 @@ def Add_to_DATA(config, day, DType, Data, subset_pnames, MR_file=None, swp=None)
                     if pname in subset_pnames: pass
                     else: subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load loc data for the sites in plotting domain
-                    Data.update({pname: Stationary_Insitu(config, day, pname)})
+                    pform_data=Stationary_Insitu(config, day, pname)
+                    Data.update({pname: pform_data})
                     if config.print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
                     if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
@@ -232,7 +243,8 @@ def Add_to_DATA(config, day, DType, Data, subset_pnames, MR_file=None, swp=None)
             else: print('What radar are you trying to plot? MR_name = %' %(MR_file.metadata['instrument_name']))
 
             print("Reading in radar data for plotting from %s" %(MR_name))
-            Data.update({'P_Radar': Radar(config, day, MR_name, Rfile=MR_file, Swp=swp, Plotting_Radar=True)})
+            pform_data= Radar(config, day, MR_name, Rfile=MR_file, Swp=swp, Plotting_Radar=True)
+            Data.update({'P_Radar': pform_data})
 
         # * * *
         ## Initilize the other radar objects that do not contain radar data to be plotted
@@ -246,7 +258,8 @@ def Add_to_DATA(config, day, DType, Data, subset_pnames, MR_file=None, swp=None)
                     if pname in subset_pnames: pass
                     else: subset_pnames.append(pname) #append the pname to the subset_pnames list
                     #  load loc data (and in this case rhi angles if applicable)
-                    Data.update({pname: Radar(config, day, pname, Data)})
+                    pform_data= Radar(config, day, pname, Data)
+                    Data.update({pname:pform_data})
                     if config.print_long == True: print("Data can be read in for platform %s" %(pname))
                 else:
                     if config.print_long == True: print("No data available to be read in for platform %s" %(pname))
@@ -283,6 +296,21 @@ def read_TInsitu(config, day, pname, d_testing=False):
                Tstart,Tend: datetime objects
         OUTPUT: dataframe containing all data collected during desired times
     '''
+    def get_timeave_previous(df, var, centered_time, time_offset):
+        lower_tbound = (centered_time-dt.timedelta(minutes=time_offset)) 
+        upper_tbound = centered_time
+        df_sub = df.loc[(df['datetime'] >= lower_tbound) & (df['datetime'] <= upper_tbound)]
+        mean = df_sub[var].mean()
+        return mean
+    def get_timearround(df, var, centered_time, time_offset):
+        lower_tbound = (centered_time-dt.timedelta(seconds=time_offset)) 
+        upper_tbound = (centered_time+dt.timedelta(seconds=time_offset)) 
+        df_sub = df.loc[(df['datetime'] >= lower_tbound) & (df['datetime'] <= upper_tbound)]
+        return df_sub 
+    def calc_slope(x):
+        slope = np.polyfit(range(len(x)), x, 1)[0]
+        return slope
+    ####
     if pname in pform_names('UNL'):
         mmfile = glob.glob(config.g_TORUS_directory+day+'/data/mesonets/UNL/UNL.'+pname+'.*')
 
@@ -290,7 +318,7 @@ def read_TInsitu(config, day, pname, d_testing=False):
         if d_testing == True:
             try:
                 #if there is no files this will will cause the try statement to fail
-                mtest = mmfile[0]
+                mmfile[0]
                 return True
             except: return False
         #  if the defn was only called to it will exit at this point (saving computing time)
@@ -304,7 +332,7 @@ def read_TInsitu(config, day, pname, d_testing=False):
             timearray = np.array([dt.datetime.utcfromtimestamp(int(t)/1e9) for t in ds.time.values])
             U,V = mpcalc.wind_components(ds.wind_speed, ds.wind_dir)
             lats = np.array([40]) * units.degrees
-
+            
             #create new xarray dataset to make plotting easier 
             dims = ['datetime']
             coords = { 'datetime': timearray }
@@ -319,8 +347,8 @@ def read_TInsitu(config, day, pname, d_testing=False):
                 'Pressure': (dims, ds.pressure.values, {'units':str(ds.pressure.units)}),
                 'spd': (dims, ds.wind_speed.values, {'units':str(ds.wind_speed.units)}),
                 'dir': (dims, ds.wind_dir.values, {'units':str(ds.wind_dir.units)}),
-                'U': (dims, U.m, {'units':str(U.units)}),
-                'V': (dims, V.m, {'units':str(V.units)}),
+                'U': (dims, U.data, {'units':str(ds.wind_speed.units)}),
+                'V': (dims, V.data, {'units':str(ds.wind_speed.units)}),
                 'Theta': (dims, ds.theta.values, {'units':str(ds.theta.units)}),
                 'Thetae': (dims, ds.theta_e.values, {'units':str(ds.theta_e.units)}),
                 'Thetav': (dims, ds.theta_v.values, {'units':str(ds.theta_v.units)})
@@ -345,6 +373,26 @@ def read_TInsitu(config, day, pname, d_testing=False):
         #convert the list holding the dataframes to one large dataframe
         data_unl = pd.concat(data_hold)
 
+        if config.overlays['Colorline']['Pert'] == True:
+            for var in config.Line_Plot: 
+                var_pert_data=[]
+                for i,j in data_unl.iterrows():
+                    base_state =get_timeave_previous(data_unl, var, j['datetime'], 60)
+                    pert_data= j[var] - base_state 
+                    var_pert_data.append(pert_data)
+                data_unl.loc[:, var+str('_pert')]=var_pert_data    
+        if config.lineplt_control['Deriv'] == True:
+            for var in config.Line_Plot: 
+                if config.overlays['Colorline']['Pert'] == True:
+                    var= var+str('_pert')
+                der_data=[]
+                for i,j in data_unl.iterrows():
+                    p_sub=get_timearround(data_unl, var, j['datetime'], 30)
+                    slope=calc_slope(p_sub[var])
+                    der_data.append(slope)
+                data_unl.loc[:, var+str('_der')]=der_data    
+
+
         #drop all the columns that we will not use past this point (to save memory/computing time)
         data_unl = data_unl.drop(columns=['Z_ASL', 'Z_AGL', 'Theta', 'Dewpoint', 'Pressure'])#, 'RH'])
         #  print(data_unl.memory_usage())
@@ -359,7 +407,7 @@ def read_TInsitu(config, day, pname, d_testing=False):
         if d_testing == True:
             try:
                 #if there is no files this will will cause the try statement to fail
-                mtest = mmfile[0]
+                mmfile[0]
                 return True
             except: return False
         # + + + + + + + + + + + + ++ + +
@@ -371,7 +419,8 @@ def read_TInsitu(config, day, pname, d_testing=False):
         data = data.drop_duplicates()
 
         # Find timedelta of hours since start of iop (IOP date taken from filename!)
-        tiop = dt.datetime(2019, np.int(mmfile[-15:-13]), np.int(mmfile[-13:-11]), 0, 0, 0)
+        print(mmfile)
+        tiop = dt.datetime(2019, int(mmfile[-15:-13]), int(mmfile[-13:-11]), 0, 0, 0)
 
         time_start, time_end= time_range(config)
         if time_start is None:
@@ -389,8 +438,9 @@ def read_TInsitu(config, day, pname, d_testing=False):
             else:  hend = float((time_end-tiop).seconds)/3600
 
         # Save only desired iop data
-        data_nssl_sub = data.loc[(data.loc[:,'time'] >= hstart_dec)]
-        data_nssl = data_nssl_sub.loc[(data_nssl_sub.loc[:,'time'] <= hend)]
+        data_nssl, data_nssl_sub = pd.DataFrame(), pd.DataFrame()
+        data_nssl_sub= data.loc[(data.loc[:,'time'] >= hstart_dec)]
+        data_nssl= data_nssl_sub.loc[(data_nssl_sub.loc[:,'time'] <= hend)]
         # Convert time into timedeltas
         date = dt.datetime.strptime('2019-'+mmfile[-15:-13]+'-'+mmfile[-13:-11],'%Y-%m-%d')
         # Convert deltas into actual times
@@ -401,18 +451,37 @@ def read_TInsitu(config, day, pname, d_testing=False):
         r_h = data_nssl['rh'].values/100
         data_nssl.loc[:, 'Theta'] = (mpcalc.potential_temperature(p, t)).m
 
-        mixing = mpcalc.mixing_ratio_from_relative_humidity(r_h, t, p)
+        mixing = mpcalc.mixing_ratio_from_relative_humidity(p, t, r_h)
         data_nssl.loc[:, 'Thetav'] = (mpcalc.virtual_potential_temperature(p, t, mixing)).m
 
-        td = mpcalc.dewpoint_from_relative_humidity(temperature= t, rh=r_h)
+        td = mpcalc.dewpoint_from_relative_humidity(t, r_h)
         data_nssl.loc[:, 'Thetae'] = (mpcalc.equivalent_potential_temperature(p, t, td)).m
 
         Spd, dire = data_nssl['spd'].values * units('m/s') , data_nssl['dir'].values * units('degrees')
         u, v = mpcalc.wind_components(Spd, dire)
         data_nssl.loc[:, 'U'], data_nssl.loc[:, 'V'] = u.to('knot'), v.to('knot')
 
-        #  q_list = ['qc1','qc2','qc3','qc4']
-        q_list = config.NSSL_qcflags
+        if config.overlays['Colorline']['Pert'] == True:
+            for var in config.Line_Plot: 
+                var_pert_data=[]
+                for i,j in data_nssl.iterrows():
+                    base_state =get_timeave_previous(data_nssl, var, j['datetime'], 60)
+                    pert_data= j[var] - base_state 
+                    var_pert_data.append(pert_data)
+                data_nssl.loc[:, var+str('_pert')]=var_pert_data    
+        if config.lineplt_control['Deriv'] == True:
+            for var in config.Line_Plot: 
+                if config.overlays['Colorline']['Pert'] == True:
+                    var= var+str('_pert')
+                der_data=[]
+                for i,j in data_nssl.iterrows():
+                    p_sub=get_timearround(data_nssl, var, j['datetime'], 30)
+                    slope=calc_slope(p_sub[var])
+                    der_data.append(slope)
+                data_nssl.loc[:, var+str('_der')]=der_data    
+
+
+        q_list = config.overlays['NSSL']['qcflags'] 
         data_nssl.loc[:, 'all_qc_flags'] = data_nssl[q_list].sum(axis=1)
         #  data_nssl.set_index('datetime', inplace=True, drop=False)
 
@@ -451,7 +520,7 @@ def read_Stationary(config, day, pname, d_testing=False):
     if d_testing == True:
         try:
             #if there is no files this will will cause the try statement to fail
-            p_test = stnry_df.iloc[0]
+            stnry_df.iloc[0]
             return True
         except: return False
     # + + + + + + + + + + + + ++ + +
@@ -470,6 +539,7 @@ def read_Radar(config, day, pname, swp=None, rfile= None, d_testing=False, known
             index_at_start = rfile.sweep_start_ray_index['data'][swp[0]] #Find the beginning loc of given sweep in data array
             #det the scantime
             MR_time = cftime.num2pydate(rfile.time['data'][index_at_start], rfile.time['units'])
+            radar_fields_prep(config, rfile, 'WSR', swp)
 
         else:# if the main plotting radar is a KA or NOXP radar
             #apply mask and make texture, gradient etc feilds
@@ -563,7 +633,7 @@ def read_Radar(config, day, pname, swp=None, rfile= None, d_testing=False, known
             # Test Data availability
             if d_testing == True:
                 try: #  if no sites in domain this will cause a failure
-                    p_test = WSR_df.iloc[0]
+                    WSR_df.iloc[0]
                     return True
                 except:return False
             else:  return WSR_df, 'WSR'
@@ -605,7 +675,7 @@ class Platform:
             return False
 
     # * * *
-    def getLocation(pform, offsetkm, scan_time=None ,given_bearing= False):
+    def getLocation(pform, offsetkm, scan_time=None ,given_bearing= False, pnt_x=None, pnt_y=None):
         ''' This definition has two functions:
                 1) If no bearing is specified it will return a namedtuple containing the max/min lat/lons
                     to form a square surrounding the point indicated by lat1,lon1 by x km.
@@ -624,7 +694,10 @@ class Platform:
 
         # + + + + + + + + + + + + ++ + +
         #  determine starting point lat and lon
-        if isinstance(pform, Radar):
+        if pform =='ClickPoint':
+            start_lat, start_lon = pnt_y, pnt_x
+        
+        elif isinstance(pform, Radar):
             start_lat, start_lon = pform.lat, pform.lon
 
         else:
@@ -713,10 +786,10 @@ class Platform:
         #Determine what to return
         if Single_Point == True: df_sub= 'filler'
         #Test to ensure that there is valid data in the subrange
-        #  (aka the pform was dep at the time of Rscan and was within the domaain of the plot)
+        #  (aka the pform was dep at the time of Rscan and was within the domain of the plot)
         else:
             try:
-                p_test = df_sub.iloc[0]
+                df_sub.iloc[0]
                 p_deploy = True
             except:
                 p_deploy = False
@@ -749,7 +822,10 @@ class Torus_Insitu(Platform):
                 self.Thetae_ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df['Thetae'].values) #add masked dataset to the object
                 self.Thetav_ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df['Thetav'].values) #add masked dataset to the object
                 self.tfast_ts_mask_df = np.ma.masked_where(self.df['qc3'].values > 0, self.df['tfast'].values) #add masked dataset to the object
-                self.Min, self.Max = mask_allqc_df.min(), mask_allqc_df.max()#use the masked dataset to find max and min of var
+                if len(mask_allqc_df) == 0: 
+                    self.Min, self.Max = np.nan, np.nan
+                else:
+                    self.Min, self.Max = mask_allqc_df.min(), mask_allqc_df.max()#use the masked dataset to find max and min of var
             elif mask == False:
                 self.Min, self.Max = self.df.min()[var], self.df.max()[var] #use the orig dataset to find max/min
 
