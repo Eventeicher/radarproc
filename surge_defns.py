@@ -235,12 +235,13 @@ def meso_radarbins(self, config, Data, sweep):
             print('7777777')
             square_bounds=point_entry['Ring'].bounds
 
-            xmasked=np.ma.masked_where((gate_x<square_bounds[0]) & (gate_x>square_bounds[2]), gate_x)
+            xmasked=np.ma.masked_where((gate_x>square_bounds[0]) & (gate_x<square_bounds[2]), gate_x)
             xmask=np.ma.getmask(xmasked)
             ymasked=np.ma.masked_where((gate_y>square_bounds[1]) & (gate_y<square_bounds[3]), gate_y)
             ymask=np.ma.getmask(ymasked)
             ymask=~ymask
-            mask= np.where(xmask== False, ymask, True)
+            mask= np.where(xmask== True, ymask, False) 
+            #  mask= np.where((xmask== False) & (ymask==False), True, False)
             #  mask=np.ma.mask_or(xmask, ymask)
             r_mom_ofintrest_data=Data['P_Radar'].rfile.fields[config.lineplt_control['H']['var']]['data']
             sweep_startidx = np.int64(Data['P_Radar'].rfile.sweep_start_ray_index['data'][sweep])
