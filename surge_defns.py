@@ -47,21 +47,26 @@ def clicker_defn(PLT, AXES):
     #  plt.waitforbuttonpress()
     return pts
 
-def make_surge_csv(config, Data, pts, surge_name, tilt, filename, Does_csv_exist):
+def make_csv(config, Data, pts, surge_name, tilt, filename, Type, Does_csv_exist):
+    if Type == 'Surge':
+        ID_name = 'Surge_ID'
+    elif Type == 'Meso':
+        ID_name = 'Meso_ID'
+
     sweep = Data['P_Radar'].swp
     if config.Radar_Plot_Type == 'WSR_Plotting':
         sweep= sweep[1]
     gate_lat, gate_lon, _ = Data['P_Radar'].rfile.get_gate_lat_lon_alt(sweep)
     gate_x, gate_y, _ = Data['P_Radar'].rfile.get_gate_x_y_z(sweep)
+
     if Does_csv_exist == False: 
         # making csv file if it does not exist 
         with open(filename, 'w') as csvfile: 
             # field names 
-            fields = ['RName', 'Tilt', 'Scan_time','Surge_ID', 'point_x', 'point_y', 'point_lat', 'point_lon'] 
+            fields = ['RName', 'Tilt', 'Scan_time', ID_name, 'point_x', 'point_y', 'point_lat', 'point_lon'] 
             
             # creating a csv writer object 
             csvwriter = csv.writer(csvfile) 
-                
             # writing the fields 
             csvwriter.writerow(fields) 
     ###
@@ -76,38 +81,6 @@ def make_surge_csv(config, Data, pts, surge_name, tilt, filename, Does_csv_exist
             p_lat, p_lon = gate_lat[cray_ind, crange_ind], gate_lon[cray_ind, crange_ind]
             rows= [[Data['P_Radar'].name, tilt, Data['P_Radar'].Scan_time, surge_name, point[0],point[1], p_lat, p_lon]]
             csvwriter.writerows(rows)
-
-def make_meso_csv(config, Data, pts, meso_name, tilt, filename, Does_csv_exist):
-    sweep = Data['P_Radar'].swp
-    if config.Radar_Plot_Type == 'WSR_Plotting':
-        sweep= sweep[1]
-
-    gate_lat, gate_lon, _ = Data['P_Radar'].rfile.get_gate_lat_lon_alt(sweep)
-    gate_x, gate_y, _ = Data['P_Radar'].rfile.get_gate_x_y_z(sweep)
-    if Does_csv_exist == False: 
-        # making csv file if it does not exist 
-        with open(filename, 'w') as csvfile: 
-            # field names 
-            fields = ['RName', 'Tilt', 'Scan_time','Meso_ID', 'point_x', 'point_y', 'point_lat', 'point_lon'] 
-            
-            # creating a csv writer object 
-            csvwriter = csv.writer(csvfile) 
-                
-            # writing the fields 
-            csvwriter.writerow(fields) 
-    ###
-    # Now append the new row of data points
-    with open(filename, 'a') as csvfile: 
-        # writing the data rows 
-        csvwriter = csv.writer(csvfile) 
-        for i in np.arange(0, len(pts)):
-            point=pts[i]
-
-            cray_ind, crange_ind, _ = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=point[0], given_y_lat=point[1])
-            p_lat, p_lon = gate_lat[cray_ind, crange_ind], gate_lon[cray_ind, crange_ind]
-            rows= [[Data['P_Radar'].name, tilt, Data['P_Radar'].Scan_time, meso_name, point[0],point[1], p_lat, p_lon]]
-            csvwriter.writerows(rows)
-
 
 def return_pnt_index(Data, gate_x_lon, gate_y_lat, sweep, Buffer_dist=None, surge_pd=None, given_x_lon=None, given_y_lat=None, point=None, XY_or_LatLon='xy'):
     def find_index_of_nearest_xy(y_array, x_array, y_point, x_point):
@@ -132,43 +105,46 @@ def return_pnt_index(Data, gate_x_lon, gate_y_lat, sweep, Buffer_dist=None, surg
     #  pnt=points.split("), (")
     return ray_ind, range_ind, extra_bins
 
-
-
-def surge_csv_reader(config, Data, day, tilt):        
-    def subset_surge_df(surge_df, Data, ID, tilt):
+def csv_reader(config, Data, day, tilt, Type):
+    def subset_df(df, Data, ID, tilt, Type):
         Crossing_Radars = config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['allow']
-        def no_valid_surge_checker(df):
-            if len(df) == 0: valid_surges= False
-            else:  valid_surges = True
-            return valid_surges
+        def no_valid_object_checker(df):
+            if len(df) == 0: valid_object= False
+            else:  valid_object= True
+            return valid_object
         def nearest(items, pivot):
             return min(items, key=lambda x: abs(x - pivot))
         # # # # 
-        surge_ID_sub = surge_df[surge_df['Surge_ID'] == ID]
-        remaining_surges = no_valid_surge_checker(surge_ID_sub)
+        if Type == 'Surge':  object_ID = Type+'_ID'
+        elif Type == 'Meso':  object_ID = Type+'_ID'
+        ID_sub = df[df[object_ID] == ID]
+        remaining_objects= no_valid_object_checker(ID_sub)
 
-        if remaining_surges == True:
+        if remaining_objects == True:
             if Crossing_Radars == False: valid_time = str(Data['P_Radar'].Scan_time)
             else:
-                times_list = [dt.datetime.strptime(time, '%Y-%m-%d %H:%M:%S') for time in surge_df.Scan_time.unique()]
+                try:
+                    times_list = [dt.datetime.strptime(time, '%Y-%m-%d %H:%M:%S') for time in df.Scan_time.unique()]
+                except:
+                    times_list = [dt.datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f') for time in df.Scan_time.unique()]
                 closest_time=nearest(times_list, Data['P_Radar'].Scan_time)
                 max_time_range = Data['P_Radar'].Scan_time + dt.timedelta(minutes=config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['within_time'])
                 min_time_range = Data['P_Radar'].Scan_time - dt.timedelta(minutes=config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['within_time'])
                 if time_in_range(min_time_range, max_time_range, closest_time): valid_time = str(closest_time) 
                 else: valid_time = None
 
-            time_sub=surge_ID_sub[surge_ID_sub['Scan_time'] == valid_time]
-            remaining_surges = no_valid_surge_checker(time_sub)
-
-        if remaining_surges == True:
+            time_sub=ID_sub[ID_sub['Scan_time'] == valid_time]
+            remaining_objects= no_valid_object_checker(time_sub)
+        
+        if remaining_objects == True:
             if Crossing_Radars == False: valid_radar = [Data['P_Radar'].name]
             else: 
                 valid_radar = time_sub.RName.unique()
 
             radar_sub=time_sub[time_sub['RName'].isin(valid_radar)]
-            remaining_surges = no_valid_surge_checker(radar_sub)
+            remaining_objects= no_valid_object_checker(radar_sub)
 
-        if remaining_surges == True:
+        if remaining_objects == True:
             if Crossing_Radars == False: valid_tilt = tilt 
             else: 
                 tilt_allowance = config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['tilt_allowance']
@@ -181,107 +157,38 @@ def surge_csv_reader(config, Data, day, tilt):
                     else:  valid_tilt = None
 
             tilt_sub=radar_sub[radar_sub['Tilt'] == valid_tilt]
-            remaining_surges = no_valid_surge_checker(tilt_sub)
+            remaining_objects= no_valid_object_checker(tilt_sub)
         
-        if remaining_surges == True: final_sub = tilt_sub.reset_index()
+        if remaining_objects == True: final_sub = tilt_sub.reset_index()
         else: final_sub = None
         return final_sub
-
-    # ****
-    try: 
-        surge_df=pd.read_csv(config.g_TORUS_directory+day+'/data/'+day+'_surge_pnts.csv')
-    except: 
-        print('did not find file: '+ config.g_TORUS_directory+day+'/data/'+day+'_surge_pnts.csv' )
-        print('NO SURGES READ IN FOR THIS DAY')
-        num_of_surges = 0
-        return num_of_surges, None , None
-
-    surges=surge_df.Surge_ID.unique()
-
-    num_of_surges, surge_ids, surges_attime_df = 0, [], pd.DataFrame() 
-    for j in surges: 
-        single_surge_df=subset_surge_df(surge_df, Data, j, tilt)
-        if isinstance(single_surge_df, pd.DataFrame):
-            surges_attime_df=surges_attime_df.append(single_surge_df)
-            num_of_surges=num_of_surges+1
-            surge_ids.append(j)
-    return num_of_surges, surge_ids, surges_attime_df  
-
-def meso_csv_reader(config, Data, day, tilt):        
-    def subset_meso_df(meso_df, Data, ID, tilt):
-        Crossing_Radars = config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['allow']
-        def no_valid_meso_checker(df):
-            if len(df) == 0: valid_mesos= False
-            else:  valid_mesos= True
-            return valid_mesos
-        def nearest(items, pivot):
-            return min(items, key=lambda x: abs(x - pivot))
-        # # # # 
-        meso_ID_sub = meso_df[meso_df['Meso_ID'] == ID]
-        remaining_mesos = no_valid_meso_checker(meso_ID_sub)
-
-        if remaining_mesos == True:
-            if Crossing_Radars == False: valid_time = str(Data['P_Radar'].Scan_time)
-            else:
-                print(meso_ID_sub)
-                times_list = [dt.datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f') for time in meso_df.Scan_time.unique()]
-                closest_time=nearest(times_list, Data['P_Radar'].Scan_time)
-                max_time_range = Data['P_Radar'].Scan_time + dt.timedelta(minutes=config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['within_time'])
-                min_time_range = Data['P_Radar'].Scan_time - dt.timedelta(minutes=config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['within_time'])
-                if time_in_range(min_time_range, max_time_range, closest_time): valid_time = str(closest_time) 
-                else: valid_time = None
-
-            time_sub=meso_ID_sub[meso_ID_sub['Scan_time'] == valid_time]
-            remaining_mesos= no_valid_meso_checker(time_sub)
-
-        if remaining_mesos== True:
-            if Crossing_Radars == False: valid_radar = [Data['P_Radar'].name]
-            else: 
-                valid_radar = time_sub.RName.unique()
-
-            radar_sub=time_sub[time_sub['RName'].isin(valid_radar)]
-            remaining_mesos= no_valid_meso_checker(radar_sub)
-
-        if remaining_mesos== True:
-            if Crossing_Radars == False: valid_tilt = tilt 
-            else: 
-                tilt_allowance = config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['tilt_allowance']
-                if tilt_allowance == None: valid_tilt= tilt 
-                else: 
-                    possible_tilts = radar_sub.Tilt.unique()
-                    closest_tilt = nearest(possible_tilts, tilt)
-                    max_tilt, min_tilt = (tilt + tilt_allowance), (tilt - tilt_allowance)
-                    if (closest_tilt <= max_tilt) and (closest_tilt >= min_tilt): valid_tilt = closest_tilt
-                    else:  valid_tilt = None
-
-            tilt_sub=radar_sub[radar_sub['Tilt'] == valid_tilt]
-            remaining_mesos= no_valid_meso_checker(tilt_sub)
         
-        if remaining_mesos== True: final_sub = tilt_sub.reset_index()
-        else: final_sub = None
-        return final_sub
-
     # ****
     try: 
-        meso_df=pd.read_csv(config.g_TORUS_directory+day+'/data/'+day+'_meso_pnts.csv')
+        if Type == 'Surge': object_type = 'surge'
+        elif Type == 'Meso': object_type = 'meso'
+        df=pd.read_csv(config.g_TORUS_directory+day+'/data/'+day+'_'+object_type+'_pnts.csv')
     except: 
-        print('did not find file: '+ config.g_TORUS_directory+day+'/data/'+day+'_meso_pnts.csv' )
-        print('NO MESOS READ IN FOR THIS DAY')
-        num_of_mesos= 0
-        return num_of_mesos, None , None
+        print('did not find file: '+ config.g_TORUS_directory+day+'/data/'+day+'_'+object_type+'_pnts.csv' )
+        print('NO '+ Type+ ' READ IN FOR THIS DAY')
+        num_of_objects= 0
+        return num_of_objects, None , None
 
-    mesos=meso_df.Meso_ID.unique()
+    if Type == 'Surge': objects=df.Surge_ID.unique()
+    elif Type == 'Meso': objects=df.Meso_ID.unique()
 
-    num_of_mesos, meso_ids, mesos_attime_df = 0, [], pd.DataFrame() 
-    for j in mesos: 
-        single_meso_df=subset_meso_df(meso_df, Data, j, tilt)
-        if isinstance(single_meso_df, pd.DataFrame):
-            mesos_attime_df=mesos_attime_df.append(single_meso_df)
-            num_of_mesos=num_of_mesos+1
-            meso_ids.append(j)
-    return num_of_mesos, meso_ids, mesos_attime_df  
+    num_of_objects, object_ids, objects_attime_df = 0, [], pd.DataFrame() 
+    for j in objects: 
+        single_object_df=subset_df(df, Data, j, tilt, Type)
+        if isinstance(single_object_df, pd.DataFrame):
+            objects_attime_df=objects_attime_df.append(single_object_df)
+            num_of_objects=num_of_objects+1
+            object_ids.append(j)
+    return num_of_objects, object_ids, objects_attime_df  
 
-def meso(self, config, Data, sweep):
+
+
+def meso_radarbins(self, config, Data, sweep):
     if config.Radar_Plot_Type == 'WSR_Plotting':
         sweep=sweep[1]
     gate_x, gate_y, _ = Data['P_Radar'].rfile.get_gate_x_y_z(sweep)
@@ -324,6 +231,49 @@ def meso(self, config, Data, sweep):
                            'Point_object': Point(xpos, ypos),
                            'Ring':Point(xpos, ypos).buffer(4023)
                            }
+
+            print('7777777')
+            square_bounds=point_entry['Ring'].bounds
+
+            xmasked=np.ma.masked_where((gate_x<square_bounds[0]) & (gate_x>square_bounds[2]), gate_x)
+            xmask=np.ma.getmask(xmasked)
+            ymasked=np.ma.masked_where((gate_y>square_bounds[1]) & (gate_y<square_bounds[3]), gate_y)
+            ymask=np.ma.getmask(ymasked)
+            ymask=~ymask
+            mask= np.where(xmask== False, ymask, True)
+            #  mask=np.ma.mask_or(xmask, ymask)
+            r_mom_ofintrest_data=Data['P_Radar'].rfile.fields[config.lineplt_control['H']['var']]['data']
+            sweep_startidx = np.int64(Data['P_Radar'].rfile.sweep_start_ray_index['data'][sweep])
+            sweep_endidx = np.int64(Data['P_Radar'].rfile.sweep_end_ray_index['data'][sweep])
+            subset_orig_rmom=r_mom_ofintrest_data[sweep_startidx:sweep_endidx+1]
+            #  m= np.ma.masked_where((xmask== False) & (ymask == False), subset_orig_rmom)
+            #  mask=np.ma.getmask(m)
+            #  masked_subset_orig_rmom = np.ma.masked_array(subset_orig_rmom, mask=xmask)
+            #  masked_subset_orig_rmom= np.ma.masked_where(xmask== True, subset_orig_rmom)
+            masked_subset_orig_rmom= np.where(mask== False, subset_orig_rmom, np.nan)
+            #  xmasked_subset_orig_rmom= np.where(xmask== False, subset_orig_rmom, np.nan)
+            #  masked_subset_orig_rmom= np.where(ymask== False, xmasked_subset_orig_rmom, np.nan)
+            #  masked_subset_orig_rmom= np.where(ymask== False & xmask==False, subset_orig_rmom, np.nan)
+
+
+            print(subset_orig_rmom.mean)
+            print(masked_subset_orig_rmom.mean)
+            print(np.shape(r_mom_ofintrest_data))
+            print(np.shape(subset_orig_rmom))
+            print('12121212121212')
+            print(type(r_mom_ofintrest_data))
+            print(type(subset_orig_rmom))
+            print(subset_orig_rmom)
+            print('1313131313')
+            print(masked_subset_orig_rmom)
+
+            Meso_subset_rmom= np.zeros(r_mom_ofintrest_data.shape)
+            #  Surge_subset_rmom= Surge_Area_Rdata
+            Meso_subset_rmom[sweep_startidx:sweep_endidx+1] = masked_subset_orig_rmom 
+
+            #  gatefilter = pyart.filters.GateFilter(rfile)
+            Data['P_Radar'].rfile.add_field('Meso_test', {'data': Meso_subset_rmom}, replace_existing=True) 
+            #  gatefilter.include_not_masked('Meso_test')
 
             Meso_Holder.update({Meso_ID:{'Center_pnt': point_entry}})  
     #  pprint.pprint(Meso_Holder)
@@ -501,6 +451,7 @@ def surge_radarbins(self, config, Data, sweep):
                         else:
                             #  Surge_Area_Rdata[c_ray, int(c_rangebin)] = 0
                             Surge_Area_Rdata[c_ray, int(c_rangebin)] = np.nan
+
             else:
                 Surge_Area_Rdata[c_ray, :] = np.nan
 
@@ -518,6 +469,7 @@ def surge_radarbins(self, config, Data, sweep):
                 else:
                     ray_selection[c_ray, :] = rayangle_90diff
                 rayangle_tosurge.append(rayangle_90diff)
+                
             else: 
                 ray_selection[c_ray, :] = np.nan 
         #  Surge_Area_Rdata = np.asarray(Surge_Area_Rdata)
@@ -572,74 +524,154 @@ def surge_radarbins(self, config, Data, sweep):
     #  result_angle = math.acos(Fraction)
     #  return result_angle
 
-##################################################
-# Define a triangle by clicking three points
 '''
-plt.clf()
-plt.setp(plt.gca(), autoscale_on=False)
+def surge_csv_reader(config, Data, day, tilt):        
+    def subset_surge_df(surge_df, Data, ID, tilt):
+        Crossing_Radars = config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['allow']
+        def no_valid_surge_checker(df):
+            if len(df) == 0: valid_surges= False
+            else:  valid_surges = True
+            return valid_surges
+        def nearest(items, pivot):
+            return min(items, key=lambda x: abs(x - pivot))
+        # # # # 
+        surge_ID_sub = surge_df[surge_df['Surge_ID'] == ID]
+        remaining_surges = no_valid_surge_checker(surge_ID_sub)
 
-tellme('You will define a triangle, click to begin')
-plt.waitforbuttonpress()
+        if remaining_surges == True:
+            if Crossing_Radars == False: valid_time = str(Data['P_Radar'].Scan_time)
+            else:
+                times_list = [dt.datetime.strptime(time, '%Y-%m-%d %H:%M:%S') for time in surge_df.Scan_time.unique()]
+                closest_time=nearest(times_list, Data['P_Radar'].Scan_time)
+                max_time_range = Data['P_Radar'].Scan_time + dt.timedelta(minutes=config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['within_time'])
+                min_time_range = Data['P_Radar'].Scan_time - dt.timedelta(minutes=config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['within_time'])
+                if time_in_range(min_time_range, max_time_range, closest_time): valid_time = str(closest_time) 
+                else: valid_time = None
 
-while True:
-    pts = []
-    while len(pts) < 3:
-        tellme('Select 3 corners with mouse')
-        pts = np.asarray(plt.ginput(3, timeout=-1))
-        if len(pts) < 3:
-            tellme('Too few points, starting over')
-            time.sleep(1)  # Wait a second
+            time_sub=surge_ID_sub[surge_ID_sub['Scan_time'] == valid_time]
+            remaining_surges = no_valid_surge_checker(time_sub)
 
-    ph = plt.fill(pts[:, 0], pts[:, 1], 'r', lw=2)
+        if remaining_surges == True:
+            if Crossing_Radars == False: valid_radar = [Data['P_Radar'].name]
+            else: 
+                valid_radar = time_sub.RName.unique()
 
-    tellme('Happy? Key click for yes, mouse click for no')
+            radar_sub=time_sub[time_sub['RName'].isin(valid_radar)]
+            remaining_surges = no_valid_surge_checker(radar_sub)
 
-    if plt.waitforbuttonpress():
-        break
+        if remaining_surges == True:
+            if Crossing_Radars == False: valid_tilt = tilt 
+            else: 
+                tilt_allowance = config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['tilt_allowance']
+                if tilt_allowance == None: valid_tilt= tilt 
+                else: 
+                    possible_tilts = radar_sub.Tilt.unique()
+                    closest_tilt = nearest(possible_tilts, tilt)
+                    max_tilt, min_tilt = (tilt + tilt_allowance), (tilt - tilt_allowance)
+                    if (closest_tilt <= max_tilt) and (closest_tilt >= min_tilt): valid_tilt = closest_tilt
+                    else:  valid_tilt = None
 
-    # Get rid of fill
-    for p in ph:
-        p.remove()
+            tilt_sub=radar_sub[radar_sub['Tilt'] == valid_tilt]
+            remaining_surges = no_valid_surge_checker(tilt_sub)
+        
+        if remaining_surges == True: final_sub = tilt_sub.reset_index()
+        else: final_sub = None
+        return final_sub
+
+    # ****
+    try: 
+        surge_df=pd.read_csv(config.g_TORUS_directory+day+'/data/'+day+'_surge_pnts.csv')
+    except: 
+        print('did not find file: '+ config.g_TORUS_directory+day+'/data/'+day+'_surge_pnts.csv' )
+        print('NO SURGES READ IN FOR THIS DAY')
+        num_of_surges = 0
+        return num_of_surges, None , None
+
+    surges=surge_df.Surge_ID.unique()
+
+    num_of_surges, surge_ids, surges_attime_df = 0, [], pd.DataFrame() 
+    for j in surges: 
+        single_surge_df=subset_surge_df(surge_df, Data, j, tilt)
+        if isinstance(single_surge_df, pd.DataFrame):
+            surges_attime_df=surges_attime_df.append(single_surge_df)
+            num_of_surges=num_of_surges+1
+            surge_ids.append(j)
+    return num_of_surges, surge_ids, surges_attime_df  
 
 
-##################################################
-# Now contour according to distance from triangle
-# corners - just an example
+def meso_csv_reader(config, Data, day, tilt):        
+    def subset_meso_df(meso_df, Data, ID, tilt):
+        Crossing_Radars = config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['allow']
+        def no_valid_meso_checker(df):
+            if len(df) == 0: valid_mesos= False
+            else:  valid_mesos= True
+            return valid_mesos
+        def nearest(items, pivot):
+            return min(items, key=lambda x: abs(x - pivot))
+        # # # # 
+        meso_ID_sub = meso_df[meso_df['Meso_ID'] == ID]
+        remaining_mesos = no_valid_meso_checker(meso_ID_sub)
 
-# Define a nice function of distance from individual pts
-def f(x, y, pts):
-    z = np.zeros_like(x)
-    for p in pts:
-        z = z + 1/(np.sqrt((x - p[0])**2 + (y - p[1])**2))
-    return 1/z
+        if remaining_mesos == True:
+            if Crossing_Radars == False: valid_time = str(Data['P_Radar'].Scan_time)
+            else:
+                print(meso_ID_sub)
+                times_list = [dt.datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f') for time in meso_df.Scan_time.unique()]
+                closest_time=nearest(times_list, Data['P_Radar'].Scan_time)
+                max_time_range = Data['P_Radar'].Scan_time + dt.timedelta(minutes=config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['within_time'])
+                min_time_range = Data['P_Radar'].Scan_time - dt.timedelta(minutes=config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['within_time'])
+                if time_in_range(min_time_range, max_time_range, closest_time): valid_time = str(closest_time) 
+                else: valid_time = None
 
+            time_sub=meso_ID_sub[meso_ID_sub['Scan_time'] == valid_time]
+            remaining_mesos= no_valid_meso_checker(time_sub)
 
-X, Y = np.meshgrid(np.linspace(-1, 1, 51), np.linspace(-1, 1, 51))
-Z = f(X, Y, pts)
+        if remaining_mesos== True:
+            if Crossing_Radars == False: valid_radar = [Data['P_Radar'].name]
+            else: 
+                valid_radar = time_sub.RName.unique()
 
-CS = plt.contour(X, Y, Z, 20)
+            radar_sub=time_sub[time_sub['RName'].isin(valid_radar)]
+            remaining_mesos= no_valid_meso_checker(radar_sub)
 
-tellme('Use mouse to select contour label locations, middle button to finish')
-CL = plt.clabel(CS, manual=True)
+        if remaining_mesos== True:
+            if Crossing_Radars == False: valid_tilt = tilt 
+            else: 
+                tilt_allowance = config.Surge_controls['Surge_IDing']['Existing_pnts']['cross_rpforms']['tilt_allowance']
+                if tilt_allowance == None: valid_tilt= tilt 
+                else: 
+                    possible_tilts = radar_sub.Tilt.unique()
+                    closest_tilt = nearest(possible_tilts, tilt)
+                    max_tilt, min_tilt = (tilt + tilt_allowance), (tilt - tilt_allowance)
+                    if (closest_tilt <= max_tilt) and (closest_tilt >= min_tilt): valid_tilt = closest_tilt
+                    else:  valid_tilt = None
 
-##################################################
-# Now do a zoom
-tellme('Now do a nested zoom, click to begin')
-plt.waitforbuttonpress()
+            tilt_sub=radar_sub[radar_sub['Tilt'] == valid_tilt]
+            remaining_mesos= no_valid_meso_checker(tilt_sub)
+        
+        if remaining_mesos== True: final_sub = tilt_sub.reset_index()
+        else: final_sub = None
+        return final_sub
 
-while True:
-    tellme('Select two corners of zoom, middle mouse button to finish')
-    pts = plt.ginput(2, timeout=-1)
-    if len(pts) < 2:
-        break
-    (x0, y0), (x1, y1) = pts
-    xmin, xmax = sorted([x0, x1])
-    ymin, ymax = sorted([y0, y1])
-    plt.xlim(xmin, xmax)
-    plt.ylim(ymin, ymax)
+    # ****
+    try: 
+        meso_df=pd.read_csv(config.g_TORUS_directory+day+'/data/'+day+'_meso_pnts.csv')
+    except: 
+        print('did not find file: '+ config.g_TORUS_directory+day+'/data/'+day+'_meso_pnts.csv' )
+        print('NO MESOS READ IN FOR THIS DAY')
+        num_of_mesos= 0
+        return num_of_mesos, None , None
 
-tellme('All Done!')
-plt.show()
+    mesos=meso_df.Meso_ID.unique()
 
+    num_of_mesos, meso_ids, mesos_attime_df = 0, [], pd.DataFrame() 
+    for j in mesos: 
+        single_meso_df=subset_meso_df(meso_df, Data, j, tilt)
+        if isinstance(single_meso_df, pd.DataFrame):
+            mesos_attime_df=mesos_attime_df.append(single_meso_df)
+            num_of_mesos=num_of_mesos+1
+            meso_ids.append(j)
+    return num_of_mesos, meso_ids, mesos_attime_df  
 '''
+
 

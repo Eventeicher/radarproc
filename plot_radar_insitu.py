@@ -72,7 +72,7 @@ import copy
 import singledop
 import pynimbus as pyn 
 import tracemalloc
-import shapefile
+#import shapefile
 import math 
 from shapely.geometry import LineString, Point, Polygon
 import seaborn as sns
@@ -101,7 +101,7 @@ if plot_config.overlays['GEO']['OX'] == True: import osmnx as ox
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
 from read_pforms import error_printing, timer, time_in_range, time_range
 from radar_defns import read_from_radar_file, radar_fields_prep, det_nearest_WSR, sweep_index, get_WSR_from_AWS, info_radar_files
-from surge_defns import clicker_defn, make_surge_csv, make_meso_csv, surge_csv_reader, meso_csv_reader, surge_radarbins, meso
+from surge_defns import clicker_defn, make_csv, csv_reader, surge_radarbins, meso_radarbins
 
 totalcompT_start = time.time()
 ################################################################################################
@@ -254,18 +254,19 @@ class Master_Plt:
 
         #######
         if config.Surge_controls['Surge_IDing']['Existing_pnts']['Read_in_surges'] == True: 
-            self.num_of_surges, self.surge_ids, self.valid_surges = surge_csv_reader(config, Data, day, tilt)
+            self.num_of_surges, self.surge_ids, self.valid_surges = csv_reader(config, Data, day, tilt, 'Surge')
             if self.num_of_surges !=0:
                 self.Surges, self.gate_x, self.gate_y, self.gate_lon, self.gate_lat = surge_radarbins(self, config, Data, Data['P_Radar'].swp)  
         else: 
             self.num_of_surges=0
 
         if config.Surge_controls['Surge_IDing']['Existing_pnts']['Read_in_mesos'] == True: 
-            self.num_of_mesos, self.meso_ids, self.valid_mesos = meso_csv_reader(config, Data, day, tilt)
+            self.num_of_mesos, self.meso_ids, self.valid_mesos = csv_reader(config, Data, day, tilt, 'Meso')
             if self.num_of_mesos!=0:
-                self.Mesos, self.gate_x, self.gate_y, self.gate_lon, self.gate_lat = meso(self, config, Data, Data['P_Radar'].swp)
+                self.Mesos, self.gate_x, self.gate_y, self.gate_lon, self.gate_lat = meso_radarbins(self, config, Data, Data['P_Radar'].swp)
         else: 
             self.num_of_mesos=0
+            self.meso_ids=None
 
         #######
         #both ts and r
@@ -436,10 +437,11 @@ class Master_Plt:
         '''
         if self.config.print_long == True: print('~~~~~~~~~~~made it into radar_subplots~~~~~~~~~~~~~~')
 
-        if mom != 'Meso':
-            sweep, rfile, Rname, Scan_time = P_Radar.swp, P_Radar.rfile, P_Radar.name, P_Radar.Scan_time
-        else: 
+        if isinstance(P_Radar, Radar):
+            sweep, rfile, Rname, Scan_time, DISPLAY = P_Radar.swp, P_Radar.rfile, P_Radar.name, P_Radar.Scan_time, self.display
+        else:
             sweep, rfile, Rname, Scan_time = P_Radar['swp'], P_Radar['rfile'], P_Radar['name'], P_Radar['Scan_time']
+            DISPLAY= pyart.graph.RadarMapDisplay(rfile)
 
         if Rname == 'WSR88D':
            if mom in ['refl','refl_unmasked', 'refl_despeck']:
@@ -621,6 +623,9 @@ class Master_Plt:
         elif mom == 'Meso':
             c_label, c_scale = 'Azi Shear 'r' (s$^{-1}$)'+' '+Rname+' '+str(Scan_time), 'RdBu'
             field, vminb, vmaxb= 'Meso_azi', -10, 10 
+        elif mom == 'Meso_test':
+            c_label, c_scale = 'Azi Shear 'r' (s$^{-1}$)'+' '+Rname+' '+str(Scan_time), 'RdBu'
+            field, vminb, vmaxb= 'Meso_test', -10, 10 
 
         elif mom == 'Ray_angle':
             vminb, vmaxb=  -90., 90
@@ -645,7 +650,7 @@ class Master_Plt:
         ## Plot the radar
         #################
         #  ax_n.set_title(p_title, y=-.067, fontdict=self.Radar_title_font)
-        self.display.plot_ppi_map(field, sweep, ax=ax_n, cmap=colormap, vmin=vminb, vmax=vmaxb,
+        DISPLAY.plot_ppi_map(field, sweep, ax=ax_n, cmap=colormap, vmin=vminb, vmax=vmaxb,
                                   width=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000,
                                   height=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000,
                                   title_flag=False, colorbar_flag=False, embelish=False)
@@ -872,6 +877,10 @@ class Master_Plt:
                 lat, lon =lsr_reports.points.lat_lon_to_plot()
                 ax_n.scatter(lon, lat, color=hazard_colors[hazard], transform=self.Proj)
         
+        if self.config.overlays['Tracks']['Marker_test']== True:
+            track_type =['pnts', 'polys', 'paths'] 
+            track_data = self.config.g_TORUS_directory+day+'/data/reports/extractDamage/nws_dat_damage_'+ track_type
+
         if self.config.overlays['Tracks']['Marker']== True:
             # to Download Data -> https://apps.dat.noaa.gov/StormDamage/DamageViewer/
             # enter dates, and zoom into wanted tracks
@@ -1064,7 +1073,7 @@ class Master_Plt:
                         TSleg_entry = Line2D([], [], label=p.leg_str, linewidth=12, color=p.l_color)
                         TSleg_elements.append(TSleg_entry)
                 ## Set up XY axes tick locations and Labels
-                if len(self.config.r_mom) != 0: scan= P_Radar.Scan_time
+                if len(self.config.r_mom) != 0: scan= Data['P_Radar'].Scan_time
                 else: scan= None 
                 self.tick_grid_settings(ax=ax_n, ts=ts, scan_time=scan)
 
@@ -1110,9 +1119,9 @@ class Master_Plt:
             ## If makeing the timeseries in conjunction with radar subplots set up vertical lines that indicate the time of
             #  radar scan and the timerange ploted (via filled colorline) on the radar plots
             if len(self.config.r_mom) != 0:
-                ax_n.axvline(P_Radar.Scan_time, color='r', linewidth=4, alpha=.5)
-                ax_n.axvspan(P_Radar.Scan_time - timedelta(minutes=self.config.overlays['Colorline']['cline_extent']),
-                             P_Radar.Scan_time + timedelta(minutes=self.config.overlays['Colorline']['cline_extent']), 
+                ax_n.axvline(Data['P_Radar'].Scan_time, color='r', linewidth=4, alpha=.5)
+                ax_n.axvspan(Data['P_Radar'].Scan_time - timedelta(minutes=self.config.overlays['Colorline']['cline_extent']),
+                             Data['P_Radar'].Scan_time + timedelta(minutes=self.config.overlays['Colorline']['cline_extent']), 
                              facecolor='0.5', alpha=0.4)
 
             if deriv == True:
@@ -1154,10 +1163,11 @@ class Master_Plt:
             ax_n.text(-2.4, .28, 'Intercept: '+str(round(self.Surges[Surge_ID]['line']['intercept'])), transform=ax_n.transAxes, ha="left", va="top")
             ax_n.text(-2.4, .18, 'Max Vel: '+str(round(self.Surges[Surge_ID]['Surge_Subset']['Max']['value'])), transform=ax_n.transAxes, ha="left", va="top")
             ax_n.text(-2.4, .08, 'Min Vel: '+str(round(self.Surges[Surge_ID]['Surge_Subset']['Min']['value'])), transform=ax_n.transAxes, ha="left", va="top")
-            ax_n.text(-2.4, -.02, 'Dist to Meso Ring: '+str(round(self.Surges[Surge_ID]['Center_pnts']['line_object'].distance(self.Mesos[self.meso_ids[0]]['Center_pnt']['Ring']))),
-                      transform=ax_n.transAxes, ha="left", va="top")
-            ax_n.text(-2.4, -.12, 'Dist to Meso Point: '+str(round(self.Surges[Surge_ID]['Center_pnts']['line_object'].distance(self.Mesos[self.meso_ids[0]]['Center_pnt']['Point_object']))),
-                     transform=ax_n.transAxes, ha="left", va="top")
+            if self.num_of_mesos != 0:
+                ax_n.text(-2.4, -.02, 'Dist to Meso Ring: '+str(round(self.Surges[Surge_ID]['Center_pnts']['line_object'].distance(self.Mesos[self.meso_ids[0]]['Center_pnt']['Ring']))),
+                          transform=ax_n.transAxes, ha="left", va="top")
+                ax_n.text(-2.4, -.12, 'Dist to Meso Point: '+str(round(self.Surges[Surge_ID]['Center_pnts']['line_object'].distance(self.Mesos[self.meso_ids[0]]['Center_pnt']['Point_object']))),
+                         transform=ax_n.transAxes, ha="left", va="top")
             ### 
 
             bb = Bbox([[-2.5, -.2], [.9, .99]])
@@ -1218,8 +1228,34 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                         if mom != 'Meso':
                             mom = 'pass'
                     
+                    if mom != 'Meso':
+                        RADAR= Data['P_Radar']
+                    else: 
+                        if PLT.num_of_mesos != 0: 
+                            #  RNAME=PLT.valid_mesos['RName'][0]
+                            #  print(PLT.valid_mesos)
+                            RNAME=PLT.valid_mesos.RName.unique()[0]
+                            #  TIME=PLT.valid_mesos.loc[0,'Scan_time'][0]
+                            TIME=PLT.valid_mesos.Scan_time.unique()[0]
+                            #  TIME=TIME.loc[0]
+                            #  print(TIME)
+                            TIME=dt.datetime.strptime(TIME, '%Y-%m-%d %H:%M:%S.%f') 
+                            #  WSR_info = det_nearest_WSR(Data[config.radar_controls['Centered_Pform']].df)
+                             
+                            radar_file = get_WSR_from_AWS(config, day, (TIME-timedelta(minutes=1)), (TIME+timedelta(minutes=1)), 'KLBB')
+                            radar = read_from_radar_file(radar_file[0], True)
+                            radar = radar_fields_prep(config, radar, 'WSR', 1, moment='Meso_azi')
+
+                            #  print(radar.info(level='compact'))
+                            RADAR={'name':RNAME, 'Scan_time':TIME, 'rfile':radar, 'swp':[0,1]}
+                        else:
+                            mom = 'pass'
+
                     print('Radar plot: '+ mom +', Outer GridSpec Pos: [0, :], SubGridSpec Pos: ['+str(row)+', '+str(col)+']')
-                    
+                    print('MESO')
+                    print(PLT.valid_mesos)
+                    print('SURGES')
+                    print(PLT.valid_surges)
                     if mom != 'pass':
                         ax_n= PLT.fig.add_subplot(PLT.r_gs[row, col], projection= PLT.R_Proj)
                         if row==0 and col==0: leg = True
@@ -1228,26 +1264,13 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                         if col == PLT.R_cols-1:  thermo_cbar = True
                         else: thermo_cbar = False
 
-                        if mom != 'Meso':
-                            RADAR= Data['P_Radar']
-                        else: 
-                            RNAME=PLT.valid_mesos['RName'][0] 
-                            TIME=PLT.valid_mesos['Scan_time'][0] 
-                            TIME=dt.datetime.strptime(TIME, '%Y-%m-%d %H:%M:%S.%f') 
-                            #  WSR_info = det_nearest_WSR(Data[config.radar_controls['Centered_Pform']].df)
-                             
-                            radar_file = get_WSR_from_AWS(config, day, (TIME-timedelta(minutes=1)), (TIME+timedelta(minutes=1)), 'KLBB')
-                            radar = read_from_radar_file(radar_file[0], True)
-                            radar = radar_fields_prep(config, radar, 'WSR', 1)
-                            RADAR={'name':RNAME, 'Scan_time':TIME, 'rfile':radar, 'swp':[0,1]}
-
                         PLT.radar_subplots(RADAR, mom, day, ax_n, PLT.fig, TVARS, Data, leg, thermo_cbar, Surge_ID, PLT.meso_ids)
-                        if mom == 'zoom': 
-                            surge_id_index=surge_id_index+1
-                            if surge_id_index >= (len(PLT.surge_ids)): 
-                                mom_index =mom_index+1
-                        else:
-                            mom_index =mom_index+1
+
+                    if mom == 'zoom': 
+                        surge_id_index=surge_id_index+1
+                        if surge_id_index >= (len(PLT.surge_ids)):  mom_index =mom_index+1
+                    else:
+                        mom_index =mom_index+1
 
                         
 
@@ -1371,7 +1394,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                         break
                     else:
                         pts=clicker_defn(PLT, AXES)
-                        make_surge_csv(config, Data, pts, surge_name, tilt, csv_name, Does_csv_exist)
+                        make_csv(config, Data, pts, surge_name, tilt, csv_name, 'Surge', Does_csv_exist)
         elif config.Surge_controls['Surge_IDing']['Make_new_pnts']['Type'] == 'Meso':
             csv_name= config.g_TORUS_directory+day+'/data/'+day+'_meso_pnts.csv'
             Does_csv_exist=os.path.isfile(csv_name)
@@ -1389,7 +1412,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                         break
                     else:
                         pts=clicker_defn(PLT, AXES)
-                        make_meso_csv(config, Data, pts, meso_name, tilt, csv_name, Does_csv_exist)
+                        make_csv(config, Data, pts, meso_name, tilt, csv_name, 'Meso', Does_csv_exist)
     ## * * *     
     #This is the directory path for the output file
     outdir = config.g_TORUS_directory+day+'/plots/'+plt_dir
