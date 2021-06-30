@@ -161,7 +161,7 @@ class Thermo_Plt_Vars:
 #### * * * * * * * * * * * * * * * * * * * * * * * * * *
 ### set up Master_Plt class (along with subclasses R_Plt (radar plots), and TS_Plt (timeseries plot))
 class Master_Plt:
-    def __init__(self, Data, config, tilt=None):
+    def __init__(self, day, Data, config, tilt=None):
         self.Data = Data #(the data dict)
         self.config = config
 
@@ -253,17 +253,17 @@ class Master_Plt:
             
 
         #######
-        if config.Surge_controls['Surge_IDing']['Existing_pnts']['Read_in_surges'] == True: 
+        if config.Surge_controls['Feature_IDing']['Existing_pnts']['Read_in_surges'] == True: 
             self.num_of_surges, self.surge_ids, self.valid_surges = csv_reader(config, Data, day, tilt, 'Surge')
             if self.num_of_surges !=0:
                 self.Surges, self.gate_x, self.gate_y, self.gate_lon, self.gate_lat = surge_radarbins(self, config, Data, Data['P_Radar'].swp)  
         else: 
             self.num_of_surges=0
 
-        if config.Surge_controls['Surge_IDing']['Existing_pnts']['Read_in_mesos'] == True: 
+        if config.Surge_controls['Feature_IDing']['Existing_pnts']['Read_in_mesos'] == True: 
             self.num_of_mesos, self.meso_ids, self.valid_mesos = csv_reader(config, Data, day, tilt, 'Meso')
             if self.num_of_mesos!=0:
-                self.Mesos, self.gate_x, self.gate_y, self.gate_lon, self.gate_lat = meso_radarbins(self, config, Data, Data['P_Radar'].swp)
+                self.Mesos=meso_radarbins(self, day, config, Data, Data['P_Radar'].swp)
         else: 
             self.num_of_mesos=0
             self.meso_ids=None
@@ -632,6 +632,7 @@ class Master_Plt:
             field= mom 
             c_scale='twilight_shifted'
             c_label= 'Angle of Ray rel to Surge (deg)' 
+
         elif mom == 'Surge_subset_'+str(Surge_ID):
             vminb, vmaxb= -30., 30.
             field= mom 
@@ -644,8 +645,12 @@ class Master_Plt:
         #  print(Data['P_Radar'].rfile.info(level='compact'))
         ## set colors to highlight where the max/min are exceded
         colormap = copy.copy(matplotlib.cm.get_cmap(name=c_scale))
-        colormap.set_under('aqua')
-        colormap.set_over('magenta')
+        if mom == 'Ray_angle':
+            colormap.set_over('green')
+        else:
+            colormap.set_under('aqua')
+            colormap.set_over('magenta')
+
 
         ## Plot the radar
         #################
@@ -654,6 +659,16 @@ class Master_Plt:
                                   width=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000,
                                   height=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000,
                                   title_flag=False, colorbar_flag=False, embelish=False)
+        if mom == 'Ray_angle':
+            vminb, vmaxb= -30., 30.
+            c_scale2 = cmocean.cm.balance
+            colormap2 = copy.copy(matplotlib.cm.get_cmap(name=c_scale))
+            colormap2.set_under('aqua')
+            colormap2.set_over('magenta')
+            DISPLAY.plot_ppi_map('Surge_subset_'+str(Surge_ID), sweep, ax=ax_n, cmap=colormap2, vmin=vminb, vmax=vmaxb,
+                                      width=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000,
+                                      height=self.config.radar_controls['offsetkm'][self.config.Radar_Plot_Type]*2000,
+                                      title_flag=False, colorbar_flag=False, embelish=False, alpha=.3)
         ## Plot Contours  
         if self.config.overlays['Contour']['Lines']==True:
             unsmoothed_contourdata = rfile.get_field(sweep, self.config.overlays['Contour']['Var'])
@@ -712,7 +727,7 @@ class Master_Plt:
                               self.Surges[Surge_ID]['Center_pnts']['y'],
                               marker='.',mec='k',mfc='k',markersize=10, zorder=9, color='yellow',
                               path_effects=[PE.withStroke(linewidth=6, foreground='k')])#, c='red')
-                    for o_dist in self.config.Surge_controls['offset_dist']:
+                    for o_dist in self.config.Surge_controls['Surges']['offset_dist']:
                         for o_dir in ['Plus', 'Minus']:
                             if o_dir == 'Plus': Mark='^' 
                             elif o_dir == 'Minus': Mark='D' 
@@ -726,6 +741,8 @@ class Master_Plt:
                                     zorder=10, s=40, 
                                     path_effects=[PE.withStroke(linewidth=5, foreground='k')])#, c='red')
 
+                ax_n.scatter(self.Surges[Surge_ID]['Surge_Subset']['Max']['x'], self.Surges[Surge_ID]['Surge_Subset']['Max']['y'])
+                ax_n.scatter(self.Surges[Surge_ID]['Surge_Subset']['Min']['x'], self.Surges[Surge_ID]['Surge_Subset']['Min']['y'])
                 """Plot a line from slope and intercept"""
                 x_vals = np.array(ax_n.get_xlim())
                 y_vals = self.Surges[Surge_ID]['line']['intercept'] + self.Surges[Surge_ID]['line']['slope'] * x_vals
@@ -740,7 +757,8 @@ class Master_Plt:
                               self.Mesos[Meso]['Center_pnt']['y'],
                               marker='.',mec='k',mfc='k',markersize=2, zorder=9, color='yellow',
                               path_effects=[PE.withStroke(linewidth=6, foreground='k')])#, c='red')
-
+                    ax_n.scatter(self.Mesos['Max']['x'], self.Mesos['Max']['y'])
+                    ax_n.scatter(self.Mesos['Min']['x'], self.Mesos['Min']['y'])
 
                     plt.plot(*self.Mesos[Meso]['Center_pnt']['Ring'].exterior.xy)
             ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
@@ -1000,6 +1018,26 @@ class Master_Plt:
         elif ts == 'clicker':
             WL=19
             if testing ==False:
+                #  rmom=Data['P_Radar'].rfile.fields['Surge_subset_'+str(Surge_ID)]['data']
+                rmom=self.Surges[Surge_ID]['Surge_Subset']['R_data']
+                range_bins_alongray = Data['P_Radar'].rfile.range['data']
+                print(np.shape(range_bins_alongray))
+                print(np.shape(rmom))
+
+                for ray in self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays']:
+                    #  r_bin_sub.append(range_bins_alongray[ranges_ind[pnt]-Max_obins:ranges_ind[pnt]+Max_obins])
+                    data_subset = scipy.signal.savgol_filter(rmom[ray,:], window_length=WL, polyorder=2)#, deriv=1)#, axis=A)
+                    print(data_subset)
+                    print(np.shape(data_subset))
+                    plt.plot(range_bins_alongray, data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+                    #  plt.plot(self.Surges[Surge_ID]['Subsets']['Range_bins'][ray,:], data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+                '''
+                for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
+                    self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt,:]
+                    data_subset = scipy.signal.savgol_filter(self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt,:], window_length=WL, polyorder=2)#, deriv=1)#, axis=A)
+                    plt.plot(self.Surges[Surge_ID]['Subsets']['Range_bins'][pnt,:], data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+                '''
+                '''
                 for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
                     data_subset = scipy.signal.savgol_filter(self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt,:], window_length=WL, polyorder=2)#, deriv=1)#, axis=A)
                     plt.plot(self.Surges[Surge_ID]['Subsets']['Range_bins'][pnt,:], data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
@@ -1007,13 +1045,14 @@ class Master_Plt:
                     plt.scatter(self.Surges[Surge_ID]['Center_pnts']['range_value'][pnt],
                                 self.Surges[Surge_ID]['Center_pnts']['radar_value'][pnt],
                                 s=40)#c='red')
-                for o_dist in self.config.Surge_controls['offset_dist']:
+                for o_dist in self.config.Surge_controls['Surges']['offset_dist']:
                     for o_dir in ['Plus', 'Minus']:
                         if o_dir == 'Plus': Mark='^' 
                         elif o_dir == 'Minus': Mark='D' 
                         plt.scatter(self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['range_value'],
                                     self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['radar_value'],
                                     s=40, marker=Mark, c='grey')
+                '''
             else:
                 for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
                     data_subset = scipy.signal.savgol_filter(self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt,:], window_length=WL, polyorder=2, deriv=1)#, axis=A)
@@ -1168,9 +1207,13 @@ class Master_Plt:
                           transform=ax_n.transAxes, ha="left", va="top")
                 ax_n.text(-2.4, -.12, 'Dist to Meso Point: '+str(round(self.Surges[Surge_ID]['Center_pnts']['line_object'].distance(self.Mesos[self.meso_ids[0]]['Center_pnt']['Point_object']))),
                          transform=ax_n.transAxes, ha="left", va="top")
+                ax_n.text(-2.4, -.22, 'Max in Meso Ring: '+str(round(self.Mesos['Min']['value']))
+                          ,transform=ax_n.transAxes, ha="left", va="top")
+                ax_n.text(-2.4, -.32, 'Min in Meso Point: '+str(round(self.Mesos['Max']['value']))
+                          ,transform=ax_n.transAxes, ha="left", va="top")
             ### 
 
-            bb = Bbox([[-2.5, -.2], [.9, .99]])
+            bb = Bbox([[-2.5, -.4], [.9, .99]])
             fancy = mpatches.FancyBboxPatch((bb.xmin, bb.ymin), bb.width, bb.height, boxstyle=mpatches.BoxStyle('Round', pad=.02), fc='white', clip_on=False, path_effects=[PE.withSimplePatchShadow(alpha=.8)])
             ax_n.add_patch(fancy)
 
@@ -1187,7 +1230,7 @@ class Master_Plt:
 ###########################
 ## PLOTTING DEFINTIONS  ###
 ###########################
-def plotting(config, Data, TVARS, start_comptime, tilt=None):
+def plotting(config, day, Data, TVARS, start_comptime, tilt=None):
     print("*** Entering plotting() ")
     plotting_start_time = time.time()
     ''' Initial plotting defenition: sets up fig size, layout, font size etc and will call timeseries and radar subplots
@@ -1202,7 +1245,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
     '''
     if config.print_long == True: print('~~~~~~~~~~~Made it into plotting~~~~~~~~~~~~~~~~~~~~~')
     #initilize the plot object(will have info about plotlayout and such now)
-    PLT = Master_Plt(Data, config, tilt)
+    PLT = Master_Plt(day, Data, config, tilt)
 
     ## Make the Radar Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
@@ -1234,28 +1277,29 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                         if PLT.num_of_mesos != 0: 
                             #  RNAME=PLT.valid_mesos['RName'][0]
                             #  print(PLT.valid_mesos)
-                            RNAME=PLT.valid_mesos.RName.unique()[0]
+                            #  RNAME=PLT.valid_mesos.RName.unique()[0]
                             #  TIME=PLT.valid_mesos.loc[0,'Scan_time'][0]
-                            TIME=PLT.valid_mesos.Scan_time.unique()[0]
+                            #  TIME=PLT.valid_mesos.Scan_time.unique()[0]
                             #  TIME=TIME.loc[0]
                             #  print(TIME)
-                            TIME=dt.datetime.strptime(TIME, '%Y-%m-%d %H:%M:%S.%f') 
+                            #  TIME=dt.datetime.strptime(TIME, '%Y-%m-%d %H:%M:%S.%f')
                             #  WSR_info = det_nearest_WSR(Data[config.radar_controls['Centered_Pform']].df)
                              
-                            radar_file = get_WSR_from_AWS(config, day, (TIME-timedelta(minutes=1)), (TIME+timedelta(minutes=1)), 'KLBB')
-                            radar = read_from_radar_file(radar_file[0], True)
-                            radar = radar_fields_prep(config, radar, 'WSR', 1, moment='Meso_azi')
+                            #  radar_file = get_WSR_from_AWS(config, day, (TIME-timedelta(minutes=1)), (TIME+timedelta(minutes=1)), 'KLBB')
+                            #  radar = read_from_radar_file(radar_file[0], True)
+                            #  radar = radar_fields_prep(config, radar, 'WSR', 1, moment='Meso_azi')
 
                             #  print(radar.info(level='compact'))
-                            RADAR={'name':RNAME, 'Scan_time':TIME, 'rfile':radar, 'swp':[0,1]}
+                            #  RADAR={'name':RNAME, 'Scan_time':TIME, 'rfile':radar, 'swp':[0,1]}
+                            RADAR=PLT.Mesos['RADAR']
                         else:
                             mom = 'pass'
 
                     print('Radar plot: '+ mom +', Outer GridSpec Pos: [0, :], SubGridSpec Pos: ['+str(row)+', '+str(col)+']')
-                    print('MESO')
-                    print(PLT.valid_mesos)
-                    print('SURGES')
-                    print(PLT.valid_surges)
+                    #  print('MESO')
+                    #  print(PLT.valid_mesos)
+                    #  print('SURGES')
+                    #  print(PLT.valid_surges)
                     if mom != 'pass':
                         ax_n= PLT.fig.add_subplot(PLT.r_gs[row, col], projection= PLT.R_Proj)
                         if row==0 and col==0: leg = True
@@ -1376,8 +1420,8 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
         plt_dir='TSeries/'
     
     
-    if config.Surge_controls['Surge_IDing']['Make_new_pnts']['activate_clicker'] == True:
-        if config.Surge_controls['Surge_IDing']['Make_new_pnts']['Type'] == 'Surge':
+    if config.Surge_controls['Feature_IDing']['Make_new_pnts']['activate_clicker'] == True:
+        if config.Surge_controls['Feature_IDing']['Make_new_pnts']['Type'] == 'Surge':
             csv_name= config.g_TORUS_directory+day+'/data/'+day+'_surge_pnts.csv'
             Does_csv_exist=os.path.isfile(csv_name)
             surge_name= 'NA'
@@ -1395,7 +1439,7 @@ def plotting(config, Data, TVARS, start_comptime, tilt=None):
                     else:
                         pts=clicker_defn(PLT, AXES)
                         make_csv(config, Data, pts, surge_name, tilt, csv_name, 'Surge', Does_csv_exist)
-        elif config.Surge_controls['Surge_IDing']['Make_new_pnts']['Type'] == 'Meso':
+        elif config.Surge_controls['Feature_IDing']['Make_new_pnts']['Type'] == 'Meso':
             csv_name= config.g_TORUS_directory+day+'/data/'+day+'_meso_pnts.csv'
             Does_csv_exist=os.path.isfile(csv_name)
             meso_name= 'NA'
@@ -1468,7 +1512,11 @@ def plot_radar(config, day, Data, TVARS):
             r_files_path = sorted(glob.glob(path))
 
         elif config.Radar_Plot_Type == 'WSR_Plotting':
-            r_files_path = det_nearest_WSR(Data[config.radar_controls['Centered_Pform']].df)
+            if config.radar_controls['Use_downloaded_files']== True:
+                path = config.g_TORUS_directory + day+'/data/radar/Nexrad/Nexrad_files/dealiased_K*'
+                r_files_path = sorted(glob.glob(path))
+            else:
+                r_files_path = det_nearest_WSR(Data[config.radar_controls['Centered_Pform']].df)
         return r_files_path
     
     ####
@@ -1477,7 +1525,11 @@ def plot_radar(config, day, Data, TVARS):
         start_comptime = time.time()
         if config.Radar_Plot_Type == 'WSR_Plotting':
             is_WSR= True
-            valid_time= True
+            if config.radar_controls['Use_downloaded_files']== True:
+                time_string= str(os.path.split(r_file)[1][14:29])
+                rtime = datetime.strptime(time_string, "%Y%m%d_%H%M%S")
+            else:
+                valid_time= True
         else:
             is_WSR= False 
             if config.Radar_Plot_Type == 'KA_Plotting':
@@ -1486,14 +1538,14 @@ def plot_radar(config, day, Data, TVARS):
             elif config.Radar_Plot_Type == 'NOXP_Plotting':
                 head_tail= os.path.split(r_file)
                 rtime = datetime.strptime(head_tail[1][24:39], "%Y%m%d_%H%M%S")
-            time_start, time_end = time_range(config)
-            valid_time = time_in_range(time_start, time_end, rtime)
+        time_start, time_end = time_range(config)
+        valid_time = time_in_range(time_start, time_end, rtime)
 
         # * * * 
         for tilt in config.radar_controls['p_tilt']:
             if valid_time == True:
                 #open file using pyart
-                radar = read_from_radar_file(r_file, is_WSR)
+                radar = read_from_radar_file(config, r_file, is_WSR)
                 swp_id = sweep_index(tilt, is_WSR, radar)
                 if config.Radar_Plot_Type == 'KA_Plotting':
                     ## Only proceed if file is a ppi scan; we are currently not interested in plotting the RHI scans
@@ -1515,19 +1567,22 @@ def plot_radar(config, day, Data, TVARS):
                 ## Proceed to plot the radar
                 ##### + + + + + + + + + + + +
                 print("\nProducing Radar Plot:")
-                plotting(config, Data, TVARS, start_comptime, tilt)
+                plotting(config, day, Data, TVARS, start_comptime, tilt)
                 print("done in plot_radar_file")
 
 
     #########
     if config.Radar_Plot_Type == 'WSR_Plotting':
-        WSR_info = find_radar_files(config, day, Data)
-        radar_files_paths= []
-        for rad, times in WSR_info.items():
-            print("Radar_Site: {}\n Start: {}\n End: {} \n***".format(rad, times[0], times[1]))
-            radar_files = get_WSR_from_AWS(config, day, times[0], times[1], rad)
-            #  radar_files_paths.append(radar_files)
-            radar_files_paths= radar_files_paths+radar_files
+        if config.radar_controls['Use_downloaded_files']== True:
+            radar_files_paths = find_radar_files(config, day, Data)
+        else:
+            WSR_info = find_radar_files(config, day, Data)
+            radar_files_paths= []
+            for rad, times in WSR_info.items():
+                print("Radar_Site: {}\n Start: {}\n End: {} \n***".format(rad, times[0], times[1]))
+                radar_files = get_WSR_from_AWS(config, day, times[0], times[1], rad)
+                #  radar_files_paths.append(radar_files)
+                radar_files_paths= radar_files_paths+radar_files
     else:
         radar_files_paths = find_radar_files(config, day, Data)
 

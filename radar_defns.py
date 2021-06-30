@@ -77,21 +77,24 @@ import llsd
 warnings.filterwarnings("ignore")
 
 #
-def radar_fields_prep(config, rfile, radar_type, sweep_id):
+def radar_fields_prep(config, rfile, radar_type, sweep_id, moment='From_config'):
     ###########
     #  print(rfile.info(level='compact'))
-    
+
     if radar_type == 'KA':
-        vel_name, specw_name = 'corrected_velocity','spectrum_width' 
+        vel_name, specw_name = 'corrected_velocity','spectrum_width'
         ncp_name, ncp_thresh = 'normalized_coherent_power', .4
         refl_name, refl_thresh = 'reflectivity', -5
 
     if radar_type == 'NOXP':
-        vel_name , refl_name, specw_name = 'corrected_velocity', 'DBZ','WIDTH' 
-        ncp_name, ncp_thresh = 'SQI', .6 
+        vel_name , refl_name, specw_name = 'corrected_velocity', 'DBZ','WIDTH'
+        ncp_name, ncp_thresh = 'SQI', .6
         refl_name, refl_thresh = 'DBZ', 15
     if radar_type == 'WSR':
-        vel_name , refl_name, specw_name = 'velocity', 'reflectivity','spectrum_width' 
+        if config.radar_controls['Use_downloaded_files']== True:
+            vel_name , refl_name, specw_name = 'corrected_velocity', 'reflectivity','spectrum_width'
+        else:
+            vel_name , refl_name, specw_name = 'velocity', 'reflectivity','spectrum_width'
         refl_thresh =15
     #creating the mask for attenuation
         #  range_mask = np.zeros(np.shape(reflectivity))
@@ -102,13 +105,13 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
         #  gatefilter.exclude_below('DBZ', 10)
     #  gatefilter= pyart.filters.moment_based_gate_filter(rfile, ncp_field= ncp_name, rhv_field=rhv_name,
                                                       #  refl_field=refl_name, min_ncp= ncp_thresh)
-    
+
     def mask(rfile, gatefilter, moment, new_mom_name, masking=True):
         if masking==True:
             #  gatefilter=pyart.correct.despeckle_field(rfile, moment, gatefilter=gatefilter, size= 15)
             mom_masked= np.ma.masked_where(gatefilter.gate_included == False, moment)
         else: mom_masked=moment
-        rfile.add_field(new_mom_name, {'data': mom_masked}, replace_existing=True) 
+        rfile.add_field(new_mom_name, {'data': mom_masked}, replace_existing=True)
         return rfile
 
     gatefilter = pyart.filters.GateFilter(rfile)
@@ -123,11 +126,13 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
     #  smooth_data_ma = np.ma.masked_where(np.ma.getmask(vel_field), smooth_data)
     rfile=mask(rfile, gatefilter, smooth_data, 'vel_smooth', masking =True)
 #
-    for m in config.r_mom:
+    if moment == 'From_config': mom = config.r_mom
+    else: mom = [moment]
+    for m in mom:
         print(m)
 
         if m in ['vel', 'refl', 'specw']:
-            if m == 'vel': 
+            if m == 'vel':
                 orig_field_name, new_feild_name, gfilter = vel_name, 'vel_fix', gatefilter
             if m == 'refl':
                 if radar_type != 'WSR':
@@ -175,23 +180,23 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
             rfile=mask(rfile, gatefilter, vel_grad, 'vel_gradient')
 
         if m in ['vel_savgol', 'vel_savgol_axis0', 'vel_savgol_axis1']:
-            if m == 'vel_savgol': 
+            if m == 'vel_savgol':
                 orig_field_name = 'vel_fix'
                 DER = 0
             else:
-                orig_field_name = 'corrected_velocity' 
+                orig_field_name = 'corrected_velocity'
                 DER = 1
-                if m == 'vel_savgol_axis0': A = 0 
-                if m == 'vel_savgol_axis1': A = 1 
+                if m == 'vel_savgol_axis0': A = 0
+                if m == 'vel_savgol_axis1': A = 1
 
             vel_field = rfile.fields[orig_field_name]['data']
             PO, WL = 2, 13
             vel_savg = scipy.signal.savgol_filter(vel_field, window_length=WL, polyorder=PO, derivative=DER, axis=A)
             rfile = mask(rfile, gatefilter, vel_savg, m)
-        
+
         # * * *
         if m == 'sim_vel':
-            sd_test = singledop.SingleDoppler2D(L=30.0, radar=rfile, range_limits=[0, 20], sweep_number=0, 
+            sd_test = singledop.SingleDoppler2D(L=30.0, radar=rfile, range_limits=[0, 20], sweep_number=0,
                                                 name_vr='velocity', thin_factor=[4, 12])
             pyart.util.simulated_vel_from_profile(rfile, rfile.fields['vel_fix']['data'])
             rfile=mask(rfile, gatefilter, sd_test, m)
@@ -210,7 +215,7 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
             vort_data=vort(rfile,sweep_id, vel_field)
             rfile=mask(rfile, gatefilter, vort_data, m)
 
-        if m in ['Meso_azi', 'Meso']: 
+        if m == 'Meso_azi':
             start_time = time.time()
             az_shear_meta = llsd.main(rfile,refl_name,vel_name)
             print("LLSD COMPUTE --- %s seconds ---" % (time.time() - start_time))
@@ -221,15 +226,15 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
             smooth_data = scipy.ndimage.filters.median_filter(vel_field, 3)
             np.ma.masked_where(np.ma.getmask(vel_field), smooth_data)
             rfile=mask(rfile, gatefilter, smooth_data, 'vel_smooth', masking =True)
-            
+
             az_shear_meta = llsdmain(rfile, refl_name, 'vel_smooth', sweep_id)
             rfile=mask(rfile, gatefilter, az_shear_meta['data'], m, masking=False)
-        
+
         # * * *
         if m == 'diff':
             final_field= rfile.fields['vel_fix']['data']
             inital_field = rfile.fields['VEL']['data']
-            diff = final_field - inital_field 
+            diff = final_field - inital_field
             rfile=mask(rfile, gatefilter, diff, 'difference')
 
     return rfile
@@ -248,14 +253,14 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id):
 def vort(radar, swp_id, vel_name):
     '''
     Function calculates the vorticity on an PPI assuming solid body rotation. Vorticity vector is also assumed normal to plane.
-    Calculation: (1/r)(1/sin(phi))*(du_r/dtheta), taken from wolfram mathworld on spherical vorticity calculations. 
+    Calculation: (1/r)(1/sin(phi))*(du_r/dtheta), taken from wolfram mathworld on spherical vorticity calculations.
     Originally was negative, but due to polar coordiantes being reversed in radar world, it is actually positive.
-    
+
     Parameter: radar (pyart object), swp_id (int)
     Returns: vorticity array, same shape as velocity array
-    
+
     The result is multiplied by 2 due to assumed solid body rotation. If this is a bad assumption, divide the result by 2
- 
+
     https://mathworld.wolfram.com/SphericalCoordinates.html
     '''
     #define the indices for the required sweep
@@ -269,10 +274,10 @@ def vort(radar, swp_id, vel_name):
 
     rangearray = np.tile(radar.range['data'],(len(theta),1))# in m
     vort_tilt=(1./(rangearray*np.sin(np.deg2rad(90-phi))))*np.gradient(vel,np.deg2rad(theta),axis=0)*2
-    
+
     vort_full = np.zeros(radar.fields[vel_name]['data'].shape)
     vort_full[sweep_startidx:sweep_endidx+1] = vort_tilt
-    return vort_full 
+    return vort_full
 '''
 def ppi_vort(radar,swp_id):
     #### calculate vorticity #####
@@ -351,11 +356,14 @@ def RHIvort(radar,swp_id):
 
 
 ##########
-def read_from_radar_file(radar_file, is_WSR=False):
-    if is_WSR == False: 
+def read_from_radar_file(config, radar_file, is_WSR=False):
+    if is_WSR == False:
         radar = pyart.io.read(radar_file)
-    elif is_WSR == True: 
-        radar = pyart.io.read_nexrad_archive(radar_file)
+    elif is_WSR == True:
+        if config.radar_controls['Use_downloaded_files']== True:
+            radar = pyart.io.read(radar_file)
+        else:
+            radar = pyart.io.read_nexrad_archive(radar_file)
     return radar
 #  function_cache_memory = Memory(plot_config.g_cache_directory,verbose=1)
 #  cached_read_from_radar_file = function_cache_memory.cache(read_from_radar_file)
@@ -477,14 +485,14 @@ def aliasfix(array,delta,nyq):
    If the texture is greater than 1.5*nyquist (arbitrary threshold), then it is a de-aliasing error.
    The if statements fix this according to the nyquist velocity.
     '''
- 
+
     mean = convolve(array,np.ones((delta,delta))/delta**2.)
     maskpos = np.logical_and(np.abs(array-mean)>nyq*1.5,array>0)
     maskneg = np.logical_and(np.abs(array-mean)>nyq*1.5,array<0)
- 
+
     array[maskpos]= -2.*nyq+array[maskpos]
     array[maskneg]= 2.*nyq+array[maskneg]
- 
+
     return array
 ####
 def llsdmain(radar, ref_name, vel_name, swp_id):
@@ -505,14 +513,14 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
     """
     FILLVALUE = -9999
     SCALING = 10
-    
+
     #define the indices for the required sweep
     sweep_startidx = np.int64(radar.sweep_start_ray_index['data'][swp_id])
     sweep_endidx = np.int64(radar.sweep_end_ray_index['data'][swp_id])
-    
+
     #  data quality controls on entire volume
     #  smooth_data(radar, vel_nam)
-   
+
     #extract data
     r= radar.range['data']
     theta = radar.azimuth['data'][sweep_startidx:sweep_endidx+1]
@@ -530,7 +538,7 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
     #  azi_shear_tilt = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx,refl_full,type_grad='az')
     #scale
     azi_shear_tilt = azi_shear_tilt*SCALING
-    
+
     #init az_shear for the volume
     azi_shear = np.zeros(refl_full.shape)
     #insert az shear tilt into volume array
@@ -539,12 +547,12 @@ def llsdmain(radar, ref_name, vel_name, swp_id):
     #  print(azi_shear)
     #define meta data
     azi_shear_meta = {'data': azi_shear,
-                      'long_name': 'LLSD Azimuthal Shear', 
+                      'long_name': 'LLSD Azimuthal Shear',
                       '_FillValue': FILLVALUE,
                       '_Least_significant_digit': 2,
                       'comment': f'Scaled by x{SCALING}. LLSD azimuthal shear calculation from Miller, M. L., Lakshmanan, V., and Smith, T. M. (2013). An Automated Method for Depicting Mesocyclone Paths and Intensities. Weather and Forecasting, 28(3): 570-585. Effective range of this technique is limited by the window size.',
                       'units': 'Hz'}
-    #return shear data 
+    #return shear data
     return azi_shear_meta
 
 def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, refl_full, type_grad):
@@ -564,7 +572,7 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
         index of starting rays for tilts
     sweep_endidx: numba int64 array
         index of ending rays for tilts
-                
+
     Returns:
     ========
     azi_shear:
@@ -583,7 +591,7 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
     elif type_grad =='az_19':
         azi_saxis = 500#m              #notes: total azimuthal size = 2*azi_saxis
         rng_saxis = 1  #idx away from i  #notes: total range size = 2*rng_saxis
-    
+
     #get size and init az_shear_tilt
     sz = vrad.shape
     #  print(vrad.shape)
@@ -606,12 +614,12 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
             offset_theta= ray_theta-center_raytheta
             #  print('ray:{} center:{} offset:{} maxoffset:{}'.format(ray_theta,
                                         #  center_raytheta, offset_theta, max_offset_theta))
-            if abs(offset_theta) <= abs(max_offset_theta): 
+            if abs(offset_theta) <= abs(max_offset_theta):
                 num_k = num_k+1
             else:
-               break 
+               break
 
-        #limit the offset to 100(100 is the legacy) 
+        #limit the offset to 100(100 is the legacy)
         if num_k> 100:  num_k= 100
 
         az_k_datapnts.append(num_k)
@@ -627,10 +635,10 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                 j_max, j_min = c_ray+abs(az_k_datapnts[c_rangebin]), c_ray-abs(az_k_datapnts[c_rangebin])
                 i_max, i_min = c_rangebin+rng_saxis, c_rangebin-rng_saxis
                 if j_min< 0: j_min = j_min + sz[0]
-                if j_max > sz[0]-1: j_max = j_max - sz[0]                 
+                if j_max > sz[0]-1: j_max = j_max - sz[0]
                 #  print('j_max:{} j_min:{} '.format(j_max, j_min))
                 #  print('i_max:{} i_min:{} '.format(i_max, i_min))
-                
+
                 if j_max< j_min:
                     kernal_thetas=theta
                     kernal_thetas=np.delete(kernal_thetas, np.s_[j_max:j_min], axis=0)
@@ -644,7 +652,7 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                     kernal_thetas=theta[j_min:j_max+1]
                     kernal_ranges=r_fromradar[j_min:j_max+1]
                     kernal_vrad=vrad[j_min:j_max+1]
-                
+
                 #perform calculations according to Miller et al., (2013)
                 topsum, botsum = 0, 0
                 masked = False
@@ -656,9 +664,9 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                     if mask[c_ray, c_rangebin]: masked = True
 
                 elif type_grad == 'div':
-                    drange= 15 
+                    drange= 15
                     i_range= np.arange(i_min, i_max+1)
-                    i =  i_range-c_rangebin 
+                    i =  i_range-c_rangebin
                     topsum = np.sum(i * kernal_vrad[:, i_min:i_max+1])
                     botsum = drange*(np.sum((i)**2))
                 elif type_grad in ['div_19', 'az_19']:
@@ -688,10 +696,10 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                     #  print('det:{} u:{} dr:{}'.format(det, u, dr))
                     #  print('termA:{} termB:{} termC:{}'.format(termA, termB, termC))
                 #exclude regions which contain any masked pixels
-                if masked: 
+                if masked:
                     #  print('masked')
                     pass
-                else: 
+                else:
                     #  print('hey')
                     #  print('topsum:{} botsum:{}'.format(topsum, botsum))
                     #  print('top/bot:{}'.format(topsum/botsum))
@@ -706,7 +714,7 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                 #  if c_ray in range(300,400):
                     #  azi_shear_tilt[c_ray, c_rangebin] = 300
         #  print(shear_tilt)
-    return shear_tilt 
+    return shear_tilt
 
 
 '''
@@ -718,14 +726,14 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                 continue
             #defining the amount of index offsets for azimuthal direction
             arc_len_idx_offset = np.int64([(azi_saxis//((2*r_fromradar[i, j]*np.pi)/360))])[0] #arc length as a fraction or circ
-            #limit the offset to 100 
+            #limit the offset to 100
             #  if arc_len_idx_offset > 100:
                 #  arc_len_idx_offset = 100
             #define the indices for the LLSd grid and deal with wrapping
-            lower_arc_idx = i - arc_len_idx_offset              
+            lower_arc_idx = i - arc_len_idx_offset
             upper_arc_idx = i + arc_len_idx_offset
             if lower_arc_idx < 0: lower_arc_idx = lower_arc_idx + sz[0]
-            if upper_arc_idx > sz[0]-1: upper_arc_idx = upper_arc_idx - sz[0]                 
+            if upper_arc_idx > sz[0]-1: upper_arc_idx = upper_arc_idx - sz[0]
             if upper_arc_idx < lower_arc_idx:
                 ii_range = np.concatenate((np.arange(lower_arc_idx, sz[0], 1), np.arange(0, upper_arc_idx+1 ,1)), axis=0)
             else:
@@ -735,7 +743,7 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
             #perform calculations according to Miller et al., (2013)
             topsum, botsum = 0, 0
             masked = False
-            for ii in ii_range:         
+            for ii in ii_range:
                 for jj in jj_range:
                     if type_grad == 'az':
                         dtheta = (theta[ii, jj] - theta[i, j])
@@ -751,7 +759,7 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
                     elif type_grad == 'div':
                         pass
 
-            
+
             if masked:
                 #exclude regions which contain any masked pixels
                 pass
@@ -761,18 +769,18 @@ def lssd_compute(r_fromradar, theta, vrad, mask, sweep_startidx, sweep_endidx, r
             else:
                 azi_shear_tilt[i, j] = topsum/botsum
             if i in range(300,400):
-                azi_shear_tilt[i, j] = 300 
+                azi_shear_tilt[i, j] = 300
 
     #init az_shear for the volume
     azi_shear = np.zeros(refl_full.shape)
     #insert az shear tilt into volume array
     azi_shear[sweep_startidx:sweep_endidx+1] = azi_shear_tilt
 
-    return azi_shear 
+    return azi_shear
 '''
 ##############################################################
 ###############################
-### Command line prompted Defns 
+### Command line prompted Defns
 ###############################
 def info_radar_files(level, files):
     for radar_file in files[:]:
@@ -789,7 +797,7 @@ def info_radar_files(level, files):
 
 
 #*****
-def dealias_radar(radar, vel_field, texture_threshold):
+def dealias_radar(radar, vel_field, texture_threshold, is_WSR=False):
     #  texture_feild= pyart.retrieve.calculate_velocity_texture(radar, vel_field=vel_field, wind_size=3)
     #  radar.add_field('vel_texture', texture_feild, replace_existing=True)
 
@@ -802,12 +810,16 @@ def dealias_radar(radar, vel_field, texture_threshold):
         #  gatefilter.exclude_below(ncp_name, ncp_thresh)
         gatefilter.exclude_above('vel_texture', texture_threshold)
         #  gatefilter.exclude_equal('vel_texture', 0)
-        dealias_data = pyart.correct.dealias_region_based(radar, vel_field=vel_field, gatefilter=gatefilter)
+        if is_WSR== False:
+            dealias_data = pyart.correct.dealias_region_based(radar, vel_field=vel_field, gatefilter=gatefilter)
     else:
-        dealias_data = pyart.correct.dealias_region_based(radar, vel_field=vel_field)
+        if is_WSR== False:
+            dealias_data = pyart.correct.dealias_region_based(radar, vel_field=vel_field)
+        elif is_WSR == True:
+            dealias_data = pyart.correct.dealias_unwrap_phase(radar, vel_field=vel_field)#, unwrap_unit='volume')
     return dealias_data, radar
 
-def dealias_radar_file(prefix, radar_file, vel_field, texture_threshold):
+def dealias_radar_file(prefix, radar_file, vel_field, texture_threshold, is_WSR=False):
     out_filename = os.path.dirname(radar_file) + '/' + prefix + os.path.basename(radar_file)
     print("\nDealiasing... " + " Input File: " + str(radar_file) + " Output File: " + out_filename)
 
@@ -827,17 +839,21 @@ def dealias_radar_file(prefix, radar_file, vel_field, texture_threshold):
 
 
 def dealias_radar_files(prefix, files, Rtype):
-    pass
-
     if Rtype == 'KA':
         vel_field = 'velocity'
         texture_thresh= False
+        is_WSR=False
     elif Rtype == 'NOXP':
         vel_field = 'VEL'
         texture_thresh= 3
+        is_WSR=False
+    elif Rtype == 'WSR':
+        vel_field = 'velocity'
+        texture_thresh= False
+        is_WSR=True
 
     #for radar_file in files[:]:
-    Parallel(n_jobs=-1, verbose=10) (delayed(dealias_radar_file)(prefix, radar_file, vel_field, texture_thresh) for radar_file in files[:])
+    Parallel(n_jobs=-1, verbose=10) (delayed(dealias_radar_file)(prefix, radar_file, vel_field, texture_thresh, is_WSR) for radar_file in files[:])
 
 def fix_NOXP_order(prefix, files):
     ''' pyart requires rays in sweep to be ordered by angle
@@ -904,7 +920,7 @@ def fix_NOXP_order(prefix, files):
         rfile= pyart.io.read(radar_file)
 
         ### order_rays_by_angle
-        # # # #  # # # #  # # # 
+        # # # #  # # # #  # # #
         for sweep_id in range(rfile.nsweeps):
             azimuth_angles = rfile.get_azimuth(sweep_id)
             azimuth_angles = remove_zero_crossing(azimuth_angles)
