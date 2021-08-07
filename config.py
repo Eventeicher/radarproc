@@ -31,17 +31,19 @@ nCPU = 1#-2
 #  r_mom = ['refl','vel', 'vort', 'vort_smooth']
 #  r_mom = ['refl','vel_smooth', 'zoom', 'Meso']
 #  r_mom = ['refl','vel', 'Meso_azi']
-#  r_mom = ['refl','vel_smooth', 'zoom']
+#  r_mom = ['refl','vel', 'Meso']
+r_mom = ['refl','vel_smooth', 'zoom']
+#  r_mom = ['refl','vel_smooth', 'vel_test']
 #  r_mom = ['refl','vel_smooth', 'Meso', 'zoom']
 #  r_mom = ['refl','vel_smooth', 'Meso_test', 'zoom']
-r_mom = ['refl','vel', 'Meso_azi']#, 'zoom']
+#  r_mom = ['refl','vel', 'Meso_azi']#, 'zoom']
 #  r_mom = ['refl','vel', 'vel_savgol_axis0']
 #  r_mom = ['refl','vel','vel_savgol', 'vel_savgol_axis1']
 
 #list; the timeseries to plot (can include multiple) (leave list empty to plot only radar) 
     #  histogram, wind, Thetae, Thetav, tfast
-Line_Plot= []
-#  Line_Plot= ['clicker']
+#  Line_Plot= []
+Line_Plot= ['clicker']
 #  Line_Plot= ['histogram']
 #  Line_Plot= ['wind','Thetav']
 #  Line_Plot= ['Thetav']
@@ -49,8 +51,8 @@ Line_Plot= []
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
 ## What type of radar do you want to plot 
 #  Radar_Plot_Type = 'NOXP_Plotting'
-#  Radar_Plot_Type = 'KA_Plotting'
-Radar_Plot_Type = 'WSR_Plotting'
+Radar_Plot_Type = 'KA_Plotting'
+#  Radar_Plot_Type = 'WSR_Plotting'
 
 
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
@@ -58,22 +60,23 @@ Radar_Plot_Type = 'WSR_Plotting'
 # ***********
 ## List of days to plot
 #  day_list= ['20190615']
-#  day_list= ['20190517']
+day_list= ['20190517']
 #  day_list= ['20190524', '20190525', '20190528']
-day_list= ['20190524']
+#  day_list= ['20190608']
+#  day_list= ['20190608']
 #  day_list= ['20190517','20190518','20190520']# '20190523', '20190524','20190525','20190526',
 #  day_list= ['20190520', '20190523', '20190524','20190525','20190526',
 #  day_list= ['20190517','20190518','20190520', '20190523', '20190524','20190525','20190526',
              #  '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
-#  day_list= ['20190518','20190520', '20190523', '20190524','20190525','20190526',
-             #  '20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
-#  day_list= ['20190528', '20190608', '20190611', '20190613', '20190615']
+#  day_list= [ '20190611', '20190613', '20190615']
+#  day_list= [ '20190608', '20190611', '20190613', '20190615']
+#  day_list= ['20190608', '20190611', '20190613', '20190615']
 #  day_list= ['20190523', '20190524','20190525','20190526','20190527', '20190528', '20190608', '20190611', '20190613', '20190615']
 #  day_list= ['20190611', '20190613', '20190615']
 
 ## Crop the start or end time to a time you specify (comment out to use datafrom the whole day)
-tstart = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 20,40, 0)
-tend = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 21, 40, 0)
+#  tstart = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 22,50, 0)
+#  tend = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0][6:8]), 1, 5, 0)
 
 
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
@@ -81,7 +84,8 @@ tend = dt.datetime(int(day_list[0][0:4]), int(day_list[0][4:6]), int(day_list[0]
 # *******************************************
 #whether to bother trying to read in this datatype at all (timesaver) 
 Read_Data = {'Meso': True, 'Radar':True}
-Pert_times= {'20190525': {'Prb1':{'start':'22:35', 'endh':23, 'endm':10}}}
+Pert_times= {'20190525': {'Prb1':{'start':'22:35', 'endh':23, 'endm':10}},
+             '20190615': {'Prb1':{'start':'21:35', 'endh':22, 'endm':10}}}
 
 # # # # # # # # # # # #  # # #  # # #  # # # # # #  # # # # # # # # # # #
 ## Plot visual controls (aka what is plotted)
@@ -97,17 +101,20 @@ lineplt_control = { 'Axis_Extents':{'X':30, 'Y':None}, #either x or y can be set
                     'Mask': ['NSSL'],
                     'Deriv': False,
                     #  'H':{'var':'vort', 'xmin':-1, 'xmax':1}
-                    'H':{'var':'vel_smooth', 'xmin':False, 'xmax':False}
+                    'H':{'var':'vel_smooth', 'xmin':False, 'xmax':False},
+                    'smooth_window':17, #None or odd number
+                    'ray_style':'averagedrays' #allrays, pntrays, averagedrays ##to use while plotting surge data
                     }
 
-Surge_controls= {'Surges': {'ray_selection_thresh': 10, #degrees off of 90
+Surge_controls= {'Surges': {'ray_selection_thresh': 15, #degrees off of 90
                             'ray_selection_method': 'local', # 'average' or 'local' referring to the type of slope intersection
                             'offset_dist': [500, 1000, 2000] #dist in m
+                            #  'offset_dist': [2000] #dist in m
                              },
                  'Mesos':  {'radius': 4023},
                  'Feature_IDing': {'Make_new_pnts': {'activate_clicker':False, 'Type':'Meso'},#Surge'},   
-                                   'Existing_pnts': {'Read_in_surges': False, 'Read_in_mesos':True,
-                                                     'cross_rpforms':{'allow':True, 'within_time':5, 'tilt_allowance':.5}
+                                   'Existing_pnts': {'Read_in_surges': True, 'Read_in_mesos':False,
+                                                     'cross_rpforms':{'allow':True, 'within_time':0, 'tilt_allowance':.5}
                                                      }
                                     }
                  }
@@ -118,17 +125,17 @@ Surge_controls= {'Surges': {'ray_selection_thresh': 10, #degrees off of 90
 radar_controls= {'layout':{"Rows":1, "Cols":None},
                  #  'p_tilt': [0.5, 1.0],
                  #  'p_tilt': [0.5, 1.0,1.5],
-                 'p_tilt': [0.5],
-                 #  'p_tilt': [1.0],#, 1.5],
+                 #  'p_tilt': [0.5],
+                 'p_tilt': [1.0],#, 1.5],
                  #  'Centered_Pform': 'WinS',
                  #  'Centered_Pform': 'CoMeT2',
                  #  'Centered_Pform': 'Ka2',
-                 'Centered_Pform': 'Prb1',
-                 #  'Centered_Pform': 'P_Radar',
+                 #  'Centered_Pform': 'Prb1',
+                 'Centered_Pform': 'P_Radar',
                  'offsetkm':{'KA_Plotting':21, 'NOXP_Plotting':20, 'WSR_Plotting':21, 'Zoom':'Fitted'},
                  #  'offsetkm':{'KA_Plotting':15, 'NOXP_Plotting':10, 'WSR_Plotting':40},
                  'distance_indicator':{'square_grid':True, 'range_rings':True, 'ring_int':1000}, 
-                 'colorbars':{'thermo':True, 'mom':True},
+                 'colorbars':{'thermo':False, 'mom':True},
                  'smooth':13,
                  'Use_downloaded_files':True
                  }
@@ -150,7 +157,7 @@ overlays = {'KA': {'Marker': True, 'Label': False, 'RHI_ring': True, 'RHI_Lab': 
             'LSR': {'Marker': False, 'Label': False},
             'Tracks': {'Marker': False, 'Marker_test':False, 'Label': False},
             'Contour':{'Lines': False, 'Interval':5, 'Label':True, 'Var':'vel_fix'},
-            'surge_lines':{'Marker': False, 'Lines':False, 'zoom_boxes':True, 'zoom_only':True},
+            'surge_lines':{'Marker': True, 'Lines':True, 'zoom_boxes':True, 'zoom_only':True},
             'Mesos':{'Marker': True},
             'GEO': { 'OX': False, 'country_roads': False, 'hwys': False, 'county_lines': False, 'state_lines': False}
            }

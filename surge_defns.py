@@ -45,7 +45,7 @@ def clicker_defn(PLT, AXES):
             plt.xlim(xmin, xmax)
             plt.ylim(ymin, ymax)
 
-    tellme('Now its time to select the surge points, click enter when done')
+    tellme('Now select surge points,\n click enter when done\n')
     pts = plt.ginput(n=40,timeout=0) # look up ginput docs for some good guidance
     #  plt.waitforbuttonpress()
     return pts
@@ -330,7 +330,11 @@ def surge_radarbins(self, config, Data, sweep):
     def angle3pt(a, b, c):
         """Counterclockwise angle in degrees by turning from a to c around b
             Returns a float between 0.0 and 360.0"""
-        if isinstance(Plus_Intersections, Point):
+        #  if isinstance(Plus_Intersections, Point):
+        if isinstance(c, Point):
+            C_x, C_y = c.x, c.y
+        elif isinstance(c, MultiPoint):
+            c= c[0]
             C_x, C_y = c.x, c.y
         else: 
             C_x, C_y = c[0], c[1]
@@ -352,8 +356,10 @@ def surge_radarbins(self, config, Data, sweep):
     r_mom_ofintrest_data=Data['P_Radar'].rfile.fields[config.lineplt_control['H']['var']]['data']
     sweep_startidx = np.int64(Data['P_Radar'].rfile.sweep_start_ray_index['data'][sweep])
     sweep_endidx = np.int64(Data['P_Radar'].rfile.sweep_end_ray_index['data'][sweep])
+    subset_orig_rmom=r_mom_ofintrest_data[sweep_startidx:sweep_endidx+1]
 
     Surge_Holder={}
+    save_Surge_subset=0
     for Surge_ID in self.surge_ids[:]:
         zoom_surge_df= self.valid_surges[self.valid_surges['Surge_ID'] == Surge_ID]
         if Data['P_Radar'].name in zoom_surge_df.RName.unique():
@@ -402,10 +408,11 @@ def surge_radarbins(self, config, Data, sweep):
                     rays.append(Ray_Index)
                     ranges.append(Range_Index)
 
-                    r_bin.append(range_bins_alongray[Range_Index])
-                    r_data.append(r_mom_ofintrest_data[Ray_Index , Range_Index])
-                    xpos.append(gate_x[Ray_Index , Range_Index])
-                    ypos.append(gate_y[Ray_Index , Range_Index])
+                    if Range_Index<= len(range_bins_alongray):
+                        r_bin.append(range_bins_alongray[Range_Index])
+                        r_data.append(r_mom_ofintrest_data[Ray_Index , Range_Index])
+                        xpos.append(gate_x[Ray_Index , Range_Index])
+                        ypos.append(gate_y[Ray_Index , Range_Index])
                    
                 comb_xy=list(zip(xpos, ypos))
                 point_entry = {'x': xpos, 
@@ -422,6 +429,7 @@ def surge_radarbins(self, config, Data, sweep):
                     Both_Dir.update({offset_dir:point_entry})
                     Surge_Holder[Surge_ID]['Offset_pnts'].update({config.Surge_controls['Surges']['offset_dist'][o]: Both_Dir}) 
                 
+
         #add the subset for the surge area (max offset) 
         Max_obins=np.max(offset_bins)
         for pnt in range(len(pnt_name)):
@@ -433,6 +441,7 @@ def surge_radarbins(self, config, Data, sweep):
                                              {'Radar_data':np.asarray(r_data_sub), 'Range_bins':np.asarray(r_bin_sub)}
                                          }) 
 
+        #########
         #add Polygon for the full (maxoffset) area 
         Max_odist=np.max(config.Surge_controls['Surges']['offset_dist'])
         Xplus=Surge_Holder[Surge_ID]['Offset_pnts'][Max_odist]['Plus']['x']
@@ -465,44 +474,58 @@ def surge_radarbins(self, config, Data, sweep):
         # * * *
         points = [Surge_Holder[Surge_ID]['Center_pnts']['line_object'].interpolate(dist) for dist in 
                   np.arange(0, Surge_Holder[Surge_ID]['Center_pnts']['line_object'].length, 0.5)]
-        x, y = zip(*[(pt.x, pt.y) for pt in points])
-        surge_slope, surge_yintercept, r_value, p_value, std_err = stats.linregress(x,y)
+        if len(points) != 0: 
+            x, y = zip(*[(pt.x, pt.y) for pt in points])
+            surge_slope, surge_yintercept, r_value, p_value, std_err = stats.linregress(x,y)
 
-        x_vals = (np.min(gate_x), np.max(gate_x))
-        x_vals= np.asarray(x_vals)
-        y_vals = surge_yintercept + surge_slope * x_vals
-        surge_linepoint= (x_vals[-1], y_vals[-1]) #a point along the surge line
+            x_vals = (np.min(gate_x), np.max(gate_x))
+            x_vals= np.asarray(x_vals)
+            y_vals = surge_yintercept + surge_slope * x_vals
+            surge_linepoint= (x_vals[-1], y_vals[-1]) #a point along the surge line
+        else: 
+            surge_slope, surge_yintercept=None, None
+
 
         # * * *
         #define the indices for the required sweep
         ray_selection= np.zeros(gate_x.shape)
         rayangle_tosurge=[]
         store_rays_wthin_range=[]
-        subset_orig_rmom=r_mom_ofintrest_data[sweep_startidx:sweep_endidx+1]
         Surge_Area_Rdata=np.zeros(gate_x.shape)
+        Max_dist = Surge_Holder[Surge_ID]['Offset_pnts']['Max']['dist']
         for c_ray in range(ray_selection.shape[0]): #iterate over each ray
             if c_ray in np.arange(np.min(Surge_Holder[Surge_ID]['Center_pnts']['Index']['Ray']),
                                   np.max(Surge_Holder[Surge_ID]['Center_pnts']['Index']['Ray'])):
                 ray_line_object=LineString(list(zip(gate_x[c_ray], gate_y[c_ray])))
-                Max_dist = Surge_Holder[Surge_ID]['Offset_pnts']['Max']['dist']
+
+                #  for dist in config.Surge_controls['Surges']['offset_dist']:
+                    #  Plus_Intersections=Surge_Holder[Surge_ID]['Offset_pnts'][dist]['Plus']['line_object'].intersection(ray_line_object)
+                    #  Minus_Intersections=Surge_Holder[Surge_ID]['Offset_pnts'][dist]['Minus']['line_object'].intersection(ray_line_object)
+
                 Plus_Intersections=Surge_Holder[Surge_ID]['Offset_pnts'][Max_dist]['Plus']['line_object'].intersection(ray_line_object)
                 Minus_Intersections=Surge_Holder[Surge_ID]['Offset_pnts'][Max_dist]['Minus']['line_object'].intersection(ray_line_object)
-                Plus_ind, Minus_ind =[],[]
 
-                if isinstance(Plus_Intersections, Point):
-                    #  print(type(Plus_Intersections))
-                    ray_ind, plus_range_ind, extra_bins = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=Plus_Intersections.x, given_y_lat=Plus_Intersections.y)
-                    ray_ind, minus_range_ind, extra_bins = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=Minus_Intersections.x, given_y_lat=Minus_Intersections.y)
-                    #iterate over each range bin
-                    for c_rangebin in range(len(range_bins_alongray)): 
-                        if Surge_Area_Rdata[c_ray, int(c_rangebin)] == -9999.0:
+                if isinstance(Plus_Intersections, MultiPoint):
+                    Plus_Intx=Plus_Intersections[0]
+                elif isinstance(Plus_Intersections, Point):
+                    Plus_Intx=Plus_Intersections
+                if isinstance(Minus_Intersections, MultiPoint):
+                    Minus_Intx=Minus_Intersections[0]
+                elif isinstance(Minus_Intersections, Point):
+                    Minus_Intx=Minus_Intersections
+
+                ray_ind, plus_range_ind, extra_bins = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=Plus_Intx.x, given_y_lat=Plus_Intx.y)
+                ray_ind, minus_range_ind, extra_bins = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=Minus_Intx.x, given_y_lat=Minus_Intx.y)
+                #iterate over each range bin
+                for c_rangebin in range(len(range_bins_alongray)): 
+                    if c_rangebin in np.arange(minus_range_ind, plus_range_ind):
+                        radarbin_entry=subset_orig_rmom[c_ray, int(c_rangebin)]
+                        if radarbin_entry== -9999.0 or subset_orig_rmom._mask[c_ray, int(c_rangebin)] == True: #if the bin is masked
                             Surge_Area_Rdata[c_ray, int(c_rangebin)] = np.nan
-                        
-                        if c_rangebin in np.arange(minus_range_ind, plus_range_ind):
-                            Surge_Area_Rdata[c_ray, int(c_rangebin)] = subset_orig_rmom[c_ray, int(c_rangebin)] 
                         else:
-                            #  Surge_Area_Rdata[c_ray, int(c_rangebin)] = 0
-                            Surge_Area_Rdata[c_ray, int(c_rangebin)] = np.nan
+                            Surge_Area_Rdata[c_ray, int(c_rangebin)] = radarbin_entry 
+                    else:
+                        Surge_Area_Rdata[c_ray, int(c_rangebin)] = np.nan
 
             else:
                 Surge_Area_Rdata[c_ray, :] = np.nan
@@ -526,7 +549,11 @@ def surge_radarbins(self, config, Data, sweep):
                         Neighborpnt_Intersections=Surge_Holder[Surge_ID]['Center_pnts']['line_object'].intersection(neighbor_ray_line_object)
                     ray_line_object=LineString(list(zip(gate_x[c_ray], gate_y[c_ray])))
                     Intersections=Surge_Holder[Surge_ID]['Center_pnts']['line_object'].intersection(ray_line_object)
-                    x_crsspnt, y_crsspnt= Intersections.x, Intersections.y
+                    if isinstance(Intersections, MultiPoint):
+                        Intersect= Intersections[0]
+                    else: 
+                        Intersect= Intersections
+                    x_crsspnt, y_crsspnt= Intersect.x, Intersect.y
                     pnt_along_surge= Neighborpnt_Intersections
 
                 rayangle=angle3pt((0, 0), (x_crsspnt, y_crsspnt), pnt_along_surge)
@@ -545,12 +572,102 @@ def surge_radarbins(self, config, Data, sweep):
 
         Rayangle_rmom= np.zeros(r_mom_ofintrest_data.shape)
         Rayangle_rmom[sweep_startidx:sweep_endidx+1] = ray_selection 
-        Data['P_Radar'].rfile.add_field('Ray_angle', {'data': Rayangle_rmom}, replace_existing=True) 
+        Data['P_Radar'].rfile.add_field('Ray_angle_'+str(Surge_ID), {'data': Rayangle_rmom}, replace_existing=True) 
 
         Surge_subset_rmom= np.zeros(r_mom_ofintrest_data.shape)
         Surge_subset_rmom[sweep_startidx:sweep_endidx+1] = Surge_Area_Rdata
         Data['P_Radar'].rfile.add_field('Surge_subset_'+str(Surge_ID), {'data': Surge_subset_rmom}, replace_existing=True) 
 
+        # * * *
+        Max_diffholder=[]
+        Area_of_interest=(Surge_Area_Rdata[np.min(Surge_Holder[Surge_ID]['Center_pnts']['Index']['Ray']):np.max(
+                        Surge_Holder[Surge_ID]['Center_pnts']['Index']['Ray']),:])
+        for ray in range(np.shape(Area_of_interest)[0]):
+            ray_of_interest=Area_of_interest[ray]
+            ray_wo_nan= ray_of_interest[~np.isnan(ray_of_interest)]
+            Max_diffholder.append(np.max(ray_wo_nan.ptp()))
+        Surge_Holder[Surge_ID]['Offset_diff']={'Max_alongrays': Max_diffholder} 
+
+        for count, dist in enumerate(config.Surge_controls['Surges']['offset_dist']):
+            exact_diff_holder, exactplus_bin, exactminus_bin=[],[],[]
+            maxseg_diff_holder, maxsegplus_bin, maxsegminus_bin=[],[],[]
+            for ray in np.arange(np.min(Surge_Holder[Surge_ID]['Center_pnts']['Index']['Ray']),
+                                 np.max(Surge_Holder[Surge_ID]['Center_pnts']['Index']['Ray'])):
+                ray_line_object=LineString(list(zip(gate_x[ray], gate_y[ray])))
+
+                Plus_Intersections=Surge_Holder[Surge_ID]['Offset_pnts'][dist]['Plus']['line_object'].intersection(ray_line_object)
+                Minus_Intersections=Surge_Holder[Surge_ID]['Offset_pnts'][dist]['Minus']['line_object'].intersection(ray_line_object)
+                if isinstance(Plus_Intersections, MultiPoint): Plus_Intx=Plus_Intersections[0]
+                elif isinstance(Plus_Intersections, Point): Plus_Intx=Plus_Intersections
+                if isinstance(Minus_Intersections, MultiPoint): Minus_Intx=Minus_Intersections[0]
+                elif isinstance(Minus_Intersections, Point): Minus_Intx=Minus_Intersections
+
+                ray_ind, plus_range_ind, _ = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=Plus_Intx.x, given_y_lat=Plus_Intx.y)
+                ray_ind, minus_range_ind, _ = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=Minus_Intx.x, given_y_lat=Minus_Intx.y)
+                
+                ###Exact diff at each dist
+                exactplus_radarbin_entry=subset_orig_rmom[ray_ind, plus_range_ind]
+                exactminus_radarbin_entry=subset_orig_rmom[ray_ind, minus_range_ind]
+                if exactplus_radarbin_entry== -9999.0 or subset_orig_rmom._mask[ray_ind, int(plus_range_ind)] == True: #if the bin is masked
+                    pass
+                elif exactminus_radarbin_entry== -9999.0 or subset_orig_rmom._mask[ray_ind, int(minus_range_ind)] == True: #if the bin is masked
+                    pass
+                else:
+                    exactplus_bin.append(exactplus_radarbin_entry)
+                    exactminus_bin.append(exactminus_radarbin_entry)
+                    exact_diff_holder.append(abs(exactplus_radarbin_entry-exactminus_radarbin_entry))
+
+                ###Max diff in each segment 
+                if count == 0: 
+                    #  test=subset_orig_rmom[ray_ind, :]
+                    subsetray=subset_orig_rmom[ray_ind, minus_range_ind:plus_range_ind]
+                    subsetray=subsetray[subsetray != -9999.0]
+
+                    maxseg_diff_holder.append(np.max(subsetray.ptp()))
+                else: 
+                    currentplus_range_ind=plus_range_ind
+                    currentminus_range_ind=minus_range_ind
+                    pre_plus_range_ind=plus_index_storage
+                    pre_minus_range_ind=minus_index_storage
+                    
+                    if pre_plus_range_ind > currentplus_range_ind:
+                        EP,SP= pre_plus_range_ind, currentplus_range_ind
+                    else: 
+                        EP,SP= currentplus_range_ind,pre_plus_range_ind 
+                    if pre_minus_range_ind > currentminus_range_ind:
+                        EM,SM= pre_minus_range_ind, currentminus_range_ind
+                    else: 
+                        EM,SM= currentminus_range_ind,pre_minus_range_ind 
+
+                    plus_subset=subset_orig_rmom[ray_ind, SP:EP]
+                    minus_subset=subset_orig_rmom[ray_ind, SM:EM]
+                    plus_subsetray=plus_subset[plus_subset!= -9999.0]
+                    minus_subsetray=minus_subset[minus_subset != -9999.0]
+                    if len(plus_subsetray) == 0 and len(minus_subsetray)==0:
+                        pass
+                    else: 
+                        subsetray= np.ma.append(plus_subsetray, minus_subsetray)
+                        maxseg_diff_holder.append(np.max(subsetray.ptp()))
+
+                    #  print('oooooo')
+                    #  print(('Dist: {}, Ray {}').format(dist, ray))
+                    #  print(('Plus Range Ind: Current {}, Prior {}').format(currentplus_range_ind, pre_plus_range_ind))
+                    #  print(('Minus Range Ind: Current {}, Prior {}').format(currentminus_range_ind, pre_minus_range_ind))
+                    #  print(('Length of Subsets: Plus {}, Minus {}').format(len(plus_subset),len(minus_subset)))
+                    #  print('uuuuuuuuuuuuuuuu')
+                    #  print(subsetray)
+                    #  print(len(subsetray))
+                    #  print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+                plus_index_storage=plus_range_ind
+                minus_index_storage=minus_range_ind
+
+
+            Surge_Holder[Surge_ID]['Offset_diff'].update({dist: exact_diff_holder}) 
+            Surge_Holder[Surge_ID]['Offset_diff'].update({str(dist)+'_Max': maxseg_diff_holder}) 
+
+
+
+        # * * *
         maxindexlist=np.where(Surge_Area_Rdata == np.nanmax(Surge_Area_Rdata))
         minindexlist=np.where(Surge_Area_Rdata == np.nanmin(Surge_Area_Rdata))
         xmax, ymax, xmin, ymin = [],[],[],[]
