@@ -114,7 +114,7 @@ def pform_names(Type):
     if Type == 'ALL': P_list = ['WTx_M','OK_M','IA_M','KS_M','ASOS','FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS', 'Ka1','Ka2','NOXP','WSR88D']
     elif Type == "STN_I": P_list= ['WTx_M','OK_M','IA_M','KS_M', 'ASOS']
     elif Type == 'MESO': P_list = ['WTx_M','OK_M','IA_M', 'KS_M']
-    elif Type == 'TInsitu': P_list = ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3','UAS']
+    elif Type == 'TInsitu': P_list = ['FFld','LIDR','Prb1','Prb2','WinS','CoMeT1','CoMeT2','CoMeT3']#'UAS']
     elif Type == 'UNL': P_list = ['CoMeT1','CoMeT2','CoMeT3']
     elif Type == 'NSSL': P_list = ['FFld','LIDR','Prb1','Prb2','WinS']
     elif Type == 'RADAR': P_list = ['Ka1','Ka2','NOXP','WSR88D']
@@ -296,10 +296,11 @@ def read_TInsitu(config, day, pname, d_testing=False):
                Tstart,Tend: datetime objects
         OUTPUT: dataframe containing all data collected during desired times
     '''
-    def get_timeave_previous(df, var, centered_time, time_offset):
-        lower_tbound = (centered_time-dt.timedelta(minutes=time_offset)) 
-        upper_tbound = centered_time
-        df_sub = df.loc[(df['datetime'] >= lower_tbound) & (df['datetime'] <= upper_tbound)]
+    def get_timeave(df, var, start, end):
+        df_sub = df.loc[(df['datetime'] >= start) & (df['datetime'] <= end)]
+        pd.set_option("display.max_rows", None)
+
+        #  print(df_sub[['datetime',var]])
         mean = df_sub[var].mean()
         return mean
     def get_timearround(df, var, centered_time, time_offset):
@@ -324,6 +325,7 @@ def read_TInsitu(config, day, pname, d_testing=False):
         #  if the defn was only called to it will exit at this point (saving computing time)
         # + + + + + + + + + + + + ++ + +
 
+        print(mmfile)
         data_hold = [] #empty list to append to
         for i in range(len(mmfile)):
             ds = xr.open_dataset(mmfile[i])
@@ -375,11 +377,41 @@ def read_TInsitu(config, day, pname, d_testing=False):
 
         if config.overlays['Colorline']['Pert'] == True:
             for var in config.Line_Plot: 
+                base_times=config.Pert_times[day]
                 var_pert_data=[]
-                for i,j in data_unl.iterrows():
-                    base_state =get_timeave_previous(data_unl, var, j['datetime'], 60)
-                    pert_data= j[var] - base_state 
-                    var_pert_data.append(pert_data)
+                if base_times != None:
+                    for p in base_times.keys(): 
+                        if p == 'All':
+                            tstrt= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times['All']['starth'], base_times['All']['startm'], 0)
+                            tend= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times['All']['endh'], base_times['All']['endm'], 0)
+                            base_state = get_timeave(data_unl, var, tstrt, tend) 
+                        elif p == 'All except p1':
+                            if pname != 'Prb1':
+                                tstrt= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times['All except p1']['starth'], base_times['All except p1']['startm'], 0)
+                                tend= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times['All except p1']['endh'], base_times['All except p1']['endm'], 0)
+                                base_state = get_timeave(data_unl, var, tstrt, tend) 
+                            else: 
+                                base_state=None
+                        elif pname == p:
+                            tstrt= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times[p]['starth'], base_times[p]['startm'], 0)
+                            tend= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times[p]['endh'], base_times[p]['endm'], 0)
+                            base_state = get_timeave(data_unl, var, tstrt, tend) 
+                        else: 
+                            base_state=None
+
+                        if base_state != None:
+                            #  pd.set_option("display.max_columns", None)
+                            #  print(data_nssl)
+                            print(('Base: {}, Pform: {}').format(base_state, pname)) 
+                            for i,j in data_unl.iterrows():
+                                #  print(('Base: {}, orig: {}, diff: {}, time: {}').format(base_state, j[var], base_state-j[var], j['datetime']))
+                                pert_data= j[var] - base_state 
+                                var_pert_data.append(pert_data)
+                        else: 
+                            var_pert_data=np.full_like(data_unl[var], np.nan)
+                else:
+                    var_pert_data=np.full_like(data_unl[var], np.nan)
+
                 data_unl.loc[:, var+str('_pert')]=var_pert_data    
         if config.lineplt_control['Deriv'] == True:
             for var in config.Line_Plot: 
@@ -462,12 +494,48 @@ def read_TInsitu(config, day, pname, d_testing=False):
         data_nssl.loc[:, 'U'], data_nssl.loc[:, 'V'] = u.to('knot'), v.to('knot')
 
         if config.overlays['Colorline']['Pert'] == True:
-            for var in config.Line_Plot: 
+            for var in config.Line_Plot:
+                base_times=config.Pert_times[day]
                 var_pert_data=[]
-                for i,j in data_nssl.iterrows():
-                    base_state =get_timeave_previous(data_nssl, var, j['datetime'], 60)
-                    pert_data= j[var] - base_state 
-                    var_pert_data.append(pert_data)
+                #  print(vars(base_times))
+                if base_times != None:
+                    for p in base_times.keys(): 
+                        if p == 'All':
+                            tstrt= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times['All']['starth'], base_times['All']['startm'], 0)
+                            tend= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times['All']['endh'], base_times['All']['endm'], 0)
+                            base_state = get_timeave(data_nssl, var, tstrt, tend) 
+                        elif p == 'All except p1':
+                            if pname != 'Prb1':
+                                tstrt= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times['All except p1']['starth'], base_times['All except p1']['startm'], 0)
+                                tend= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times['All except p1']['endh'], base_times['All except p1']['endm'], 0)
+                                base_state = get_timeave(data_nssl, var, tstrt, tend) 
+                            else: 
+                                base_state=None
+
+                        elif pname == p:
+                            tstrt= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times[p]['starth'], base_times[p]['startm'], 0)
+                            tend= dt.datetime(int(day[0:4]), int(day[4:6]), int(day[6:8]), base_times[p]['endh'], base_times[p]['endm'], 0)
+                            base_state = get_timeave(data_nssl, var, tstrt, tend) 
+                        else: 
+                            base_state=None
+
+                        #  print(pname)
+                        #  print(p)
+                        #  print(base_state)
+                        #  print('yyyyyy')
+                        if base_state != None:
+                            #  pd.set_option("display.max_columns", None)
+                            #  print(data_nssl)
+                            print(('Base: {}, Pform: {}').format(base_state, pname)) 
+                            for i,j in data_nssl.iterrows():
+                                #  print(('Base: {}, orig: {}, diff: {}, time: {}').format(base_state, j[var], j[var]-base_state, j['datetime']))
+                                pert_data= j[var] - base_state 
+                                var_pert_data.append(pert_data)
+                        else: 
+                            var_pert_data=np.full_like(data_nssl[var], np.nan)
+                else: 
+                    var_pert_data=np.full_like(data_nssl[var], np.nan)
+
                 data_nssl.loc[:, var+str('_pert')]=var_pert_data    
         if config.lineplt_control['Deriv'] == True:
             for var in config.Line_Plot: 

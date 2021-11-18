@@ -7,6 +7,8 @@ import matplotlib
 #  matplotlib.use('agg')
 #  matplotlib.use('GTK3Agg')
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+from matplotlib.ticker import PercentFormatter
 import pandas as pd
 import numpy as np
 import datetime as dt
@@ -18,9 +20,22 @@ from datetime import datetime, timedelta
 from scipy import stats
 from scipy import ndimage, interpolate
 from shapely.geometry import LineString, Point, Polygon, MultiPoint
+import os
+import os.path
+import copy
+import numpy.ma as ma
+import matplotlib.colors as colors
+#  from matplotlib.colors import DivergingNorm
+from pathlib import Path
+import cmocean
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import statistics
+import statsmodels.api as sm 
 
 #this is the file with the plotting controls to access any of the vars in that file use config.var
 import config as plot_config
+from converge_plt import make_con_csv, csvstats_scatterplts, Conv_1dplt, Conv_histograms
 from read_pforms import Platform, time_in_range
 from radar_defns import get_WSR_from_AWS, read_from_radar_file, radar_fields_prep
 
@@ -50,7 +65,163 @@ def clicker_defn(PLT, AXES):
     #  plt.waitforbuttonpress()
     return pts
 
-def make_csv(config, Data, pts, surge_name, tilt, filename, Type, Does_csv_exist):
+def compute_surgestats(self, day, Data, config, Surge_ID, Surge_Holder, Conv, valid_rays):
+    Surgedata=Surge_Holder[Surge_ID]
+    #  fields = ['Day','RName', 'Scan_time', 'Surge_ID', 'Surge_Rorigin', 'Pnts_Selected',
+            #  'Max_Dist_Offset','AllRay_Count', 'Vray_Count','Straight_Length','length','area', 'slope','Intercept','Max_Vel', 'Min_Vel','Vel_Diff',
+            #  'Sigma','Mu','Kappa','Gamma', 'Vray_Sigma', 'Vray_Mu', 'Vray_Kappa','Vray_Gamma', 'deg_thres',
+            #  'Conv_Max_Vrays', 'Conv_Max_Allrays', 'Conv_Mean_Vrays', 'Conv_Mean_Allrays', 'Conv_PTP_Vrays', 'Conv_PTP_Allrays',
+            #  'Vdiff_convcalc_Max_Vrays', 'Vdiff_convcalc_Max_Allrays', 'Vdiff_convcalc_Mean_Vrays', 'Vdiff_convcalc_Mean_Allrays', 'Vdiff_convcalc_PTP_Vrays', 'Vdiff_convcalc_PTP_Allrays']
+    Surge_stats_dict={}
+    #  for i in fields:
+        #  Surge_stats_dict[i]=None
+
+    # * * *
+    #current_surge_df, rname, Surges
+    current_surge_df= self.valid_surges[self.valid_surges['Surge_ID'] == Surge_ID]
+    rname=current_surge_df.loc[0,'RName']
+    Surge_stats_dict['Day']=day
+    Surge_stats_dict['RName']=Data['P_Radar'].site_name
+    Surge_stats_dict['Surge_ID']=Surge_ID
+    Surge_stats_dict['Scan_time']=Data['P_Radar'].Scan_time
+
+    Surge_stats_dict['Surge_Rorigin']=str(rname)+' '+str(current_surge_df.loc[0,'Tilt'])
+    Surge_stats_dict['Pnts_Selected']=len(Surgedata['point_labels'])
+    Surge_stats_dict['Max_Dist_Offset']=np.max(config.Surge_controls['Surges']['offset_dist'])
+    Surge_stats_dict['AllRay_Count']=np.max(Surgedata['Center_pnts']['Index']['Ray'])-np.min(Surgedata['Center_pnts']['Index']['Ray'])
+    Surge_stats_dict['VRay_Count']=(len(Surgedata['Surge_Subset']['Valid_Rays']))#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+
+    init_point = Point(Surgedata['Center_pnts']['x'][0], Surgedata['Center_pnts']['y'][0])
+    final_point = Point(Surgedata['Center_pnts']['x'][-1], Surgedata['Center_pnts']['y'][-1])
+    straight_dist=init_point.distance(final_point)
+    Surge_stats_dict['Straight_Length']=round(straight_dist)
+    Surge_stats_dict['length']=round(Surgedata['Center_pnts']['line_object'].length)
+    Surge_stats_dict['area']=round(Surgedata['Polygon'].area)
+
+    if Surgedata['line']['slope'] != None:  
+        Surge_stats_dict['slope']=round(Surgedata['line']['slope'],3)
+        Surge_stats_dict['Intercept']=round(Surgedata['line']['intercept'])
+        Surge_stats_dict['Max_Vel']=round(Surgedata['Surge_Subset']['Max']['value'])
+        Surge_stats_dict['Min_Vel']=round(Surgedata['Surge_Subset']['Min']['value'])
+        Surge_stats_dict['Vel_Diff']=abs(Surge_stats_dict['Max_Vel']-Surge_stats_dict['Min_Vel'])
+
+    flat_Conv=np.ndarray.flatten(Conv)
+    Conv_nonans=flat_Conv[~np.isnan(flat_Conv)]
+
+    Surge_stats_dict['Sigma']=np.std(Conv_nonans)
+    Surge_stats_dict['Mu']=np.mean(Conv_nonans)
+    Surge_stats_dict['Kappa']=stats.kurtosis(Conv_nonans)
+    Surge_stats_dict['Gamma']=stats.skew(Conv_nonans)
+    
+    if config.Conv_controls['Valid_Rays'] == True:
+        Surge_stats_dict['deg_thres']=str(config.Surge_controls['Surges']['ray_selection_method'])+' '+str(config.Surge_controls['Surges']['ray_selection_thresh'])
+        Vr_Conv=Conv
+        for ray in range(np.shape(Vr_Conv)[0]):
+            if valid_rays[ray]==False:
+                Vr_Conv[ray,:]=np.nan
+        flat_Vr_Conv=np.ndarray.flatten(Vr_Conv)
+        Vr_Conv_nonans=flat_Vr_Conv[~np.isnan(flat_Vr_Conv)]
+        
+        if len(Vr_Conv_nonans)!=0:
+            Surge_stats_dict['Vray_Sigma']=np.std(Vr_Conv_nonans)
+            Surge_stats_dict['Vray_Mu']=np.mean(Vr_Conv_nonans)
+            Surge_stats_dict['Vray_Kappa']=stats.kurtosis(Vr_Conv_nonans)
+            Surge_stats_dict['Vray_Gamma']=stats.skew(Vr_Conv_nonans)
+
+            Surge_stats_dict['Sigma_Diff']=abs(Surge_stats_dict['Sigma']-Surge_stats_dict['Vray_Sigma'])
+            Surge_stats_dict['Mu_Diff']=abs(Surge_stats_dict['Mu']-Surge_stats_dict['Vray_Mu'])
+            Surge_stats_dict['Kappa_Diff']=abs(Surge_stats_dict['Kappa']-Surge_stats_dict['Vray_Kappa'])
+            Surge_stats_dict['Gamma_Diff']=abs(Surge_stats_dict['Gamma']-Surge_stats_dict['Vray_Gamma'])
+
+    Surge_stats_dict['Conv_Max_Vrays']=Surgedata['Diff_Calcs']['Conv']['Max']['Vrays']
+    Surge_stats_dict['Conv_Max_Allrays']=Surgedata['Diff_Calcs']['Conv']['Max']['Allrays']
+    Surge_stats_dict['Conv_Mean_Vrays']=Surgedata['Diff_Calcs']['Conv']['Mean']['Vrays']
+    Surge_stats_dict['Conv_Mean_Allrays']=Surgedata['Diff_Calcs']['Conv']['Mean']['Allrays']
+
+    Surge_stats_dict['Vdiff_convcalc_Max_Vrays']=Surgedata['Diff_Calcs']['Vdiff_convcalc']['Max']['Vrays']
+    Surge_stats_dict['Vdiff_convcalc_Max_Allrays']=Surgedata['Diff_Calcs']['Vdiff_convcalc']['Max']['Allrays']
+    Surge_stats_dict['Vdiff_convcalc_Mean_Vrays']=Surgedata['Diff_Calcs']['Vdiff_convcalc']['Mean']['Vrays']
+    Surge_stats_dict['Vdiff_convcalc_Mean_Allrays']=Surgedata['Diff_Calcs']['Vdiff_convcalc']['Mean']['Allrays']
+    # * * * *
+    if len(Surge_stats_dict['Conv_Max_Vrays']) != 0:
+        #  print(Surge_stats_dict['Conv_Max_Vrays'])
+        #  print(type(Surge_stats_dict['Conv_Max_Vrays']))
+        #  print('7777777777777777777')
+        #  print(np.mean(Surge_stats_dict['Conv_Max_Vrays']))
+        #  print(type(np.mean(Surge_stats_dict['Conv_Max_Vrays'])))
+        #  print('8888888887777777777')
+        Surge_stats_dict['Conv_Max_Vrays_Mean']=np.mean(Surge_stats_dict['Conv_Max_Vrays'])
+        Surge_stats_dict['Conv_Mean_Vrays_Mean']=np.mean(Surge_stats_dict['Conv_Mean_Vrays'])
+        Surge_stats_dict['Conv_Max_Vrays_Median']=np.median(Surge_stats_dict['Conv_Max_Vrays'])
+        Surge_stats_dict['Conv_Mean_Vrays_Median']=np.median(Surge_stats_dict['Conv_Mean_Vrays'])
+        Surge_stats_dict['Conv_Max_Vrays_Min']=np.min(Surge_stats_dict['Conv_Max_Vrays'])
+        Surge_stats_dict['Conv_Mean_Vrays_Min']=np.min(Surge_stats_dict['Conv_Mean_Vrays'])
+        Surge_stats_dict['Conv_Max_Vrays_Max']=np.max(Surge_stats_dict['Conv_Max_Vrays'])
+        Surge_stats_dict['Conv_Mean_Vrays_Max']=np.max(Surge_stats_dict['Conv_Mean_Vrays'])
+        Surge_stats_dict['Vdiff_convcalc_Max_Vrays_Mean']=np.mean(Surge_stats_dict['Vdiff_convcalc_Max_Vrays'])
+        Surge_stats_dict['Vdiff_convcalc_Mean_Vrays_Mean']=np.mean(Surge_stats_dict['Vdiff_convcalc_Mean_Vrays'])
+        Surge_stats_dict['Vdiff_convcalc_Max_Vrays_Median']=np.median(Surge_stats_dict['Vdiff_convcalc_Max_Vrays'])
+        Surge_stats_dict['Vdiff_convcalc_Mean_Vrays_Median']=np.median(Surge_stats_dict['Vdiff_convcalc_Mean_Vrays'])
+        Surge_stats_dict['Vdiff_convcalc_Max_Vrays_Max']=np.max(Surge_stats_dict['Vdiff_convcalc_Max_Vrays'])
+        Surge_stats_dict['Vdiff_convcalc_Mean_Vrays_Max']=np.max(Surge_stats_dict['Vdiff_convcalc_Mean_Vrays'])
+        Surge_stats_dict['Vdiff_convcalc_Max_Vrays_Min']=np.min(Surge_stats_dict['Vdiff_convcalc_Max_Vrays'])
+        Surge_stats_dict['Vdiff_convcalc_Mean_Vrays_Min']=np.min(Surge_stats_dict['Vdiff_convcalc_Mean_Vrays'])
+
+    Surge_stats_dict['Conv_Max_Allrays_Mean']=np.mean(Surge_stats_dict['Conv_Max_Allrays'])
+    Surge_stats_dict['Conv_Mean_Allrays_Mean']=np.mean(Surge_stats_dict['Conv_Mean_Allrays'])
+
+    Surge_stats_dict['Conv_Max_Allrays_Median']=np.median(Surge_stats_dict['Conv_Max_Allrays'])
+    Surge_stats_dict['Conv_Mean_Allrays_Median']=np.median(Surge_stats_dict['Conv_Mean_Allrays'])
+
+    Surge_stats_dict['Conv_Max_Allrays_Max']=np.max(Surge_stats_dict['Conv_Max_Allrays'])
+    Surge_stats_dict['Conv_Mean_Allrays_Max']=np.max(Surge_stats_dict['Conv_Mean_Allrays'])
+
+    Surge_stats_dict['Conv_Max_Allrays_Min']=np.min(Surge_stats_dict['Conv_Max_Allrays'])
+    Surge_stats_dict['Conv_Mean_Allrays_Min']=np.min(Surge_stats_dict['Conv_Mean_Allrays'])
+    
+    Surge_stats_dict['Vdiff_convcalc_Max_Allrays_Mean']=np.mean(Surge_stats_dict['Vdiff_convcalc_Max_Allrays'])
+    Surge_stats_dict['Vdiff_convcalc_Mean_Allrays_Mean']=np.mean(Surge_stats_dict['Vdiff_convcalc_Mean_Allrays'])
+
+    Surge_stats_dict['Vdiff_convcalc_Max_Allrays_Median']=np.median(Surge_stats_dict['Vdiff_convcalc_Max_Allrays'])
+    Surge_stats_dict['Vdiff_convcalc_Mean_Allrays_Median']=np.median(Surge_stats_dict['Vdiff_convcalc_Mean_Allrays'])
+
+    Surge_stats_dict['Vdiff_convcalc_Max_Allrays_Max']=np.max(Surge_stats_dict['Vdiff_convcalc_Max_Allrays'])
+    Surge_stats_dict['Vdiff_convcalc_Mean_Allrays_Max']=np.max(Surge_stats_dict['Vdiff_convcalc_Mean_Allrays'])
+
+    Surge_stats_dict['Vdiff_convcalc_Max_Allrays_Min']=np.min(Surge_stats_dict['Vdiff_convcalc_Max_Allrays'])
+    Surge_stats_dict['Vdiff_convcalc_Mean_Allrays_Min']=np.min(Surge_stats_dict['Vdiff_convcalc_Mean_Allrays'])
+
+
+    ####### 
+    print('HHLLLLLLLLL')
+    print(Surge_stats_dict.keys())
+    print('JJJJKKJJJJ')
+    make_surgestats_csv(config, Data, Surge_stats_dict.keys(), Surge_stats_dict)
+    pprint.pprint(Surge_stats_dict)
+    return Surge_stats_dict
+
+def make_surgestats_csv(config, Data, fields, Surge_stats_dict):
+    csv_name= config.g_TORUS_directory+'Surge_stats.csv'
+    Does_csv_exist=os.path.isfile(csv_name)
+    if Does_csv_exist == False: 
+        # making csv file if it does not exist 
+        with open(csv_name, 'w') as csvfile: 
+            # field names 
+            
+            # creating a csv writer object 
+            csvwriter = csv.writer(csvfile) 
+            # writing the fields 
+            csvwriter.writerow(fields) 
+
+    ###
+    # Now append the new row of data points
+    with open(csv_name, 'a') as csvfile: 
+        writer= csv.DictWriter(csvfile, fieldnames=fields)
+        #  for data in Surge_stats_dict:
+        writer.writerow(Surge_stats_dict)
+
+
+def make_surgemeso_obj_csv(config, Data, pts, surge_name, tilt, filename, Type, Does_csv_exist):
     if Type == 'Surge':
         ID_name = 'Surge_ID'
     elif Type == 'Meso':
@@ -322,11 +493,12 @@ def meso_radarbins(self, day, config, Data, sweep):
             #  Meso_subset_rmom= np.zeros(r_mom_ofintrest_data.shape)
             #  Meso_subset_rmom[sweep_startidx:sweep_endidx+1] = masked_subset_orig_rmom
             #  Data['P_Radar'].rfile.add_field('Meso_test', {'data': Meso_subset_rmom}, replace_existing=True)
+            #############
 
     #  pprint.pprint(Meso_Holder)
     return Meso_Holder
 
-def surge_radarbins(self, config, Data, sweep):
+def surge_radarbins(self, config, Data, sweep, day):
     def angle3pt(a, b, c):
         """Counterclockwise angle in degrees by turning from a to c around b
             Returns a float between 0.0 and 360.0"""
@@ -505,14 +677,10 @@ def surge_radarbins(self, config, Data, sweep):
                 Plus_Intersections=Surge_Holder[Surge_ID]['Offset_pnts'][Max_dist]['Plus']['line_object'].intersection(ray_line_object)
                 Minus_Intersections=Surge_Holder[Surge_ID]['Offset_pnts'][Max_dist]['Minus']['line_object'].intersection(ray_line_object)
 
-                if isinstance(Plus_Intersections, MultiPoint):
-                    Plus_Intx=Plus_Intersections[0]
-                elif isinstance(Plus_Intersections, Point):
-                    Plus_Intx=Plus_Intersections
-                if isinstance(Minus_Intersections, MultiPoint):
-                    Minus_Intx=Minus_Intersections[0]
-                elif isinstance(Minus_Intersections, Point):
-                    Minus_Intx=Minus_Intersections
+                if isinstance(Plus_Intersections, MultiPoint): Plus_Intx=Plus_Intersections[0]
+                elif isinstance(Plus_Intersections, Point): Plus_Intx=Plus_Intersections
+                if isinstance(Minus_Intersections, MultiPoint): Minus_Intx=Minus_Intersections[0]
+                elif isinstance(Minus_Intersections, Point): Minus_Intx=Minus_Intersections
 
                 ray_ind, plus_range_ind, extra_bins = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=Plus_Intx.x, given_y_lat=Plus_Intx.y)
                 ray_ind, minus_range_ind, extra_bins = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=Minus_Intx.x, given_y_lat=Minus_Intx.y)
@@ -577,15 +745,26 @@ def surge_radarbins(self, config, Data, sweep):
         Surge_subset_rmom= np.zeros(r_mom_ofintrest_data.shape)
         Surge_subset_rmom[sweep_startidx:sweep_endidx+1] = Surge_Area_Rdata
         Data['P_Radar'].rfile.add_field('Surge_subset_'+str(Surge_ID), {'data': Surge_subset_rmom}, replace_existing=True) 
+        
+        #* 8 * 8 *
+        Conv, X, Y, Z, valid_ray_bool, DiffCon_Holder=calc_vdiff_con(config, Data, Surge_ID, Surge_Holder[Surge_ID], store_rays_wthin_range, sweep, subset_orig_rmom, np.max(offset_bins))
+        Surge_Holder[Surge_ID]['Diff_Calcs']= DiffCon_Holder
+
+
+
+
+        print('HHHHHHHJJJJJJJLLLLLLHHHHH')
 
         # * * *
+        '''
         Max_diffholder=[]
         Area_of_interest=(Surge_Area_Rdata[np.min(Surge_Holder[Surge_ID]['Center_pnts']['Index']['Ray']):np.max(
-                        Surge_Holder[Surge_ID]['Center_pnts']['Index']['Ray']),:])
+                          Surge_Holder[Surge_ID]['Center_pnts']['Index']['Ray']),:])
         for ray in range(np.shape(Area_of_interest)[0]):
             ray_of_interest=Area_of_interest[ray]
             ray_wo_nan= ray_of_interest[~np.isnan(ray_of_interest)]
-            Max_diffholder.append(np.max(ray_wo_nan.ptp()))
+            if len(ray_wo_nan) != 0:
+                Max_diffholder.append(np.max(ray_wo_nan.ptp()))
         Surge_Holder[Surge_ID]['Offset_diff']={'Max_alongrays': Max_diffholder} 
 
         for count, dist in enumerate(config.Surge_controls['Surges']['offset_dist']):
@@ -649,15 +828,6 @@ def surge_radarbins(self, config, Data, sweep):
                         subsetray= np.ma.append(plus_subsetray, minus_subsetray)
                         maxseg_diff_holder.append(np.max(subsetray.ptp()))
 
-                    #  print('oooooo')
-                    #  print(('Dist: {}, Ray {}').format(dist, ray))
-                    #  print(('Plus Range Ind: Current {}, Prior {}').format(currentplus_range_ind, pre_plus_range_ind))
-                    #  print(('Minus Range Ind: Current {}, Prior {}').format(currentminus_range_ind, pre_minus_range_ind))
-                    #  print(('Length of Subsets: Plus {}, Minus {}').format(len(plus_subset),len(minus_subset)))
-                    #  print('uuuuuuuuuuuuuuuu')
-                    #  print(subsetray)
-                    #  print(len(subsetray))
-                    #  print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
                 plus_index_storage=plus_range_ind
                 minus_index_storage=minus_range_ind
 
@@ -665,6 +835,7 @@ def surge_radarbins(self, config, Data, sweep):
             Surge_Holder[Surge_ID]['Offset_diff'].update({dist: exact_diff_holder}) 
             Surge_Holder[Surge_ID]['Offset_diff'].update({str(dist)+'_Max': maxseg_diff_holder}) 
 
+        '''
 
 
         # * * *
@@ -687,6 +858,15 @@ def surge_radarbins(self, config, Data, sweep):
                                             'Max':{'value':np.nanmax(Surge_Area_Rdata), 'x': xmax, 'y':ymax },
                                             'Min':{'value':np.nanmin(Surge_Area_Rdata), 'x': xmin, 'y':ymin }}
                                        })
+
+    
+        ######
+        Surge_stats_dict=compute_surgestats(self, day, Data, config, Surge_ID, Surge_Holder, Conv, valid_ray_bool)
+        Surge_Holder[Surge_ID].update({'Stats':Surge_stats_dict})
+        
+        tilt_ang = Data['P_Radar'].rfile.get_elevation(sweep)
+        Conv_1dplt(Z, X, Y, Surge_ID, day, Data, config, tilt_ang, valid_ray_bool, Surge_stats_dict)
+        Conv_histograms(Conv, Surge_ID, day, Data, config, tilt_ang, valid_ray_bool, Surge_stats_dict)
     #  pprint.pprint(Surge_Holder)
     return Surge_Holder, gate_x, gate_y, gate_lon, gate_lat
 
@@ -708,6 +888,111 @@ def surge_radarbins(self, config, Data, sweep):
     #  Fraction = Numerator / Denominator
     #  result_angle = math.acos(Fraction)
     #  return result_angle
+
+#################################################
+def calc_vdiff_con(config, Data, Surge_ID, Surgedata, store_rays_wthin_range, sweep, subset_orig_rmom, Max_obins):
+    gate_x, gate_y, _ = Data['P_Radar'].rfile.get_gate_x_y_z(sweep)
+    range_bins_alongray = Data['P_Radar'].rfile.range['data']
+    
+    #set up blank lists
+    Rays_conv, Rays_dist, Rays_diff=[], [],[]
+    Rays_mdata, Rays_pdata=[],[]
+    All_conv_mean, All_diff_mean, All_conv_max, All_diff_max=[],[],[],[]
+    Vray_conv_mean, Vray_diff_mean, Vray_conv_max, Vray_diff_max=[],[],[],[]
+    valid_ray_bool=[]
+
+    #  for ray in range(np.shape(Area_of_interest)[0]):
+    for ray in np.arange(np.min(Surgedata['Center_pnts']['Index']['Ray']),
+                         np.max(Surgedata['Center_pnts']['Index']['Ray'])):
+        #Determine the radarbin of the surge for a given ray
+        ray_line_object=LineString(list(zip(gate_x[ray], gate_y[ray])))
+        Intersections=Surgedata['Center_pnts']['line_object'].intersection(ray_line_object)
+        if isinstance(Intersections, MultiPoint): Intersect= Intersections[0]
+        else:  Intersect= Intersections
+        ray_ind, c_range_ind, _ = return_pnt_index(Data, gate_x, gate_y, sweep, given_x_lon=Intersect.x, given_y_lat=Intersect.y)
+        exact_c_radarbin_entry=subset_orig_rmom[ray_ind, c_range_ind]
+
+        m_rangebound=c_range_ind-Max_obins
+        p_rangebound=c_range_ind+Max_obins
+        if m_rangebound <= 0:
+            Mdata=subset_orig_rmom[ray_ind, 0:c_range_ind]
+            while len(Mdata) < Max_obins:
+                Mdata=np.append(Mdata,np.nan)
+            #  Mdata=ma.full(Max_obins, np.nan)
+            #  Mdata[0:Max_obins+1]=subset_orig_rmom[ray_ind, 0:c_range_ind]
+        else:
+            Mdata=subset_orig_rmom[ray_ind, m_rangebound:c_range_ind]
+
+        Mdata[Mdata==-9999.0]=np.nan
+        Mdata[Mdata._mask==True]=np.nan
+        Pdata=subset_orig_rmom[ray_ind, c_range_ind:p_rangebound]
+        Pdata[Pdata==-9999.0]=np.nan
+        Pdata[Pdata._mask==True]=np.nan
+
+        Convergence, Difference, Distance=[], [],[]
+        for obin in range(1, Max_obins+1):
+            dist= (obin*Data['P_Radar'].rfile.range['meters_between_gates'])*2
+            Distance.append(dist)
+            plus_range_ind, minus_range_ind = (c_range_ind + obin), (c_range_ind - obin)
+
+            if plus_range_ind <= len(range_bins_alongray):
+                p_rb_entry, p_rb_entry_m = subset_orig_rmom[ray_ind, plus_range_ind], subset_orig_rmom._mask[ray_ind, plus_range_ind]
+                m_rb_entry, m_rb_entry_m = subset_orig_rmom[ray_ind, minus_range_ind], subset_orig_rmom._mask[ray_ind, minus_range_ind]
+
+                if p_rb_entry== -9999.0 or p_rb_entry_m == True or m_rb_entry== -9999.0 or m_rb_entry_m == True: #if either bin is masked
+                    Convergence.append(np.nan)
+                    Difference.append(np.nan)
+                else:#actually calc convergence 
+                    diff = m_rb_entry - p_rb_entry
+                    Difference.append(diff)
+                    con = diff/dist
+                    Convergence.append(con)
+
+        All_conv_max.append(np.nanmax(Convergence))
+        All_diff_max.append(np.nanmax(Difference))
+
+        Count=np.count_nonzero(~np.isnan(Difference))
+        Ave_Conv=np.nanmean(Convergence)
+        Ave_Diff=np.nanmean(Difference)
+        All_conv_mean.append(Ave_Conv)
+        All_diff_mean.append(Ave_Diff)
+        #  print(Ave_Conv)
+        #  print('AveCon: {}\nCount: {}\n\n'.format(Ave_Conv, Count))
+        #  print('Con: {}\nDiff: {}\nDist: {}\nCount: {}\n\n'.format(Convergence, Difference, Distance, Count))
+        Rays_pdata.append(Pdata)
+        Rays_mdata.append(Mdata)
+        Rays_conv.append(Convergence)
+        Rays_dist.append(Distance)
+        Rays_diff.append(Difference)
+
+        if ray in store_rays_wthin_range:
+            Vray_conv_max.append(np.nanmax(Convergence))
+            Vray_diff_max.append(np.nanmax(Difference))
+            Vray_conv_mean.append(Ave_Conv)
+            Vray_diff_mean.append(Ave_Diff)
+            valid_ray_bool.append(True)
+        else:
+            valid_ray_bool.append(False)
+        
+    # * * * *
+    Conv, Dist, Diff, Md, Pd = np.array(Rays_conv), np.array(Rays_dist), np.array(Rays_diff), np.array(Rays_mdata), np.array(Rays_pdata)
+    Z=[Conv, Diff, Md, Pd, Dist ]
+    X,Y=np.meshgrid(range(Conv.shape[1]+1), range(Conv.shape[0]+1))
+    # * * * *
+
+    DiffCon_Holder={'Conv':{'Max':{'Vrays':Vray_conv_max, 'Allrays':All_conv_max},
+                            'Mean':{'Vrays':Vray_conv_mean, 'Allrays':All_conv_mean}, 
+                            'PTP':{'Vrays':None, 'Allrays':None}},
+                    'Vdiff_convcalc':{'Max':{'Vrays':Vray_diff_max, 'Allrays':All_diff_max},
+                                      'Mean':{'Vrays':Vray_diff_mean, 'Allrays':All_diff_mean}, 
+                                      'PTP':{'Vrays':None, 'Allrays':None}},
+                    'Vdiff_odist':{'Max':{'Vrays':None, 'Allrays':None},
+                                   'Mean':{'Vrays':None, 'Allrays':None}, 
+                                   'PTP':{'Vrays':None, 'Allrays':None}}
+                    }
+
+    return Conv, X,Y,Z, valid_ray_bool, DiffCon_Holder
+
 
 
 

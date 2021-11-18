@@ -69,7 +69,7 @@ from collections import namedtuple
 #this is the file with the plotting controls to access any of the vars in that file use config.var
 import config as plot_config
 import copy
-import singledop
+#import singledop
 import pynimbus as pyn 
 import tracemalloc
 #import shapefile
@@ -100,8 +100,8 @@ if plot_config.overlays['GEO']['OX'] == True: import osmnx as ox
 ## Read in defns that I have stored in another file (for ease of use/consistancy accross multiple scripts)
 from read_pforms import pform_names, Add_to_DATA, Platform, Torus_Insitu, Radar, Stationary_Insitu
 from read_pforms import error_printing, timer, time_in_range, time_range
-from radar_defns import read_from_radar_file, radar_fields_prep, det_nearest_WSR, sweep_index, get_WSR_from_AWS, info_radar_files
-from surge_defns import clicker_defn, make_csv, csv_reader, surge_radarbins, meso_radarbins
+from radar_defns import read_from_radar_file, MRMS_Reader, radar_fields_prep, det_nearest_WSR, sweep_index, get_WSR_from_AWS, info_radar_files
+from surge_defns import clicker_defn, make_surgemeso_obj_csv, csv_reader, surge_radarbins, meso_radarbins
 
 totalcompT_start = time.time()
 ################################################################################################
@@ -188,7 +188,6 @@ class Master_Plt:
             else:
                 Num_of_rplts= len(config.r_mom)
 
-            #if you specify a start or end time it will be assigned here otherwise will be set to none (full data set)
             if config.radar_controls['layout']['Rows'] == None:
                 R_rows = math.trunc(Num_of_rplts / 2)
             if config.radar_controls['layout']['Cols'] == None:
@@ -210,10 +209,14 @@ class Master_Plt:
             if 'clicker' in config.Line_Plot: 
                 if self.num_of_surges ==0:
                     L_Rows= len(config.Line_Plot)
+                    L_wratio = [.27,6,2,1.3]
+                elif self.num_of_surges ==1:
+                    L_Rows= (len(config.Line_Plot)+self.num_of_surges-1)
+                    L_wratio = [.33,6,2,1.3]
                 else:
                     L_Rows= (len(config.Line_Plot)+self.num_of_surges-1)
-                L_wratio = [.25,2,2,1,1]
-                L_Cols=5
+                    L_wratio = [.27,6,2,1.3]
+                L_Cols=4
             else:
                 L_Rows= len(config.Line_Plot)
                 if config.lineplt_control['Deriv']== True: L_Cols, L_wratio = 2, [2,1]
@@ -275,10 +278,11 @@ class Master_Plt:
             
 
         #######
+
         if config.Surge_controls['Feature_IDing']['Existing_pnts']['Read_in_surges'] == True: 
             self.num_of_surges, self.surge_ids, self.valid_surges = csv_reader(config, Data, day, tilt, 'Surge')
             if self.num_of_surges !=0:
-                self.Surges, self.gate_x, self.gate_y, self.gate_lon, self.gate_lat = surge_radarbins(self, config, Data, Data['P_Radar'].swp)  
+                self.Surges, self.gate_x, self.gate_y, self.gate_lon, self.gate_lat = surge_radarbins(self, config, Data, Data['P_Radar'].swp, day)  
         else: 
             self.num_of_surges=0
 
@@ -291,6 +295,8 @@ class Master_Plt:
             self.meso_ids=None
 
         #######
+        if config.actually_plt_radar == False:
+            return 
         #both ts and r
         if len(config.Line_Plot) != 0 and len(config.r_mom) != 0:
             R_and_L_plt=True
@@ -306,9 +312,9 @@ class Master_Plt:
         elif len(config.Line_Plot) != 0:
             self.L_Rows, self.L_Cols, L_hratio, L_wratio, h_space = lineplot_layout(config)
             if R_and_L_plt == True:
-                self.l_gs = GridSpecFromSubplotSpec(self.L_Rows, self.L_Cols, subplot_spec=self.outer_gs[1, :], height_ratios=L_hratio, width_ratios=L_wratio, hspace=h_space)
+                self.l_gs = GridSpecFromSubplotSpec(self.L_Rows, self.L_Cols, subplot_spec=self.outer_gs[1, :], height_ratios=L_hratio, width_ratios=L_wratio, hspace=h_space, wspace=0)
             else:
-                self.l_gs = GridSpec(self.L_Rows, self.L_Cols, height_ratios=L_hratio, width_ratios=L_wratio, hspace=h_space)
+                self.l_gs = GridSpec(self.L_Rows, self.L_Cols, height_ratios=L_hratio, width_ratios=L_wratio, hspace=h_space, wspace=0)
 
         
         #if we are plotting radar
@@ -463,6 +469,7 @@ class Master_Plt:
             sweep, rfile, Rname, Scan_time, DISPLAY = P_Radar.swp, P_Radar.rfile, P_Radar.name, P_Radar.Scan_time, self.display
         else:
             sweep, rfile, Rname, Scan_time = P_Radar['swp'], P_Radar['rfile'], P_Radar['name'], P_Radar['Scan_time']
+            Rname='WSR88D'
             DISPLAY= pyart.graph.RadarMapDisplay(rfile)
 
         if Rname == 'WSR88D':
@@ -511,15 +518,22 @@ class Master_Plt:
         
         ###
         elif mom == 'zoom':
-            c_scale = cmocean.cm.balance
-            if Rname == 'WSR88D':
-               vminb, vmaxb= -40., 40.
-            else:
-               vminb, vmaxb= -30., 30.
                #  vminb, vmaxb, sweep = -30., 30., Data['P_Radar'].swp
             
-            c_label= 'Radial Velocity Smoothed [m/s]'
-            field= 'vel_smooth'
+            field= self.config.Surge_controls['Zoom']['mom']
+            if field == 'vel_smooth':
+                c_label= str(Surge_ID)+' Radial Velocity Smoothed [m/s]'
+                c_scale = cmocean.cm.balance
+                if Rname == 'WSR88D':
+                   vminb, vmaxb= -40., 40.
+                else:
+                   vminb, vmaxb= -30., 30.
+            elif field == 'vort_smooth':
+                c_label = str(Surge_ID)+' Vort smooth 'r' [$\frac{1}{s}$]'
+                c_scale =  cmocean.cm.curl
+                vminb,vmaxb= -.15, .15  
+
+
 
         
         ###
@@ -651,9 +665,9 @@ class Master_Plt:
 
         elif mom == 'Ray_angle':
             vminb, vmaxb=  -90., 90
-            field= mom+'_'+Surge_ID 
+            field= mom+'_'+str(Surge_ID) 
             c_scale='twilight_shifted'
-            c_label= 'Angle of Ray rel to Surge (deg)' 
+            c_label= 'Ang Ray rel to Surge ('+r'$^{\circ}$'+')' 
 
         elif mom == 'Surge_subset_'+str(Surge_ID):
             vminb, vmaxb= -30., 30.
@@ -726,7 +740,7 @@ class Master_Plt:
         
         # Plot range rings on zoomed image
         def limitcontour(self, ax_n, x,y,z,clevs, xlim=None, ylim=None, **kwargs):
-            print(('Shape: X {}, Y {}, Z {}').format(x.shape,y.shape,z.shape))
+            #  print(('Shape: X {}, Y {}, Z {}').format(x.shape,y.shape,z.shape))
             mask = np.ones(x.shape).astype(bool)
             if xlim:
                 mask = mask & (x>=xlim[0]) & (x<=xlim[1])
@@ -736,13 +750,9 @@ class Master_Plt:
             ym = np.ma.masked_where(~mask , y)
             zm = np.ma.masked_where(~mask , z)
 
-            #  cs = ax_n.contour(xm,ym,zm, clevs,**kwargs)
             cs=ax_n.contour(xm, ym, zm, clevs, linewidths=2, antialiased=True,
                                   alpha=.6, colors='k', linestyles=':', transform=self.Proj)
-            if xlim: ax_n.set_xlim(xlim) #Limit the x-axis
-            if ylim: ax_n.set_ylim(ylim)
             ax_n.clabel(cs,inline=True,fmt='%3.0d',fontsize=self.Contour_label_font['fontsize'])
-
 
 
         if self.config.radar_controls['distance_indicator']['range_rings']== True:
@@ -750,13 +760,11 @@ class Master_Plt:
                 RANGE=np.repeat([rfile.range['data']], np.shape(self.gate_x)[0], axis=0) 
                 levels = np.arange(-20000, 20000, self.config.radar_controls['distance_indicator']['ring_int'])
                 extent=self.Surges[Surge_ID]['zoom_Domain']
-                #  limitcontour(self, ax_n, self.gate_lon, self.gate_lat, RANGE, levels, xlim=[extent.xmin,extent.xmax], ylim=[extent.ymin,extent.ymax], colors="k")
-                #  ax_n.set_xlim([extent.xmin,extent.xmax]) #Limit the x-axis
-                #  ax_n.set_ylim([extent.ymin,extent.ymax])
+                limitcontour(self, ax_n, self.gate_lon, self.gate_lat, RANGE, levels, xlim=[extent.xmin,extent.xmax], ylim=[extent.ymin,extent.ymax], colors="k")
 
-                contours=ax_n.contour(self.gate_lon, self.gate_lat, RANGE, levels, linewidths=2, antialiased=True,
-                                      alpha=.6, colors='k', linestyles=':', transform=self.Proj)
-                ax_n.clabel(contours, levels, fmt='%3.0d', inline=True, fontsize=self.Contour_label_font['fontsize'])
+                #  contours=ax_n.contour(self.gate_lon, self.gate_lat, RANGE, levels, linewidths=2, antialiased=True,
+                                      #  alpha=.6, colors='k', linestyles=':', transform=self.Proj)
+                #  ax_n.clabel(contours, levels, fmt='%3.0d', inline=True, fontsize=self.Contour_label_font['fontsize'])
                 #  ax_n.clabel(contours, levels, fmt='%r', inline=True, fontsize=self.Contour_label_font['fontsize'])
         
         # Plot square grid on non-zoomed image
@@ -792,8 +800,9 @@ class Master_Plt:
                                     zorder=10, s=40, 
                                     path_effects=[PE.withStroke(linewidth=5, foreground='k')])#, c='red')
 
-                ax_n.scatter(self.Surges[Surge_ID]['Surge_Subset']['Max']['x'], self.Surges[Surge_ID]['Surge_Subset']['Max']['y'],s=25, c='yellow', path_effects=[PE.withStroke(linewidth=5, foreground='k')])
-                ax_n.scatter(self.Surges[Surge_ID]['Surge_Subset']['Min']['x'], self.Surges[Surge_ID]['Surge_Subset']['Min']['y'],s=25, c='purple', path_effects=[PE.withStroke(linewidth=5, foreground='k')])
+                if mom =='zoom':
+                    ax_n.scatter(self.Surges[Surge_ID]['Surge_Subset']['Max']['x'], self.Surges[Surge_ID]['Surge_Subset']['Max']['y'],s=25, c='yellow', path_effects=[PE.withStroke(linewidth=5, foreground='k')])
+                    ax_n.scatter(self.Surges[Surge_ID]['Surge_Subset']['Min']['x'], self.Surges[Surge_ID]['Surge_Subset']['Min']['y'],s=25, c='purple', path_effects=[PE.withStroke(linewidth=5, foreground='k')])
                 if self.Surges[Surge_ID]['line']['slope'] != None:  
                     """Plot a line from slope and intercept"""
                     x_vals = np.array(ax_n.get_xlim())
@@ -812,6 +821,8 @@ class Master_Plt:
                     ax_n.scatter(self.Mesos['Min']['x'], self.Mesos['Min']['y'])
 
                     plt.plot(*self.Mesos[Meso]['Center_pnt']['Ring'].exterior.xy)
+                    plt.vlines(self.Mesos[Meso]['Center_pnt']['x'], self.Mesos[Meso]['Center_pnt']['y']-2000, self.Mesos[Meso]['Center_pnt']['y']+2000)
+                    plt.hlines(self.Mesos[Meso]['Center_pnt']['y'], self.Mesos[Meso]['Center_pnt']['x']-2000, self.Mesos[Meso]['Center_pnt']['x']+2000)
             ## PLOT PLATFORMS AS OVERLAYS(ie marker,colorline etc) ON RADAR
         ###############################################################
         def plot_markers(p, lon, lat, txt_label, lab_shift=(.009,.002), lab_c='xkcd:pale blue'):
@@ -1014,13 +1025,21 @@ class Master_Plt:
         ## DEAL WITH COLORBARS
         # Attach colorbar to each subplot
         if self.config.radar_controls['colorbars']['mom'] == True:
+            if mom == 'Ray_angle': 
+                cloc, c_or="right",'vertical'
+            else: 
+                cloc, c_or="bottom",'horizontal'
+
             divider = make_axes_locatable(plt.gca())
-            c_ax = divider.append_axes("bottom", "5%", pad="2%", axes_class=plt.Axes)
-            #  sm = plt.cm.ScalarMappable(cmap=c_scale, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
+            c_ax = divider.append_axes(cloc, "5%", pad="2%", axes_class=plt.Axes)
             sm = plt.cm.ScalarMappable(cmap=colormap, norm=matplotlib.colors.Normalize(vmin=vminb, vmax=vmaxb))
             sm._A = []
-            cb = plt.colorbar(sm, cax=c_ax, orientation='horizontal', extend='both', drawedges=testing_testing, boundaries=testing_bound)
-            cb.set_label(label=c_label, size=self.Radar_title_font['fontsize']) #, weight='bold')
+            cb = plt.colorbar(sm, cax=c_ax, orientation=c_or, extend='both', drawedges=testing_testing, boundaries=testing_bound)
+
+            if mom == 'Ray_angle': 
+                plt.xlabel(c_label, loc='right', size=self.Radar_title_font['fontsize'])
+            else:
+                cb.set_label(label=c_label, size=self.Radar_title_font['fontsize']) #, weight='bold')
 
         if self.config.radar_controls['colorbars']['thermo'] == True and thermo_cbar == True:
             #set up the colorbar for the thermo colorline overlay
@@ -1044,7 +1063,7 @@ class Master_Plt:
 
     # * * * * * * * * * * * * * * * * * * * * * * * *
     # * * * * * * * * * * * * * * * * * * * * * * * *
-    def line_plot(self, ts, ax_n, fig, TVARS, Data, Surge_ID, testing=False, deriv=False):
+    def line_plot(self, ts, ax_n, fig, TVARS, Data, Surge_ID):
         ''' Plot a time series (sub)plot; could be of pvar info from various intstruments or of wind info
         ----
         INPUTS: ts: ........fill in
@@ -1067,6 +1086,65 @@ class Master_Plt:
             ax_n.set_ylabel('Count')
 
         elif ts == 'difference':
+            ax2_divider = make_axes_locatable(ax_n)
+            if self.L_Rows == 1:
+                pad= ax2_divider.append_axes("left", size="3%", pad='35%') #make room for label  
+            else:
+                pad= ax2_divider.append_axes("left", size="3%", pad='25%') #make room for label  
+            pad._visible=False
+            #  print(vars(pad))
+            if self.L_Rows == 1:
+                ax_2= ax2_divider.append_axes("right", size="100%", pad='35%') 
+            else:
+                ax_2= ax2_divider.append_axes("right", size="100%", pad='25%') 
+            if ax_n.get_subplotspec().rowspan.stop != self.L_Rows: 
+                ax_n.tick_params(labelbottom=False)
+                ax_2.tick_params(labelbottom=False)
+            graphs_to_make=['Conv','Vdiff_convcalc'] #Vdiff_odist
+            stats=['Mean','Max'] #'PTP']
+
+            medianprops = dict(linewidth=2.5, color='yellow')
+            meanpointprops = dict(marker='D', markeredgecolor='black',
+                                  markerfacecolor='springgreen')
+            meanlineprops = dict(linewidth=2.5, color='springgreen')
+
+            for graph in graphs_to_make:
+                Labs, Ray_cat, Diffs=[], [], []
+                for stat in stats: 
+                    for Ray_status, entry in self.Surges[Surge_ID]['Diff_Calcs'][graph][stat].items():
+                        Labs.append(stat)
+                        Ray_cat.append(Ray_status)
+                        Diffs.append(entry)
+
+
+                if graph=='Conv':
+                    ax=ax_n 
+                    Ylab='Conv in Radial Vel (/s)'
+                elif graph == 'Vdiff_convcalc': 
+                    ax=ax_2
+                    Ylab='Diff in Radial Vel (m/s)'
+
+                bplot=ax.boxplot(Diffs, vert=True,  # vertical box alignment
+                           patch_artist=True,  # fill with color
+                           meanline=True,showmeans=True,meanprops=meanlineprops, medianprops=medianprops,
+                           labels=Labs)  # will be used to label x-ticks)
+                # fill with colors
+                for patch, color_code in zip(bplot['boxes'], Ray_cat):
+                    if color_code == 'Allrays':
+                        color='steelblue'
+                    if color_code == 'Vrays':
+                        color='indianred'
+                    patch.set_facecolor(color)
+                if graph=='Conv':
+                    ax.ticklabel_format(axis='y',style='sci', scilimits=(0,0))
+                ax.grid(axis='both')
+                ax.tick_params(which='both', axis='y', direction='in', labelrotation=90)
+                ax.tick_params(which='both', axis='x', labelrotation=45)
+                ax.tick_params(which='major', axis='both', direction='in', width=2, length=7, color='grey')
+                ax.set_ylabel(Ylab)
+
+
+            '''
             dist_lab, dist_diffs=[], []
             for dist in self.config.Surge_controls['Surges']['offset_dist']:
                 dist_lab.append(dist)
@@ -1077,135 +1155,113 @@ class Master_Plt:
             max_diff=self.Surges[Surge_ID]['Offset_diff']['Max_alongrays']
             dist_lab.append('PTP')
             dist_diffs.append(max_diff)
-            plt.boxplot(dist_diffs, vert=True,  # vertical box alignment
-                     patch_artist=True,  # fill with color
-                     labels=dist_lab)  # will be used to label x-ticks)
-            ax_n.grid(axis='both')
-            ax_n.tick_params(which='both', axis='y', direction='in')
-            ax_n.tick_params(which='major', axis='both', direction='in', width=2, length=7, color='grey')
-            ax_n.tick_params(which='both', axis='y', labelrotation=90)
+            plt.boxplot(dist_diffs, vert=True, patch_artist=True, labels=dist_lab)  
             plt.ylabel('Diff in Radial Vel (m/s)')
-            plt.xticks(rotation=45)
-            #  plt.boxplot(dist_diffs, vert=True,  # vertical box alignment
-                     #  patch_artist=True,  # fill with color
-                     #  labels=dist_lab)  # will be used to label x-ticks)
+            '''
         elif ts == 'clicker':
             WL=self.config.lineplt_control['smooth_window']
             rmom_orig=self.Surges[Surge_ID]['Surge_Subset']['R_data']
-            if WL != None: 
-                if testing ==False: D_test=0
-                else:  D_test=1
-                #try axis = 0 and compare
-                rmom= scipy.signal.savgol_filter(rmom_orig, window_length=WL, polyorder=2, axis =1, deriv=D_test)#, axis=A)
-                #  rmom= rmom_orig
-            else:
-                rmom= rmom_orig
-
             range_bins_alongray = Data['P_Radar'].rfile.range['data']
-            #  if testing ==False:
-                #  rmom=Data['P_Radar'].rfile.fields['Surge_subset_'+str(Surge_ID)]['data']
-                #  print(np.shape(range_bins_alongray))
-                #  print(np.shape(rmom))
-            if self.config.lineplt_control['ray_style'] == 'allrays':
-                for ray in np.arange(np.min(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray']),
-                                    np.max(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])):
-                    data_subset = scipy.signal.savgol_filter(rmom[ray,:], window_length=WL, polyorder=2)#, deriv=1)#, axis=A)
-                    if ray in self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays']:
-                        #  r_bin_sub.append(range_bins_alongray[ranges_ind[pnt]-Max_obins:ranges_ind[pnt]+Max_obins])
-                        plt.plot(range_bins_alongray, data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
-                        #  plt.plot(self.Surges[Surge_ID]['Subsets']['Range_bins'][ray,:], data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
-                    else: 
-                        plt.plot(range_bins_alongray, data_subset, c='grey', zorder=7, alpha=.6)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
 
-            elif self.config.lineplt_control['ray_style'] == 'averagedrays':
-                ray_count=np.max(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])-np.min(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])
-                rangemean=np.nanmean(rmom, axis=0)
-                rangemax, rangemin =np.nanmax(rmom, axis=0), np.nanmin(rmom, axis=0)
-                #  plt.fill_between(range_bins_alongray, rangemin, rangemax, alpha=.5)
-                for ray in np.arange(np.min(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray']),
-                                    np.max(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])):
-                    #  if ray in self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays']: test_color='red'
-                    #  else: test_color='grey'
-                    #  if WL == None:ray_data=rmom[ray,:]
-                    #  else:ray_data=scipy.signal.savgol_filter(rmom[ray,:], window_length=WL, polyorder=2)
-
-                    plt.plot(range_bins_alongray, rmom[ray,:], color='grey', alpha=.2)
-                plt.plot(range_bins_alongray, rangemean, label='All Rays: '+str(ray_count))
-
-                rmom_subsetby_validray= np.zeros(rmom.shape)
-                rmom_subsetby_validray[:]= np.nan
-                for ray in np.arange(np.min(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray']),
-                                    np.max(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])):
-                    if ray in self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays']:
-                        rmom_subsetby_validray[ray, :]= rmom[ray,:]
-                #  print(self.Surges[Surge_ID])
-                #  print(self.Surges[Surge_ID]['Offset_diff'])
-                subrangemean=np.nanmean(rmom_subsetby_validray, axis=0)
-                subrangemax, subrangemin = np.nanmax(rmom_subsetby_validray, axis=0), np.nanmin(rmom_subsetby_validray, axis=0)
-                plt.plot(range_bins_alongray, subrangemean, color='red', label='Ang Valid Rays: '+str(len(self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays'])))#, label=self.Surges[Surge_ID]['point_labels'][pnt])
-                if testing ==False:
-                    plt.fill_between(range_bins_alongray, subrangemin, subrangemax, alpha=.2, color='red', zorder=1)
-                    leg=plt.legend(handlelength=1)
-                    # set the linewidth of each legend object
-                    for legobj in leg.legendHandles:
-                        legobj.set_linewidth(4.0)
-
-            elif self.config.lineplt_control['ray_style'] == 'pntrays':
-                for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
-                    data_subset = scipy.signal.savgol_filter(self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt,:], window_length=WL, polyorder=2)#, deriv=1)#, axis=A)
-                    plt.plot(self.Surges[Surge_ID]['Subsets']['Range_bins'][pnt,:], data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
-                    
-                    plt.scatter(self.Surges[Surge_ID]['Center_pnts']['range_value'][pnt],
-                                self.Surges[Surge_ID]['Center_pnts']['radar_value'][pnt],
-                                s=40)#c='red')
-                for o_dist in self.config.Surge_controls['Surges']['offset_dist']:
-                    for o_dir in ['Plus', 'Minus']:
-                        if o_dir == 'Plus': Mark='^' 
-                        elif o_dir == 'Minus': Mark='D' 
-                        plt.scatter(self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['range_value'],
-                                    self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['radar_value'],
-                                    s=40, marker=Mark, c='grey')
-                        '''
+            ax2_divider = make_axes_locatable(ax_n)
+            if self.L_Rows ==1:
+                pad= ax2_divider.append_axes("left", size="1%", pad='15%') #make room for label  
             else:
+                pad= ax2_divider.append_axes("left", size="1%", pad='8%') #make room for label  
+
+            pad._visible=False
+            if self.config.lineplt_control['Deriv_Rdata'] == True:   
+                graphs_to_make=['standard', 'Deriv']
+                ax_2 = ax2_divider.append_axes("right", size="100%", pad='10%') 
+            else:  
+                graphs_to_make=['standard']
+
+            
+            for graph in graphs_to_make:
+                if graph=='Deriv':
+                    D=1 #first derivative (if possible) 
+                    ax=ax_2 
+                else: 
+                    D=0 #do not take derivative
+                    ax=ax_n
+
+                if WL != None: 
+                    rmom= scipy.signal.savgol_filter(rmom_orig, window_length=WL, polyorder=2, axis=1, deriv=D)
+                else: 
+                    rmom= rmom_orig
 
                 if self.config.lineplt_control['ray_style'] == 'allrays':
-                    for ray in self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays']:
-                        #  if len(rsubset) >= WL:
-                        data_subset = scipy.signal.savgol_filter(rmom[ray,:], window_length=WL, polyorder=2, deriv=1)#, axis=A)
-                        plt.plot(range_bins_alongray, data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+                    for ray in np.arange(np.min(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray']),
+                                        np.max(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])):
+                        #  data_subset = scipy.signal.savgol_filter(rmom[ray,:], window_length=WL, polyorder=2)#, deriv=1)#, axis=A)
+                        data_subset = rmom[ray,:]
+                        if ray in self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays']:
+                            #  r_bin_sub.append(range_bins_alongray[ranges_ind[pnt]-Max_obins:ranges_ind[pnt]+Max_obins])
+                            ax.plot(range_bins_alongray, data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+                            #  plt.plot(self.Surges[Surge_ID]['Subsets']['Range_bins'][ray,:], data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+                        else: 
+                            ax.plot(range_bins_alongray, data_subset, c='grey', zorder=7, alpha=.6)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+
                 elif self.config.lineplt_control['ray_style'] == 'averagedrays':
+                    ray_count=np.max(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])-np.min(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])
+                    rangemean=np.nanmean(rmom, axis=0)
+                    rangemax, rangemin =np.nanmax(rmom, axis=0), np.nanmin(rmom, axis=0)
+
+                    #  plt.fill_between(range_bins_alongray, rangemin, rangemax, alpha=.5)
+                    for ray in np.arange(np.min(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray']),
+                                        np.max(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])):
+                        ax.plot(range_bins_alongray, rmom[ray,:], color='grey', alpha=.2)
+                    ax.plot(range_bins_alongray, rangemean, label='All Rays: '+str(ray_count))
+
+                    rmom_subsetby_validray= np.zeros(rmom.shape)
+                    rmom_subsetby_validray[:]= np.nan
+                    for ray in np.arange(np.min(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray']),
+                                        np.max(self.Surges[Surge_ID]['Center_pnts']['Index']['Ray'])):
+                        if ray in self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays']:
+                            rmom_subsetby_validray[ray, :]= rmom[ray,:]
+                            #  print('(((((((((((((((((((((((())))))))))))))))))))))))')
+                            #  print(self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays'])
+                            #  print(type(self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays']))
+                    subrangemean=np.nanmean(rmom_subsetby_validray, axis=0)
+                    subrangemax, subrangemin = np.nanmax(rmom_subsetby_validray, axis=0), np.nanmin(rmom_subsetby_validray, axis=0)
+                    ax.plot(range_bins_alongray, subrangemean, color='red', label='Ang Valid Rays: '+str(len(self.Surges[Surge_ID]['Surge_Subset']['Valid_Rays'])))#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+
+                    if graph != 'Deriv':
+                        ax.fill_between(range_bins_alongray, subrangemin, subrangemax, alpha=.2, color='red', zorder=1)
+                        leg=ax.legend(handlelength=1)
+                        # set the linewidth of each legend object
+                        for legobj in leg.legendHandles:
+                            legobj.set_linewidth(4.0)
+
                 elif self.config.lineplt_control['ray_style'] == 'pntrays':
                     for pnt in range(len(self.Surges[Surge_ID]['point_labels'])):
-                        #  np.shape(self.Surges[Surge_ID]['Subsets']['Radar_data'])
-                        if self.Surges[Surge_ID]['Subsets']['Radar_data'].ndim == 2:
-                            rsubset= self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt,:]
-                            rbins=self.Surges[Surge_ID]['Subsets']['Range_bins'][pnt,:]
-                        else:
-                            rsubset= self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt]
-                            rbins=self.Surges[Surge_ID]['Subsets']['Range_bins'][pnt]
-                        if len(rsubset) >= WL: 
-                            data_subset = scipy.signal.savgol_filter(rsubset, window_length=WL, polyorder=2, deriv=1)#, axis=A)
-                            #  grad_data_subset=np.gradient(data_subset)
-                            plt.plot(rbins, data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
-                        '''
-
-            #  plt.legend()
-            ax_n.grid(axis='both')
-            ax_n.tick_params(which='major', axis='both', direction='in', width=2, length=7, color='grey')
-            ax_n.tick_params(which='both', axis='y', direction='in',labelrotation=90)
-            #  ax.tick_params(which='minor', axis='both', direction='in', width=2, length=7, color='grey')
-            if ax_n.get_subplotspec().rowspan.stop == self.L_Rows:
-                plt.xlabel('Range from Radar (along ray) (m)')
-                ax_n.tick_params(which='both', axis='x', labelrotation=45)
-            #  ax_n.yaxis._in_layout=False
-            #  print(vars(ax_n.yaxis._in_layout=False)
-            if testing ==False:
-                plt.ylabel('Radial Vel (m/s)')
-            else:
-                #  ax_n.set_ylim(-1,1)
-                plt.ylabel('Radial Gradient Vel (m/s)')
-            ax_n.axhline(0, color='grey', linewidth=3, alpha=.5, zorder=1)
-            ax_n.invert_xaxis()
+                        data_subset = scipy.signal.savgol_filter(self.Surges[Surge_ID]['Subsets']['Radar_data'][pnt,:], window_length=WL, polyorder=2)#, deriv=1)#, axis=A)
+                        ax.plot(self.Surges[Surge_ID]['Subsets']['Range_bins'][pnt,:], data_subset)#, label=self.Surges[Surge_ID]['point_labels'][pnt])
+                        
+                        ax.scatter(self.Surges[Surge_ID]['Center_pnts']['range_value'][pnt],
+                                    self.Surges[Surge_ID]['Center_pnts']['radar_value'][pnt],
+                                    s=40)#c='red')
+                    for o_dist in self.config.Surge_controls['Surges']['offset_dist']:
+                        for o_dir in ['Plus', 'Minus']:
+                            if o_dir == 'Plus': Mark='^' 
+                            elif o_dir == 'Minus': Mark='D' 
+                            ax.scatter(self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['range_value'],
+                                        self.Surges[Surge_ID]['Offset_pnts'][o_dist][o_dir]['radar_value'],
+                                        s=40, marker=Mark, c='grey')
+                
+                ###
+                ax.grid(axis='both')
+                ax.tick_params(which='major', axis='both', direction='in', width=2, length=7, color='grey')
+                ax.tick_params(which='both', axis='y', direction='in',labelrotation=90)
+                if ax_n.get_subplotspec().rowspan.stop == self.L_Rows:
+                    ax.set_xlabel('Range from Radar (along ray) (m)')
+                    #  ax.tick_params(which='both', axis='x', labelrotation=45)
+                if graph == 'Deriv':
+                    ax.set_ylabel('Radial Gradient Vel (m/s)')
+                else:
+                    ax.set_ylabel('Radial Vel (m/s)')
+                ax.axhline(0, color='grey', linewidth=3, alpha=.5, zorder=1)
+                ax.invert_xaxis()
 
 
                 
@@ -1227,7 +1283,7 @@ class Master_Plt:
                             #  base_state =get_timeave_previous(p, Data, 60)
                             #  plotting_data= plotting_data[:] - base_state
                             ax_n.axhline(0, color='grey', linewidth=3, alpha=.5, zorder=1)
-                        
+                        deriv=False 
                         if deriv == True:  
                             if self.config.overlays['Colorline']['Pert'] == True: 
                                 var=ts+'_pert_der'
@@ -1271,7 +1327,7 @@ class Master_Plt:
                 TSleg_elements.append(TSleg_entry)
 
             ## Plot legend
-            leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center right', bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.04,.5))
+            leg = ax_n.legend(handles= TSleg_elements, scatterpoints=3, loc='center right',handlelength=.6,borderpad=.7, bbox_transform=ax_n.transAxes, bbox_to_anchor=(-0.045,.5))
             if ts == 'Wind':
                 leg.set_title(self.config.lineplt_control['Wind_Pform'], prop=self.leg_title_font)
                 leg.remove()
@@ -1311,29 +1367,29 @@ class Master_Plt:
     def clicker_stats(self, ax_n, fig, TVARS, Data, Surge_ID):
         if Surge_ID == None: pass
         else:
-            ax_n.text(-2.8, .98, 'Surge ID: '+str(Surge_ID), transform=ax_n.transAxes, ha="left", va="top", weight='bold', size=self.leg_title_font['size'] )
-            current_surge_df= self.valid_surges[self.valid_surges['Surge_ID'] == Surge_ID]
-            rname=current_surge_df.loc[0,'RName']
-            ax_n.text(-2.8, .88, 'Radar origin: '+str(rname)+', '+ str(current_surge_df.loc[0,'Tilt']), transform=ax_n.transAxes, ha="left", va="top")
+            Stats_dict=self.Surges[Surge_ID]['Stats']
 
-            ax_n.text(-2.8, .78, 'Points Selected: '+str(len(self.Surges[Surge_ID]['point_labels'])), transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.8, .98, 'Surge ID: '+str(Surge_ID), transform=ax_n.transAxes, ha="left", va="top", weight='bold', size=self.leg_title_font['size'] )
+            ax_n.text(-2.8, .88, 'Radar origin: '+ Stats_dict['Surge_Rorigin'], transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.8, .78, 'Points Selected: '+ Stats_dict['Pnts_Selected'], transform=ax_n.transAxes, ha="left", va="top")
             
-            init_point = Point(self.Surges[Surge_ID]['Center_pnts']['x'][0], self.Surges[Surge_ID]['Center_pnts']['y'][0])
-            final_point = Point(self.Surges[Surge_ID]['Center_pnts']['x'][-1], self.Surges[Surge_ID]['Center_pnts']['y'][-1])
-            straight_dist=init_point.distance(final_point)
-            ax_n.text(-2.8, .68, 'Straight length: '+str(round(straight_dist)), transform=ax_n.transAxes, ha="left", va="top")
-            
-            ax_n.text(-2.8, .58, 'length: '+str(round(self.Surges[Surge_ID]['Center_pnts']['line_object'].length)), transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.8, .68, 'Straight length: '+ Stats_dict['Straight_Length'], transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.8, .58, 'length: '+ Stats_dict['length'],transform=ax_n.transAxes, ha="left", va="top")
+            ax_n.text(-2.8, .48, 'area: '+ Stats_dict['area'], transform=ax_n.transAxes, ha="left", va="top")
                 #  line.boundary #  line.centroid #  line.centroid.wkt #  line.interpolate(.75, normalized=True).wkt
-            
-            ax_n.text(-2.8, .48, 'area: '+str(round(self.Surges[Surge_ID]['Polygon'].area)), transform=ax_n.transAxes, ha="left", va="top")
                 #  poly.minimum_rotated_rectangle
+            #  ax_n.text(-2.8, -.02, 'swp: '+str(Data['P_Radar'].swp), transform=ax_n.transAxes, ha="left", va="top")
+            #  ax_n.text(-2.8, -.12, 'swp: '+str(np.unique(Data['P_Radar'].rfile.elevation.data)), transform=ax_n.transAxes, ha="left", va="top")
+            #  print(vars(Data['P_Radar'].rfile.elevation))
+            #  print(np.unique(Data['P_Radar'].rfile.elevation['data']))
+            #  print(type(Data['P_Radar'].rfile.elevation['data']))
 
             if self.Surges[Surge_ID]['line']['slope'] != None:  
-                ax_n.text(-2.8, .38, 'Slope: '+str(round(self.Surges[Surge_ID]['line']['slope'],3)), transform=ax_n.transAxes, ha="left", va="top")
-                ax_n.text(-2.8, .28, 'Intercept: '+str(round(self.Surges[Surge_ID]['line']['intercept'])), transform=ax_n.transAxes, ha="left", va="top")
-                ax_n.text(-2.8, .18, 'Max Vel: '+str(round(self.Surges[Surge_ID]['Surge_Subset']['Max']['value'])), transform=ax_n.transAxes, ha="left", va="top")
-                ax_n.text(-2.8, .08, 'Min Vel: '+str(round(self.Surges[Surge_ID]['Surge_Subset']['Min']['value'])), transform=ax_n.transAxes, ha="left", va="top")
+                ax_n.text(-2.8, .38, 'Slope: '+ Stats_dict['slope'], transform=ax_n.transAxes, ha="left", va="top")
+                ax_n.text(-2.8, .28, 'Intercept: '+ Stats_dict['Intercept'], transform=ax_n.transAxes, ha="left", va="top")
+                ax_n.text(-2.8, .18, 'Max Vel: '+ Stats_dict['Max_Vel'], transform=ax_n.transAxes, ha="left", va="top")
+                ax_n.text(-2.8, .08, 'Min Vel: '+ Stats_dict['Min_Vel'], transform=ax_n.transAxes, ha="left", va="top")
+
             if self.num_of_mesos != 0:
                 ax_n.text(-2.8, -.02, 'Dist to Meso Ring: '+str(round(self.Surges[Surge_ID]['Center_pnts']['line_object'].distance(self.Mesos[self.meso_ids[0]]['Center_pnt']['Ring']))),
                           transform=ax_n.transAxes, ha="left", va="top")
@@ -1348,6 +1404,7 @@ class Master_Plt:
             if self.num_of_mesos != 0:
                 bb = Bbox([[-3, -.4], [.9, .99]])
             else: 
+                #  bb = Bbox([[-3, -.4], [.9, .99]])
                 bb = Bbox([[-3, 0], [.9, .99]])
             fancy = mpatches.FancyBboxPatch((bb.xmin, bb.ymin), bb.width, bb.height, boxstyle=mpatches.BoxStyle('Round', pad=.02), fc='white', clip_on=False, path_effects=[PE.withSimplePatchShadow(alpha=.8)])
             ax_n.add_patch(fancy)
@@ -1382,6 +1439,8 @@ def plotting(config, day, Data, TVARS, start_comptime, tilt=None):
     #initilize the plot object(will have info about plotlayout and such now)
     PLT = Master_Plt(day, Data, config, tilt)
 
+    if config.actually_plt_radar == False:
+        return
     ## Make the Radar Subplots (if applicable)
     #### * * * * * * * * * * * * * * * * * ** * * * *
     if len(config.r_mom) != 0:
@@ -1406,13 +1465,16 @@ def plotting(config, day, Data, TVARS, start_comptime, tilt=None):
                         if mom != 'Meso':
                             mom = 'pass'
                     
-                    if mom != 'Meso':
-                        RADAR= Data['P_Radar']
-                    else: 
+                    if mom == 'Meso':
                         if PLT.num_of_mesos != 0: 
+                            print('MADE IT HERE')
                             RADAR=PLT.Mesos['RADAR']
                         else:
                             mom = 'pass'
+                    elif mom == 'MRMS':
+                        RADAR=MRMS_Reader(config,Data['P_Radar'].Scan_time)
+                    else: 
+                        RADAR= Data['P_Radar']
 
                     print('Radar plot: '+ mom +', Outer GridSpec Pos: [0, :], SubGridSpec Pos: ['+str(row)+', '+str(col)+']')
                     #  print('MESO')
@@ -1463,22 +1525,18 @@ def plotting(config, day, Data, TVARS, start_comptime, tilt=None):
             if Make_Line_plt == True: 
                 ax_n= PLT.fig.add_subplot(PLT.l_gs[row, col])
                 PLT.line_plot(config.Line_Plot[lineplot_index], ax_n, PLT.fig, TVARS, Data, Surge_ID)
-                if config.lineplt_control['Deriv'] == True:  
-                    print(PLT.L_Cols)
-                    ax_n= PLT.fig.add_subplot(PLT.l_gs[row, 1])
-                    PLT.line_plot(config.Line_Plot[lineplot_index], ax_n, PLT.fig, TVARS, Data, Surge_ID, deriv=True)
 
                 if 'clicker' in config.Line_Plot: 
-                    ax_n=PLT.fig.add_subplot(PLT.l_gs[row,2])
-                    PLT.line_plot(config.Line_Plot[lineplot_index], ax_n, PLT.fig, TVARS, Data, Surge_ID, testing=True)
+                    ax_n=PLT.fig.add_subplot(PLT.l_gs[row,1])
+                    PLT.line_plot(config.Line_Plot[lineplot_index], ax_n, PLT.fig, TVARS, Data, Surge_ID)
 
-                    ax_n=PLT.fig.add_subplot(PLT.l_gs[row,3])
+                    ax_n=PLT.fig.add_subplot(PLT.l_gs[row,2])
                     PLT.line_plot('difference', ax_n, PLT.fig, TVARS, Data, Surge_ID)
 
                     ax_n=PLT.fig.add_subplot(PLT.l_gs[row,0])
                     PLT.clicker_stats(ax_n, PLT.fig, TVARS, Data, Surge_ID)
 
-                    ax_n= PLT.fig.add_subplot(PLT.l_gs[row, 4], projection= PLT.R_Proj)
+                    ax_n= PLT.fig.add_subplot(PLT.l_gs[row, 3], projection= PLT.R_Proj)
                     leg=False
                     PLT.radar_subplots(Data['P_Radar'], 'Ray_angle', day, ax_n, PLT.fig, TVARS, Data, leg, False, Surge_ID, PLT.meso_ids, ZOOM=True)
                     #  PLT.radar_subplots('Surge_subset_'+str(Surge_ID), day, ax_n, PLT.fig, TVARS, Data, leg, Surge_ID, ZOOM=True)
@@ -1494,7 +1552,12 @@ def plotting(config, day, Data, TVARS, start_comptime, tilt=None):
     ### Get outdir and outname (aka file path and file name) for the correct image setup
     #if radar is included in the image
     if len(config.r_mom) != 0: 
+        print(tilt)
+        print(Data['P_Radar'].swp)
+        print(' ++++++++++++++++++++')
+        tilt_ang = Data['P_Radar'].rfile.get_elevation(Data['P_Radar'].swp)
         plt.suptitle(Data['P_Radar'].site_name+' '+str(tilt)+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=PLT.title_spacer, ha='center')
+        #  plt.suptitle(Data['P_Radar'].site_name+' '+str(tilt)+'('+str(tilt_ang[0])+')'+r'$^{\circ}$ PPI '+Data['P_Radar'].fancy_date_str, y=PLT.title_spacer, ha='center')
         #if both radar and timeseries are included in the image
         if len(config.Line_Plot) != 0:
             file_string = '_'.join(config.Line_Plot)
@@ -1560,7 +1623,7 @@ def plotting(config, day, Data, TVARS, start_comptime, tilt=None):
                         break
                     else:
                         pts=clicker_defn(PLT, AXES)
-                        make_csv(config, Data, pts, surge_name, tilt, csv_name, 'Surge', Does_csv_exist)
+                        make_surgemeso_obj_csv(config, Data, pts, surge_name, tilt, csv_name, 'Surge', Does_csv_exist)
         elif config.Surge_controls['Feature_IDing']['Make_new_pnts']['Type'] == 'Meso':
             csv_name= config.g_TORUS_directory+day+'/data/'+day+'_meso_pnts.csv'
             Does_csv_exist=os.path.isfile(csv_name)
@@ -1578,7 +1641,7 @@ def plotting(config, day, Data, TVARS, start_comptime, tilt=None):
                         break
                     else:
                         pts=clicker_defn(PLT, AXES)
-                        make_csv(config, Data, pts, meso_name, tilt, csv_name, 'Meso', Does_csv_exist)
+                        make_surgemeso_obj_csv(config, Data, pts, meso_name, tilt, csv_name, 'Meso', Does_csv_exist)
     ## * * *     
     #This is the directory path for the output file
     outdir = config.g_TORUS_directory+day+'/plots/'+plt_dir
@@ -1633,6 +1696,11 @@ def plot_radar(config, day, Data, TVARS):
             path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/dealiased_ordered_*'
             #  path = config.g_TORUS_directory + day+'/data/radar/NOXP/'+day+'/*/sec/fixed*'
             r_files_path = sorted(glob.glob(path))
+
+        elif config.Radar_Plot_Type == 'MRMS_Plotting':
+            ## Get radar files
+            path = '/home/chris/codes/data/20190608/merged/MergedAzShear_0-2kmAGL/00.00/*'
+            r_files_path= sorted(glob.glob(path))
 
         elif config.Radar_Plot_Type == 'WSR_Plotting':
             if config.radar_controls['Use_downloaded_files']== True:

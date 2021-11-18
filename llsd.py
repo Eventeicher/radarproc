@@ -89,15 +89,16 @@ def main(radar, ref_name, vel_name):
     
     #call llsd compute function
     azi_shear = lssd_compute(r, theta, vrad, mask, sweep_startidx, sweep_endidx)
+    
     #scale
     azi_shear = azi_shear*SCALING
     
     #generate mask according to reflectivity 
-    refl_mask = ref_mask(refl_ma, 40, 8)
+    refl_mask = ref_mask(refl_ma, 60, 8)
     #combine with vrad mask
     azi_mask  = np.logical_or(refl_mask, mask)
     # apply combined mask to azi_shear
-    azi_shear = np.ma.masked_where(azi_mask, azi_shear).astype(np.float32)
+    #  azi_shear = np.ma.masked_where(azi_mask, azi_shear).astype(np.float32)
     
     #define meta data
     azi_shear_meta = {'data': azi_shear,

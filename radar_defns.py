@@ -41,6 +41,7 @@ import xarray as xr
 import os
 import os.path
 import os
+import glob
 from pathlib import Path
 from joblib import Memory, Parallel, delayed
 import scipy
@@ -76,9 +77,13 @@ import warnings
 import llsd
 warnings.filterwarnings("ignore")
 
+from plotwdssiiQuick import readwdssii
+
 #
 def radar_fields_prep(config, rfile, radar_type, sweep_id, moment='From_config'):
     ###########
+    #  print(rfile.info(level='full'))
+    #  print(rfile.info(level='standard'))
     #  print(rfile.info(level='compact'))
 
     if radar_type == 'KA':
@@ -250,6 +255,34 @@ def radar_fields_prep(config, rfile, radar_type, sweep_id, moment='From_config')
     #  shr = np.zeros_like(gatex,dtype=np.float64)
     #  rs = np.zeros_like(rang)
 
+def MRMS_Reader(config, Scan_time):
+    path = '/home/chris/codes/data/20190608/merged/MergedAzShear_0-2kmAGL/00.00/*'
+    r_files_path= sorted(glob.glob(path))
+    timeholder=[]
+    for rfile in r_files_path:
+        print(rfile[-13:-9])
+        timeholder.append(int(rfile[-13:-9]))
+
+    print('9999999999999')
+    print(Scan_time)
+    print(Scan_time.strftime('%H%M'))
+    Orig_scantime=int(Scan_time.strftime('%H%M'))
+    #  print(r_files_path[:, -13:-7])
+    #  read_from_radar_file()
+    absolute_difference_function=lambda list_value: abs(list_value-Orig_scantime)
+
+    closest_value=min(timeholder, key=absolute_difference_function)
+    #  print(str(closest_value).zfill(4))
+    newtime=closest_value
+    #  newtime=(str(closest_value).zfill(4))
+    test=timeholder.index(newtime)
+    #  print(timeholder)
+    print(test)
+    print(r_files_path[test])
+    xi,ulat,yi,ulon,varname,refi=readwdssii(r_files_path[test])
+    #  radar = pyart.io.read_cfradial(r_files_path[test], exclude_fields='time')
+    #  radar = pyart.io.read(r_files_path[46], exclude_fields=['time'])
+
 def vort(radar, swp_id, vel_name):
     '''
     Function calculates the vorticity on an PPI assuming solid body rotation. Vorticity vector is also assumed normal to plane.
@@ -378,11 +411,17 @@ def sweep_index(tilt, is_WSR, radar= None):
         else: print('The tilt angle {} is not hard coded yet for WSR'.format(tilt))
 
     else:
+        #  print('radar.get_elevation: '+radar.get_elevation())
         for i in range(radar.nsweeps):
+            #  print('Tilt: '+str(tilt))
+            #  print('i: '+str(i))
+
             ## Det the actual tilt angle of a given sweep (returns an array)
             tilt_ang = radar.get_elevation(i)
+            #  print('tilt_ang: '+str(tilt_ang))
             ## Check to see if the radarfile matches the elevation tilt we are interested in
             if np.around(tilt_ang[0], decimals=1) == tilt: swp_id = i
+    #  print('swp_id: '+str(swp_id))
 
     return swp_id
 ##########
